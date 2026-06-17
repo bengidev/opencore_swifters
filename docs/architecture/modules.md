@@ -2,7 +2,7 @@
 
 OpenCore uses feature-oriented folders inside the app target. The folders are intentionally shaped like modules so they can be promoted to internal Swift Package or Xcode framework targets later without rewriting feature boundaries.
 
-State management for onboarding uses Gang of Four patterns (Command, Strategy, Factory Method, Facade, Observer) with `@Observable` flow controllers — not TCA.
+Onboarding flow state is owned by `OnboardingFlowController` and mutated through explicit commands — not TCA.
 
 ## Module map
 
@@ -22,7 +22,7 @@ OpenCore/
 │   └── HomePlaceholderView.swift
 ├── Features/
 │   └── Onboarding/           # Role-based
-│       ├── Core/             # Flow controller, commands, strategies
+│       ├── Core/             # Flow controller, commands, flow state
 │       ├── Models/
 │       ├── Views/
 │       └── Utilities/
@@ -31,17 +31,16 @@ OpenCore/
     └── UI/
 ```
 
-## Design patterns (Onboarding)
+## Role-based folders
 
-| Pattern | Role in onboarding |
-| --- | --- |
-| **Command** | `OnboardingCommand` + concrete commands encapsulate mutations |
-| **Invoker** | `OnboardingCommandInvoker` executes commands |
-| **Strategy** | `OnboardingPageBehaviorStrategy` applies page-specific demo defaults |
-| **Factory Method** | `OnboardingPageBehaviorStrategyFactory`, `OnboardingPageVisualFactory` |
-| **Facade** | `OnboardingFlowController` — single API for views |
-| **Observer** | `OnboardingFlowObserving` notifies completion |
-| **State** | `OnboardingFlowState` — immutable snapshot mutated only via commands |
+Each feature organizes files by responsibility:
+
+- `Core/` — flow controller, commands, flow state
+- `Models/` — domain types and SwiftData entities
+- `Views/` — SwiftUI screens and visual components
+- `Utilities/` — persistence clients, visual builders
+
+Folder names describe product roles, not design-pattern names.
 
 ## Access control
 

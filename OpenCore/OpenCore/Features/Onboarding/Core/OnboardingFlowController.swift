@@ -1,23 +1,21 @@
 import Foundation
 import Observation
 
-/// Facade + Observer — single entry point for onboarding flow orchestration.
+/// Single entry point for onboarding flow orchestration.
 @MainActor
 @Observable
 final class OnboardingFlowController {
     private(set) var state: OnboardingFlowState
     private let persistence: OnboardingPersistenceClient
-    private let invoker: OnboardingCommandInvoker
+    private let invoker = OnboardingCommandInvoker()
     weak var observer: OnboardingFlowObserving?
 
     init(
         state: OnboardingFlowState = OnboardingFlowState(),
-        persistence: OnboardingPersistenceClient = .preview,
-        strategyFactory: OnboardingPageBehaviorStrategyFactory = OnboardingPageBehaviorStrategyFactory()
+        persistence: OnboardingPersistenceClient = .preview
     ) {
         self.state = state
         self.persistence = persistence
-        self.invoker = OnboardingCommandInvoker(strategyFactory: strategyFactory)
     }
 
     func onAppear() async {

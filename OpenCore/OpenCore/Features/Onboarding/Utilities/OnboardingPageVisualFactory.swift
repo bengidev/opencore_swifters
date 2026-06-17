@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Factory Method — builds page-specific demo visuals.
+/// Builds page-specific demo visuals.
 enum OnboardingPageVisualFactory {
     @MainActor
     @ViewBuilder
