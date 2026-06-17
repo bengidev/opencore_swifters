@@ -64,7 +64,7 @@ struct OnboardingFlowStateTests {
 struct OnboardingCommandTests {
 
     private var invoker: OnboardingCommandInvoker {
-        OnboardingCommandInvoker(strategyFactory: OnboardingPageBehaviorStrategyFactory())
+        OnboardingCommandInvoker()
     }
 
     @Test("AdvancePageCommand advances page")

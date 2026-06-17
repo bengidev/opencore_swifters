@@ -1,53 +1,38 @@
 import Foundation
 
-/// Command pattern — encapsulates onboarding mutations as executable objects.
+/// Encapsulates a single onboarding flow mutation.
 protocol OnboardingCommand: Sendable {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    )
+    func execute(on state: inout OnboardingFlowState)
 }
 
 struct OnboardingAdvancePageCommand: OnboardingCommand {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         let nextPage = min(state.currentPage + 1, state.totalPages - 1)
         state.currentPage = nextPage
-        strategies.strategy(for: OnboardingPage.all[nextPage].type)?.applyDefaults(to: &state)
+        OnboardingPageDefaults.apply(for: OnboardingPage.all[nextPage].type, to: &state)
     }
 }
 
 struct OnboardingRetreatPageCommand: OnboardingCommand {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         let previousPage = max(state.currentPage - 1, 0)
         state.currentPage = previousPage
-        strategies.strategy(for: OnboardingPage.all[previousPage].type)?.applyDefaults(to: &state)
+        OnboardingPageDefaults.apply(for: OnboardingPage.all[previousPage].type, to: &state)
     }
 }
 
 struct OnboardingSelectPageCommand: OnboardingCommand {
     let index: Int
 
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         let selectedPage = min(max(index, 0), state.totalPages - 1)
         state.currentPage = selectedPage
-        strategies.strategy(for: OnboardingPage.all[selectedPage].type)?.applyDefaults(to: &state)
+        OnboardingPageDefaults.apply(for: OnboardingPage.all[selectedPage].type, to: &state)
     }
 }
 
 struct OnboardingSkipToLastPageCommand: OnboardingCommand {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         state.currentPage = state.totalPages - 1
     }
 }
@@ -55,10 +40,7 @@ struct OnboardingSkipToLastPageCommand: OnboardingCommand {
 struct OnboardingSelectPromptChipCommand: OnboardingCommand {
     let index: Int
 
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         state.selectedPromptIndex = min(
             max(index, 0),
             OnboardingPromptOption.samples.count - 1
@@ -67,10 +49,7 @@ struct OnboardingSelectPromptChipCommand: OnboardingCommand {
 }
 
 struct OnboardingIncrementQueueCommand: OnboardingCommand {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         state.queuedPromptCount = state.queuedPromptCount >= OnboardingQueueItem.samples.count
             ? 2
             : state.queuedPromptCount + 1
@@ -80,28 +59,20 @@ struct OnboardingIncrementQueueCommand: OnboardingCommand {
 struct OnboardingSetReasoningLevelCommand: OnboardingCommand {
     let level: Double
 
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         state.reasoningLevel = min(max(level, 0), 1)
     }
 }
 
 struct OnboardingTogglePairingCommand: OnboardingCommand {
-    func execute(
-        on state: inout OnboardingFlowState,
-        using strategies: OnboardingPageBehaviorStrategyFactory
-    ) {
+    func execute(on state: inout OnboardingFlowState) {
         state.pairingConfirmed.toggle()
     }
 }
 
-/// Invoker — dispatches commands without exposing mutation rules to callers.
+/// Dispatches onboarding commands without exposing mutation rules to callers.
 struct OnboardingCommandInvoker: Sendable {
-    let strategyFactory: OnboardingPageBehaviorStrategyFactory
-
     func invoke(_ command: any OnboardingCommand, on state: inout OnboardingFlowState) {
-        command.execute(on: &state, using: strategyFactory)
+        command.execute(on: &state)
     }
 }

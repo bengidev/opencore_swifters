@@ -1,6 +1,6 @@
 import Foundation
 
-/// Snapshot of onboarding flow data — State pattern context object mutated only through commands.
+/// Snapshot of onboarding flow data mutated through commands.
 struct OnboardingFlowState: Equatable, Sendable {
     var currentPage = 0
     var isFinished = false
