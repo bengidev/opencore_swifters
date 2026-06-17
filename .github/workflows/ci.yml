@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: OpenCore
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.4'
+
+      - name: Prepare iOS Simulator
+        run: xcrun simctl list > /dev/null
+
+      - name: Run unit tests
+        run: |
+          set -eo pipefail
+          SIMULATOR_ID=$(xcrun simctl list devices available | awk -F'[()]' '/^[[:space:]]+iPhone/ { print $2; exit }')
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator found."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using simulator id: $SIMULATOR_ID"
+          xcodebuild \
+            -scheme OpenCore \
+            -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
+            -only-testing:OpenCoreTests \
+            test
