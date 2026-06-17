@@ -8,7 +8,6 @@ final class OnboardingFlowController {
     private(set) var state: OnboardingFlowState
     private let persistence: OnboardingPersistenceClient
     private let invoker = OnboardingCommandInvoker()
-    weak var observer: OnboardingFlowObserving?
 
     init(
         state: OnboardingFlowState = OnboardingFlowState(),
@@ -19,17 +18,25 @@ final class OnboardingFlowController {
     }
 
     func onAppear() async {
-        let completed = (try? await persistence.isCompleted()) ?? false
-        state.isFinished = completed
+        do {
+            state.isFinished = try await persistence.isCompleted()
+        } catch {
+            state.isFinished = false
+        }
     }
 
     func dispatch(_ command: any OnboardingCommand) {
         invoker.invoke(command, on: &state)
     }
 
-    func finish() async {
-        state.isFinished = true
-        try? await persistence.complete()
-        observer?.onboardingDidFinish()
+    @discardableResult
+    func finish() async -> Bool {
+        do {
+            try await persistence.complete()
+            state.isFinished = true
+            return true
+        } catch {
+            return false
+        }
     }
 }

@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import Testing
 @testable import OpenCore
@@ -128,6 +129,7 @@ struct OnboardingCommandTests {
     @Test("TogglePairingCommand toggles state")
     func pairingToggle() {
         var state = OnboardingFlowState()
+        #expect(state.pairingConfirmed == true)
         invoker.invoke(OnboardingTogglePairingCommand(), on: &state)
         #expect(state.pairingConfirmed == false)
     }
@@ -152,9 +154,23 @@ struct OnboardingFlowControllerTests {
             complete: { didComplete = true }
         )
         let controller = OnboardingFlowController(persistence: persistence)
-        await controller.finish()
+        let succeeded = await controller.finish()
+        #expect(succeeded)
         #expect(controller.state.isFinished)
         #expect(didComplete)
+    }
+
+    @Test("finish does not mark finished when persistence fails")
+    func finishFailure() async {
+        enum TestError: Error { case failed }
+        let persistence = OnboardingPersistenceClient(
+            isCompleted: { false },
+            complete: { throw TestError.failed }
+        )
+        let controller = OnboardingFlowController(persistence: persistence)
+        let succeeded = await controller.finish()
+        #expect(!succeeded)
+        #expect(!controller.state.isFinished)
     }
 
     @Test("onAppear loads completion status")
@@ -166,6 +182,33 @@ struct OnboardingFlowControllerTests {
         let controller = OnboardingFlowController(persistence: persistence)
         await controller.onAppear()
         #expect(controller.state.isFinished)
+    }
+
+    @Test("onAppear defaults to incomplete when persistence fails")
+    func onAppearFailure() async {
+        enum TestError: Error { case failed }
+        let persistence = OnboardingPersistenceClient(
+            isCompleted: { throw TestError.failed },
+            complete: {}
+        )
+        let controller = OnboardingFlowController(
+            state: OnboardingFlowState(isFinished: true),
+            persistence: persistence
+        )
+        await controller.onAppear()
+        #expect(!controller.state.isFinished)
+    }
+
+    @Test("live persistence round trip")
+    func persistenceRoundTrip() async throws {
+        let schema = Schema([OnboardingProgressEntity.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let client = OnboardingPersistenceClient.live(modelContainer: container)
+
+        #expect(try await client.isCompleted() == false)
+        try await client.complete()
+        #expect(try await client.isCompleted() == true)
     }
 }
 
@@ -190,5 +233,11 @@ struct ThemeTests {
         #expect(SharedAppTheme.system.next == .light)
         #expect(SharedAppTheme.light.next == .dark)
         #expect(SharedAppTheme.dark.next == .system)
+    }
+
+    @Test("SharedAppTheme storage key round trips raw values")
+    func themeStorageKey() {
+        #expect(SharedAppTheme(rawValue: SharedAppTheme.dark.rawValue) == .dark)
+        #expect(SharedAppTheme.storageKey == "sharedAppTheme")
     }
 }

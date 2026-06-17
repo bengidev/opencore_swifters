@@ -33,7 +33,9 @@ struct OnboardingSelectPageCommand: OnboardingCommand {
 
 struct OnboardingSkipToLastPageCommand: OnboardingCommand {
     func execute(on state: inout OnboardingFlowState) {
-        state.currentPage = state.totalPages - 1
+        let lastPage = state.totalPages - 1
+        state.currentPage = lastPage
+        OnboardingPageDefaults.apply(for: OnboardingPage.all[lastPage].type, to: &state)
     }
 }
 
