@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: OpenCore
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Run unit tests
+        run: |
+          set -eo pipefail
+          DESTINATION=$(xcodebuild -scheme OpenCore -showdestinations 2>/dev/null \
+            | awk -F'[ ,]' '/platform:iOS Simulator/ && /name:iPhone/ { print $0; exit }' \
+            | sed -n 's/.*id:\([^,}]*\).*/platform=iOS Simulator,id=\1/p')
+          if [ -z "$DESTINATION" ]; then
+            DESTINATION='platform=iOS Simulator,name=iPhone 16'
+          fi
+          xcodebuild \
+            -scheme OpenCore \
+            -destination "$DESTINATION" \
+            -only-testing:OpenCoreTests \
+            test

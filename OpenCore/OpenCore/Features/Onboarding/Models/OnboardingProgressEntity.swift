@@ -8,19 +8,16 @@ final class OnboardingProgressEntity {
     var createdAt: Date
     var completedAt: Date?
     var isCompleted: Bool
-    var lastPageIndex: Int
 
     init(
         id: UUID = UUID(),
         createdAt: Date = Date(),
         completedAt: Date? = nil,
-        isCompleted: Bool = false,
-        lastPageIndex: Int = 0
+        isCompleted: Bool = false
     ) {
         self.id = id
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.isCompleted = isCompleted
-        self.lastPageIndex = lastPageIndex
     }
 }

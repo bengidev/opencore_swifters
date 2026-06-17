@@ -43,7 +43,6 @@ struct OnboardingPersistenceClient: Sendable {
 
                 progress.isCompleted = true
                 progress.completedAt = Date()
-                progress.lastPageIndex = OnboardingPage.all.count - 1
 
                 try context.save()
             }

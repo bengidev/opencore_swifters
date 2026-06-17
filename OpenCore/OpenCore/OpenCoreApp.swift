@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct OpenCoreApp: App {
-    @State private var sharedAppTheme: SharedAppTheme = .system
+    @AppStorage(SharedAppTheme.storageKey) private var sharedAppThemeRaw = SharedAppTheme.system.rawValue
     @State private var onboardingFlow: OnboardingFlowController
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -32,6 +32,10 @@ struct OpenCoreApp: App {
         }
     }
 
+    private var sharedAppTheme: SharedAppTheme {
+        SharedAppTheme(rawValue: sharedAppThemeRaw) ?? .system
+    }
+
     private var resolvedColorScheme: ColorScheme? {
         switch sharedAppTheme {
         case .system: return nil
@@ -48,9 +52,7 @@ struct OpenCoreApp: App {
         WindowGroup {
             AppRootView(
                 onboardingFlow: onboardingFlow,
-                onThemeToggle: {
-                    sharedAppTheme = sharedAppTheme.next
-                }
+                onThemeToggle: toggleTheme
             )
             .environment(\.sharedPalette, resolvedPalette)
             .environment(\.sharedAppTheme, sharedAppTheme)
@@ -60,5 +62,9 @@ struct OpenCoreApp: App {
             }
         }
         .modelContainer(modelContainer)
+    }
+
+    private func toggleTheme() {
+        sharedAppThemeRaw = sharedAppTheme.next.rawValue
     }
 }

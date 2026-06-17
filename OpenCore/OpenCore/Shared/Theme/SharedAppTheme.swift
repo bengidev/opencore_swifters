@@ -6,6 +6,8 @@ enum SharedAppTheme: String, Equatable, Sendable {
     case light
     case dark
 
+    static let storageKey = "sharedAppTheme"
+
     func resolveColorScheme(_ systemScheme: ColorScheme) -> ColorScheme {
         switch self {
         case .system: return systemScheme

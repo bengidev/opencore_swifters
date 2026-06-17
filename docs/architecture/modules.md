@@ -16,8 +16,8 @@ App
 
 ```text
 OpenCore/
+├── OpenCoreApp.swift         # @main entry point
 ├── App/                      # App shell
-│   ├── OpenCoreApp.swift
 │   ├── AppRootView.swift
 │   └── HomePlaceholderView.swift
 ├── Features/
