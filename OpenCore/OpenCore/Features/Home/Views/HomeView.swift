@@ -142,7 +142,7 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
 }
 
 private struct WelcomeViewportHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static let defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()

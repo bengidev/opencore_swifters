@@ -1027,12 +1027,12 @@ private struct ParticleSparkSeed {
 }
 
 private enum ParticleOrbMath {
-    nonisolated static func noise(_ value: Double, _ seed: Double) -> Double {
+    static func noise(_ value: Double, _ seed: Double) -> Double {
         let mixed = sin(value * 12.9898 + seed * 78.233) * 43758.5453
         return mixed - floor(mixed)
     }
 
-    nonisolated static func gaussian2D(
+    static func gaussian2D(
         x: Double,
         y: Double,
         sigmaX: Double,
