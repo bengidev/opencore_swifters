@@ -8,7 +8,7 @@ struct AppRootView: View {
     var body: some View {
         Group {
             if onboardingFlow.state.isFinished {
-                HomeView(onThemeToggle: onThemeToggle)
+                HomeView()
             } else {
                 OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)
             }
