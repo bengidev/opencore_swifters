@@ -352,7 +352,7 @@ private enum ParticleOrbMetrics {
     static let center = CGPoint(x: canvasSize.width * 0.5, y: canvasSize.height * 0.5)
     static let outerField = CGSize(width: 324, height: 204)
     static let coreField = CGSize(width: 156, height: 146)
-    @MainActor static let renderScale = max(UIScreen.main.scale, 2)
+    static let renderScale: CGFloat = 2
     static let snapGrid: CGFloat = 3
     static let glyphRamp = Array("░▒▓█").map(String.init)
 }
@@ -766,7 +766,7 @@ private enum ParticleOrbRenderer {
     static func rendererFormat() -> UIGraphicsImageRendererFormat {
         let format = UIGraphicsImageRendererFormat.preferred()
         format.opaque = false
-        format.scale = ParticleOrbMetrics.renderScale
+        format.scale = max(UIScreen.main.scale, ParticleOrbMetrics.renderScale)
         return format
     }
 }
@@ -808,9 +808,11 @@ private enum ParticleOrbLayoutFactory {
             let seed = Double(seedOffset + index)
             let angle = ParticleOrbMath.noise(seed, 5) * .pi * 2
             let radial = 0.18 + pow(ParticleOrbMath.noise(seed, 13), 0.58) * 0.50
+            let xOffset = cos(angle) * ParticleOrbMetrics.outerField.width * CGFloat(radial) * 0.38
+            let yOffset = sin(angle) * ParticleOrbMetrics.outerField.height * CGFloat(radial) * 0.34
             let point = CGPoint(
-                x: ParticleOrbMetrics.center.x + cos(angle) * ParticleOrbMetrics.outerField.width * CGFloat(radial) * 0.38,
-                y: ParticleOrbMetrics.center.y + sin(angle) * ParticleOrbMetrics.outerField.height * CGFloat(radial) * 0.34
+                x: ParticleOrbMetrics.center.x + xOffset,
+                y: ParticleOrbMetrics.center.y + yOffset
             )
             let size = CGFloat(1.1 + ParticleOrbMath.noise(seed, 23) * 2.0)
             let opacity = CGFloat(0.10 + ParticleOrbMath.noise(seed, 31) * 0.18)
