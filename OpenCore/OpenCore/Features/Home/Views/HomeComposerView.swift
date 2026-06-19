@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Prompt panel with context rail, speed/model chips, and send action.
 struct HomeComposerView: View {
     @Binding var draftMessage: String
     @Binding var speedMode: HomeComposerSpeedMode

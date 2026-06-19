@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Root home screen — welcome state with composer, matching the OpenZone home layout.
 struct HomeView: View {
+    let onThemeToggle: () -> Void
+
     @State private var draftMessage = ""
     @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
@@ -56,6 +58,8 @@ struct HomeView: View {
             .accessibilityLabel("Show sidebar")
 
             Spacer()
+
+            SharedThemeToggleButton(onTap: onThemeToggle)
 
             Button {
                 dismissComposerKeyboard()
@@ -127,13 +131,13 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                 let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeOut(duration: duration)) {
+                withAnimation(.easeInOut(duration: duration)) {
                     scrollProxy.scrollTo(HomeScrollAnchor.welcomeBottom, anchor: .bottom)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
                 let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeOut(duration: duration)) {
+                withAnimation(.easeInOut(duration: duration)) {
                     scrollProxy.scrollTo(HomeScrollAnchor.welcomeTop, anchor: .top)
                 }
             }
@@ -150,6 +154,6 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView()
+    HomeView(onThemeToggle: { })
         .environment(\.sharedPalette, SharedOpenZonePalette.resolve(.light))
 }
