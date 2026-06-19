@@ -9,7 +9,8 @@ Onboarding flow state is owned by `OnboardingFlowController` and mutated through
 ```text
 App
 ├── Shared        # Theme + UI primitives (cross-cutting)
-└── Onboarding    # First-run product tour
+├── Onboarding    # First-run product tour
+└── Home          # Welcome hero + composer visual shell
 ```
 
 ## Current layout
@@ -18,14 +19,16 @@ App
 OpenCore/
 ├── OpenCoreApp.swift         # @main entry point
 ├── App/                      # App shell
-│   ├── AppRootView.swift
-│   └── HomePlaceholderView.swift
+│   └── AppRootView.swift
 ├── Features/
-│   └── Onboarding/           # Role-based
-│       ├── Core/             # Flow controller, commands, flow state
+│   ├── Onboarding/           # Role-based
+│   │   ├── Core/
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Utilities/
+│   └── Home/
 │       ├── Models/
-│       ├── Views/
-│       └── Utilities/
+│       └── Views/
 └── Shared/
     ├── Theme/
     └── UI/
