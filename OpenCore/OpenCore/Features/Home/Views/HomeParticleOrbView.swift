@@ -763,7 +763,7 @@ private enum ParticleOrbRenderer {
         return cgImage
     }
 
-    static func rendererFormat() -> UIGraphicsImageRendererFormat {
+    @MainActor static func rendererFormat() -> UIGraphicsImageRendererFormat {
         let format = UIGraphicsImageRendererFormat.preferred()
         format.opaque = false
         format.scale = max(UIScreen.main.scale, ParticleOrbMetrics.renderScale)
