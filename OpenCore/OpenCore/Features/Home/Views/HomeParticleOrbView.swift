@@ -456,6 +456,7 @@ private struct ParticleOrbSparkDescriptor {
     }
 }
 
+@MainActor
 private enum ParticleOrbAssetStore {
     static func pack(for colors: ParticleOrbColors) -> ParticleOrbAssetPack {
         ParticleOrbAssetFactory.makePack(colors: colors)
@@ -481,6 +482,7 @@ private extension UIColor {
     }
 }
 
+@MainActor
 private enum ParticleOrbAssetFactory {
     static func makePack(colors: ParticleOrbColors) -> ParticleOrbAssetPack {
         let tint = colors.tint
@@ -663,6 +665,7 @@ private enum ParticleOrbAssetFactory {
     }
 }
 
+@MainActor
 private enum ParticleOrbRenderer {
     static func renderDots(tint: UIColor, dots: [ParticleDot]) -> CGImage {
         renderImage { context in
@@ -763,7 +766,7 @@ private enum ParticleOrbRenderer {
         return cgImage
     }
 
-    @MainActor static func rendererFormat() -> UIGraphicsImageRendererFormat {
+    static func rendererFormat() -> UIGraphicsImageRendererFormat {
         let format = UIGraphicsImageRendererFormat.preferred()
         format.opaque = false
         format.scale = max(UIScreen.main.scale, ParticleOrbMetrics.renderScale)
