@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 
+/// Animated particle orb rendered via UIKit layer composition.
 struct HomeParticleOrbView: UIViewRepresentable {
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +24,7 @@ struct HomeParticleOrbView: UIViewRepresentable {
     }
 }
 
+/// UIKit backing view for the particle orb — manages CALayer hierarchy and display-link animation.
 final class ParticleOrbUIKitView: UIView {
     private let containerLayer = CALayer()
     private var activeColors: ParticleOrbColors?
