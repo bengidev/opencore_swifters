@@ -2,8 +2,6 @@ import SwiftUI
 
 /// Root home screen — welcome state with composer, matching the OpenZone home layout.
 struct HomeView: View {
-    let onThemeToggle: () -> Void
-
     @State private var draftMessage = ""
     @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
@@ -58,8 +56,6 @@ struct HomeView: View {
             .accessibilityLabel("Show sidebar")
 
             Spacer()
-
-            SharedThemeToggleButton(onTap: onThemeToggle)
 
             Button {
                 dismissComposerKeyboard()
@@ -154,6 +150,6 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView(onThemeToggle: { })
+    HomeView()
         .environment(\.sharedPalette, SharedOpenZonePalette.resolve(.light))
 }
