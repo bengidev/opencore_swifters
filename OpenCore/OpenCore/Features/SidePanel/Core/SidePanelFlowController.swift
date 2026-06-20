@@ -67,6 +67,9 @@ final class SidePanelFlowController {
         session.onActiveConversationDeleted = { [weak self] id in
             self?.onActiveConversationDeleted?(id)
         }
+        session.onSettingsTapped = { [weak self] in
+            self?.settingsButtonTapped()
+        }
     }
 
     // MARK: - Settings presentation

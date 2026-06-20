@@ -56,6 +56,16 @@ struct SidePanelFlowControllerTests {
         #expect(controller.setting?.state.modelSupportsReasoning == true)
     }
 
+    @Test("session settingsButtonTapped presents setting controller on the host")
+    func sessionSettingsButtonTappedPresentsSetting() {
+        let session = SidePanelSessionFlowController()
+        let controller = makeController(session: session)
+
+        session.settingsButtonTapped()
+
+        #expect(controller.setting != nil)
+    }
+
     // MARK: - Session delegate forwarding
 
     @Test("session openConversation delegate forwards to host")

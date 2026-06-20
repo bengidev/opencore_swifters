@@ -17,6 +17,10 @@ final class SidePanelSessionFlowController {
     var onActiveConversationRenamed: ((UUID, String) -> Void)?
     /// The on-screen conversation was deleted and should be cleared.
     var onActiveConversationDeleted: ((UUID) -> Void)?
+    /// The user tapped the settings gear. The session scope does not present
+    /// settings itself; the host owns the settings sheet, so this fires the
+    /// delegate and the host presents.
+    var onSettingsTapped: (() -> Void)?
 
     init(
         state: SidePanelSessionFlowState = SidePanelSessionFlowState(),
@@ -70,9 +74,11 @@ final class SidePanelSessionFlowController {
         onOpenConversation?(conversation)
     }
 
-    // MARK: - Settings (no-op here; host handles it)
+    // MARK: - Settings (host presents via onSettingsTapped)
 
-    func settingsButtonTapped() {}
+    func settingsButtonTapped() {
+        onSettingsTapped?()
+    }
 
     // MARK: - Pin persistence
 
