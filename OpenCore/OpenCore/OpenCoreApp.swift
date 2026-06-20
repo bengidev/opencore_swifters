@@ -5,6 +5,8 @@ import SwiftUI
 struct OpenCoreApp: App {
     @AppStorage(SharedAppTheme.storageKey) private var sharedAppThemeRaw = SharedAppTheme.system.rawValue
     @State private var onboardingFlow: OnboardingFlowController
+    @State private var sidePanel: SidePanelFlowController
+
     @Environment(\.colorScheme) private var systemColorScheme
 
     private let modelContainer: ModelContainer
@@ -17,11 +19,21 @@ struct OpenCoreApp: App {
                 persistence: .live(modelContainer: modelContainer)
             )
         )
+        let credentialStore = SidePanelKeychainCredentialStore(service: SidePanelKeychainCredentialStore.openCoreService)
+        let providerPreference = SidePanelUserDefaultsProviderPreferenceStore()
+        let session = SidePanelSessionFlowController(history: .live(modelContainer: modelContainer))
+        _sidePanel = State(initialValue: SidePanelFlowController(
+            session: session,
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ))
     }
 
     private static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
-            OnboardingProgressEntity.self
+            OnboardingProgressEntity.self,
+            SidePanelConversationEntity.self,
+            SidePanelMessageEntity.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -52,6 +64,7 @@ struct OpenCoreApp: App {
         WindowGroup {
             AppRootView(
                 onboardingFlow: onboardingFlow,
+                sidePanel: sidePanel,
                 onThemeToggle: toggleTheme
             )
             .environment(\.sharedPalette, resolvedPalette)

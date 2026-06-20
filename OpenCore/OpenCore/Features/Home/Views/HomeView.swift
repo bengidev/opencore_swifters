@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Root home screen — welcome state with composer, matching the OpenZone home layout.
 struct HomeView: View {
+    @Bindable var sidePanel: SidePanelFlowController
+
     @State private var draftMessage = ""
     @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
@@ -23,6 +25,8 @@ struct HomeView: View {
                 welcomeContent
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            SidePanelView(flow: sidePanel)
         }
     }
 
@@ -47,7 +51,7 @@ struct HomeView: View {
     private var topBar: some View {
         HStack {
             Button {
-                dismissComposerKeyboard()
+                Task { await sidePanel.session.toggleSidebar() }
             } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 22, weight: .medium))
@@ -150,6 +154,9 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView()
+    HomeView(sidePanel: SidePanelFlowController(
+        credentialStore: SidePanelInMemoryCredentialStore(),
+        providerPreference: SidePanelInMemoryProviderPreferenceStore()
+    ))
         .environment(\.sharedPalette, SharedOpenZonePalette.resolve(.light))
 }

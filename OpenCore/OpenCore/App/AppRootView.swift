@@ -3,12 +3,14 @@ import SwiftUI
 /// Routes first-time users through onboarding, then shows the app shell.
 struct AppRootView: View {
     @Bindable var onboardingFlow: OnboardingFlowController
+    @Bindable var sidePanel: SidePanelFlowController
+
     let onThemeToggle: () -> Void
 
     var body: some View {
         Group {
             if onboardingFlow.state.isFinished {
-                HomeView()
+                HomeView(sidePanel: sidePanel)
             } else {
                 OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)
             }
