@@ -20,3 +20,12 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (firs
 - **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`
 - **Demo defaults**: `HomeVisualDefaults` (static model label, context usage, speed mode)
 - **Scope**: visual layout only — sidebar, chat, model catalog, and send flow are not wired yet
+
+## SidePanel
+
+- **Host controller**: `SidePanelFlowController`
+- **Session scope**: `SidePanelSessionFlowController` (saved-conversation browser + sidebar)
+- **Setting scope**: `SidePanelSettingFlowController` (settings sheet: provider + API key + reasoning)
+- **Persistence**: `SidePanelHistoryClient` + `SidePanelConversationEntity` (SwiftData), `SidePanelCredentialStore` (Keychain), `SidePanelProviderPreferenceStore` (UserDefaults)
+- **Presentation**: `SidePanelView` hosts session sidebar + settings sheet; `HomeView` owns the controller and toggles the drawer
+- **Delegates**: `onOpenConversation`, `onActiveConversationRenamed`/`onActiveConversationDeleted`, `onCredentialsChanged`, `onReasoningModelChanged`, `onProviderChanged`

@@ -10,6 +10,7 @@ Onboarding flow state is owned by `OnboardingFlowController` and mutated through
 App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
+├── SidePanel      # Conversation browser + settings (self-contained internal module)
 └── Home          # Welcome hero + composer visual shell
 ```
 
@@ -26,13 +27,26 @@ OpenCore/
 │   │   ├── Models/
 │   │   ├── Views/
 │   │   └── Utilities/
-│   └── Home/
+│   ├── Home/
+│   │   ├── Models/
+│   │   └── Views/
+│   └── SidePanel/
+│       ├── Core/
 │       ├── Models/
+│       ├── Utilities/
+│       ├── Session/
+│       │   ├── Core/
+│       │   └── Views/
+│       ├── Setting/
+│       │   ├── Core/
+│       │   └── Views/
 │       └── Views/
 └── Shared/
     ├── Theme/
     └── UI/
 ```
+
+SidePanel is a self-contained internal module combining two scopes (session + setting) with feature-owned infrastructure in `Utilities/`. Its role folders nest `Session/` and `Setting/` sub-folders, each with their own `Core/` and `Views/`.
 
 ## Role-based folders
 
