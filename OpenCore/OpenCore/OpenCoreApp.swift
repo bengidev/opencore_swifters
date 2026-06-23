@@ -6,6 +6,8 @@ struct OpenCoreApp: App {
     @AppStorage(SharedAppTheme.storageKey) private var sharedAppThemeRaw = SharedAppTheme.system.rawValue
     @State private var onboardingFlow: OnboardingFlowController
     @State private var sidePanel: SidePanelFlowController
+    @State private var home: HomeFlowController
+    @State private var chat: ChatFlowController
 
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -25,6 +27,15 @@ struct OpenCoreApp: App {
         _sidePanel = State(initialValue: SidePanelFlowController(
             session: session,
             credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ))
+        _home = State(initialValue: HomeFlowController(
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ))
+        _chat = State(initialValue: ChatFlowController(
+            streaming: .live(credentialStore: credentialStore),
+            history: .live(modelContainer: modelContainer),
             providerPreference: providerPreference
         ))
     }
@@ -65,6 +76,8 @@ struct OpenCoreApp: App {
             AppRootView(
                 onboardingFlow: onboardingFlow,
                 sidePanel: sidePanel,
+                home: home,
+                chat: chat,
                 onThemeToggle: toggleTheme
             )
             .environment(\.sharedPalette, resolvedPalette)
