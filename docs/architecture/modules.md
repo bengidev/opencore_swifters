@@ -10,8 +10,9 @@ Onboarding flow state is owned by `OnboardingFlowController` and mutated through
 App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
-├── SidePanel      # Conversation browser + settings (self-contained internal module)
-└── Home          # Welcome hero + composer visual shell
+├── SidePanel     # Conversation browser + settings (self-contained internal module)
+├── Chat          # Live message stream, send/receive, active conversation
+└── Home          # Welcome hero + composer shell (wires Chat + SidePanel)
 ```
 
 ## Current layout
@@ -30,6 +31,11 @@ OpenCore/
 │   ├── Home/
 │   │   ├── Models/
 │   │   └── Views/
+│   ├── Chat/
+│   │   ├── Core/
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Utilities/
 │   └── SidePanel/
 │       ├── Core/
 │       ├── Models/
