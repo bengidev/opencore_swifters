@@ -1,6 +1,6 @@
 import Foundation
 
-enum ChatMessage: Equatable, Identifiable, Sendable {
+nonisolated enum ChatMessage: Equatable, Identifiable, Sendable {
     case text(ChatTextMessage)
     case thinking(ChatThinkingMessage)
     case system(ChatSystemMessage)

@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatTextMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
+nonisolated struct ChatTextMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
     let id: UUID
     let role: ChatMessageRole
     var content: String
@@ -22,7 +22,7 @@ struct ChatTextMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, C
     }
 }
 
-struct ChatThinkingMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
+nonisolated struct ChatThinkingMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
     let id: UUID
     let role: ChatMessageRole
     var content: String
@@ -44,7 +44,7 @@ struct ChatThinkingMessage: ChatMessagePayload, Equatable, Identifiable, Sendabl
     }
 }
 
-struct ChatSystemMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
+nonisolated struct ChatSystemMessage: ChatMessagePayload, Equatable, Identifiable, Sendable, Codable {
     let id: UUID
     let role: ChatMessageRole
     var content: String

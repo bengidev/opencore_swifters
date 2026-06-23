@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatStreamError: Equatable, Sendable, ExpressibleByStringLiteral {
+nonisolated struct ChatStreamError: Equatable, Sendable, ExpressibleByStringLiteral {
     let message: String
 
     nonisolated init(message: String) {
