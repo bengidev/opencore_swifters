@@ -7,6 +7,8 @@ struct HomeComposerView: View {
     let selectedModelTitle: String
     let contextUsage: HomeComposerContextUsage
     let availableSpeedModes: [HomeComposerSpeedMode]
+    let isSendEnabled: Bool
+    let onSend: () -> Void
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
@@ -15,6 +17,8 @@ struct HomeComposerView: View {
         VStack(spacing: 8) {
             HomeComposerPromptPanel(
                 draftMessage: $draftMessage,
+                isSendEnabled: isSendEnabled,
+                onSend: onSend,
                 isComposerFocused: isComposerFocused
             )
             HomeComposerContextRail(
@@ -41,13 +45,15 @@ struct HomeComposerView: View {
 
 private struct HomeComposerPromptPanel: View {
     @Binding var draftMessage: String
+    let isSendEnabled: Bool
+    let onSend: () -> Void
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
     @State private var sendFeedbackTrigger = false
 
     private var canSend: Bool {
-        !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isSendEnabled && !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -93,6 +99,7 @@ private struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
+        onSend()
     }
 
     private func dismissKeyboard() {
@@ -475,6 +482,8 @@ private struct HomeComposerModelButton: View {
                     selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
                     contextUsage: HomeVisualDefaults.contextUsage,
                     availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
+                    isSendEnabled: true,
+                    onSend: {},
                     isComposerFocused: $isComposerFocused
                 )
             }

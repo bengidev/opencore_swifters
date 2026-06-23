@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// Root home screen — welcome state with composer, matching the home layout.
+/// Root home screen — welcome state or active chat thread with composer.
 struct HomeView: View {
     @Bindable var sidePanel: SidePanelFlowController
+    @Bindable var chat: ChatFlowController
 
-    @State private var draftMessage = ""
     @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
 
     @Environment(\.sharedPalette) private var palette
+
+    private var showsWelcome: Bool {
+        !chat.state.hasMessages
+    }
 
     var body: some View {
         ZStack {
@@ -22,11 +26,18 @@ struct HomeView: View {
                         dismissComposerKeyboard()
                     }
 
-                welcomeContent
+                if showsWelcome {
+                    welcomeContent
+                } else {
+                    chatThreadContent
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             SidePanelView(flow: sidePanel)
+        }
+        .onAppear {
+            wireSidePanelDelegates()
         }
     }
 
@@ -37,15 +48,55 @@ struct HomeView: View {
         ) { viewportHeight in
             HomeWelcomeView(viewportHeight: viewportHeight)
         } composer: {
-            HomeComposerView(
-                draftMessage: $draftMessage,
-                speedMode: $speedMode,
-                selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
-                contextUsage: HomeVisualDefaults.contextUsage,
-                availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
-                isComposerFocused: $isComposerFocused
-            )
+            composer
         }
+    }
+
+    private var chatThreadContent: some View {
+        VStack(spacing: 0) {
+            if let conversation = chat.state.conversation {
+                Text(conversation.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(palette.textPrimary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            }
+
+            ChatThreadView(flow: chat)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissComposerKeyboard()
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                ChatErrorBannerView(flow: chat)
+                    .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+
+                composer
+            }
+        }
+    }
+
+    private var composer: some View {
+        HomeComposerView(
+            draftMessage: Binding(
+                get: { chat.state.draftMessage },
+                set: { chat.setDraftMessage($0) }
+            ),
+            speedMode: $speedMode,
+            selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
+            contextUsage: HomeVisualDefaults.contextUsage,
+            availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
+            isSendEnabled: !chat.state.isSending,
+            onSend: {
+                Task { await chat.sendMessage() }
+            },
+            isComposerFocused: $isComposerFocused
+        )
     }
 
     private var topBar: some View {
@@ -63,6 +114,7 @@ struct HomeView: View {
 
             Button {
                 dismissComposerKeyboard()
+                chat.clearActiveConversation()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .medium))
@@ -72,6 +124,20 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private func wireSidePanelDelegates() {
+        sidePanel.onOpenConversation = { conversation in
+            Task { await chat.reopenConversation(conversation) }
+        }
+        sidePanel.onActiveConversationRenamed = { id, title in
+            chat.renameActiveConversation(id: id, title: title)
+        }
+        sidePanel.onActiveConversationDeleted = { id in
+            if chat.state.conversation?.id == id {
+                chat.clearActiveConversation()
+            }
+        }
     }
 
     private func dismissComposerKeyboard() {
@@ -180,9 +246,12 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView(sidePanel: SidePanelFlowController(
-        credentialStore: SidePanelInMemoryCredentialStore(),
-        providerPreference: SidePanelInMemoryProviderPreferenceStore()
-    ))
-        .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
+    HomeView(
+        sidePanel: SidePanelFlowController(
+            credentialStore: SidePanelInMemoryCredentialStore(),
+            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+        ),
+        chat: ChatFlowController()
+    )
+    .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }
