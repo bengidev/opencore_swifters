@@ -7,6 +7,11 @@ struct HomeWelcomeLayoutMetrics {
     let orbHeight: CGFloat
     let orbBottomPadding: CGFloat
 
+    /// Matches OpenZone welcome scroll motion (delay before scroll, shared easeOut curve).
+    static let welcomeScrollDelay: TimeInterval = 0.18
+    static let welcomeAnimationDuration: TimeInterval = 0.22
+    static var welcomeAnimation: Animation { .easeOut(duration: welcomeAnimationDuration) }
+
     private static let heroTextBlockHeight: CGFloat = 66
     private static let minEdgeSpacing: CGFloat = 16
     private static let standardOrbHeight: CGFloat = 260
@@ -103,7 +108,7 @@ struct HomeWelcomeView: View {
             Spacer(minLength: layout.bottomSpacerMinLength)
         }
         .padding(.horizontal, 28)
-        .animation(.easeInOut(duration: 0.2), value: viewportHeight)
+        .animation(HomeWelcomeLayoutMetrics.welcomeAnimation, value: viewportHeight)
     }
 }
 

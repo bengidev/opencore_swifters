@@ -90,7 +90,8 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
     @ViewBuilder let content: (_ viewportHeight: CGFloat) -> Content
     @ViewBuilder let composer: () -> Composer
 
-    @State private var restingViewportHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    @State private var pendingScrollWork: DispatchWorkItem?
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -99,9 +100,9 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
                     .frame(height: 1)
                     .id(HomeScrollAnchor.welcomeTop)
 
-                content(restingViewportHeight)
+                content(viewportHeight)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: restingViewportHeight > 0 ? restingViewportHeight : nil)
+                    .frame(minHeight: viewportHeight > 0 ? viewportHeight : nil)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         dismissKeyboard()
@@ -121,27 +122,52 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
                         )
                 }
             }
-            .onPreferenceChange(WelcomeViewportHeightKey.self) { newHeight in
-                if !isComposerFocused {
-                    restingViewportHeight = newHeight
-                }
-            }
+            .onPreferenceChange(WelcomeViewportHeightKey.self) { viewportHeight = $0 }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeInOut(duration: duration)) {
-                    scrollProxy.scrollTo(HomeScrollAnchor.welcomeBottom, anchor: .bottom)
+            .onChange(of: isComposerFocused) { _, isFocused in
+                if isFocused {
+                    scheduleWelcomeScroll(
+                        to: .welcomeBottom,
+                        scrollAnchor: .bottom,
+                        delay: HomeWelcomeLayoutMetrics.welcomeScrollDelay,
+                        with: scrollProxy
+                    )
+                } else {
+                    scheduleWelcomeScroll(
+                        to: .welcomeTop,
+                        scrollAnchor: .top,
+                        delay: 0,
+                        with: scrollProxy
+                    )
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
-                let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeInOut(duration: duration)) {
-                    scrollProxy.scrollTo(HomeScrollAnchor.welcomeTop, anchor: .top)
-                }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                scheduleWelcomeScroll(
+                    to: .welcomeTop,
+                    scrollAnchor: .top,
+                    delay: 0,
+                    with: scrollProxy
+                )
             }
         }
+    }
+
+    private func scheduleWelcomeScroll(
+        to anchor: HomeScrollAnchor,
+        scrollAnchor: UnitPoint,
+        delay: TimeInterval,
+        with proxy: ScrollViewProxy
+    ) {
+        pendingScrollWork?.cancel()
+        let work = DispatchWorkItem {
+            withAnimation(HomeWelcomeLayoutMetrics.welcomeAnimation) {
+                proxy.scrollTo(anchor, anchor: scrollAnchor)
+            }
+        }
+        pendingScrollWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
 
