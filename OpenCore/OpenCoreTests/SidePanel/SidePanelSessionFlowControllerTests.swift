@@ -68,7 +68,12 @@ struct SidePanelSessionFlowControllerTests {
 
     @Test("Opening the drawer loads the persisted conversation list")
     func toggleLoadsConversations() async {
-        let seed = [conversation("Alpha"), conversation("Beta")]
+        let older = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        let seed = [
+            SidePanelConversation(id: UUID(), title: "Alpha", updatedAt: older),
+            SidePanelConversation(id: UUID(), title: "Beta", updatedAt: newer),
+        ]
         let recorder = Recorder(seed)
         let controller = makeController(recorder: recorder)
 
