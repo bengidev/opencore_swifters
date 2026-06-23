@@ -90,7 +90,7 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
     @ViewBuilder let content: (_ viewportHeight: CGFloat) -> Content
     @ViewBuilder let composer: () -> Composer
 
-    @State private var restingViewportHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -99,9 +99,9 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
                     .frame(height: 1)
                     .id(HomeScrollAnchor.welcomeTop)
 
-                content(restingViewportHeight)
+                content(viewportHeight)
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: restingViewportHeight > 0 ? restingViewportHeight : nil)
+                    .frame(minHeight: viewportHeight > 0 ? viewportHeight : nil)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         dismissKeyboard()
@@ -121,11 +121,7 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
                         )
                 }
             }
-            .onPreferenceChange(WelcomeViewportHeightKey.self) { newHeight in
-                if !isComposerFocused {
-                    restingViewportHeight = newHeight
-                }
-            }
+            .onPreferenceChange(WelcomeViewportHeightKey.self) { viewportHeight = $0 }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer()
             }
