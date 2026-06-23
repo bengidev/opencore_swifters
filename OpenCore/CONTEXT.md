@@ -16,9 +16,10 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (firs
 
 ## Home
 
+- **Flow controller**: `HomeFlowController` (model catalog, selection, send gating)
 - **Entry view**: `HomeView`
-- **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`
-- **Demo defaults**: `HomeVisualDefaults` (static model label, context usage, speed mode)
+- **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`, `HomeModelPopupView`
+- **Catalog**: `HomeModelCatalogClient` + `HomeModelCatalogCachePreferenceClient`
 - **Composition**: owns `ChatFlowController` + `SidePanelFlowController`; switches welcome vs thread layout
 
 ## Chat

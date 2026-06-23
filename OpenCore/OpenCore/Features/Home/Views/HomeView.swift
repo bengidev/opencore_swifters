@@ -3,9 +3,9 @@ import SwiftUI
 /// Root home screen — welcome state or active chat thread with composer.
 struct HomeView: View {
     @Bindable var sidePanel: SidePanelFlowController
+    @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
 
-    @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
 
     @Environment(\.sharedPalette) private var palette
@@ -33,11 +33,22 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityHidden(sidePanel.isSidebarVisible)
 
             SidePanelView(flow: sidePanel)
         }
         .onAppear {
-            wireSidePanelDelegates()
+            wireDelegates()
+        }
+        .task {
+            await home.onAppear()
+            syncSidePanelFromHome()
+        }
+        .sheet(isPresented: Binding(
+            get: { home.state.isModelPopupPresented },
+            set: { home.setModelPopupPresented($0) }
+        )) {
+            HomeModelPopupView(home: home)
         }
     }
 
@@ -83,18 +94,8 @@ struct HomeView: View {
 
     private var composer: some View {
         HomeComposerView(
-            draftMessage: Binding(
-                get: { chat.state.draftMessage },
-                set: { chat.setDraftMessage($0) }
-            ),
-            speedMode: $speedMode,
-            selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
-            contextUsage: HomeVisualDefaults.contextUsage,
-            availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
-            isSendEnabled: !chat.state.isSending,
-            onSend: {
-                Task { await chat.sendMessage() }
-            },
+            home: home,
+            chat: chat,
             isComposerFocused: $isComposerFocused
         )
     }
@@ -102,6 +103,7 @@ struct HomeView: View {
     private var topBar: some View {
         HStack {
             Button {
+                sidePanel.session.mirrorActiveConversationID(chat.state.conversation?.id)
                 Task { await sidePanel.session.toggleSidebar() }
             } label: {
                 Image(systemName: "line.3.horizontal")
@@ -126,7 +128,14 @@ struct HomeView: View {
         .padding(.vertical, 12)
     }
 
-    private func wireSidePanelDelegates() {
+    private func wireDelegates() {
+        home.onOpenSettings = {
+            sidePanel.settingsButtonTapped()
+        }
+        home.onModelSelectionChanged = {
+            syncSidePanelFromHome()
+        }
+
         sidePanel.onOpenConversation = { conversation in
             Task { await chat.reopenConversation(conversation) }
         }
@@ -138,6 +147,19 @@ struct HomeView: View {
                 chat.clearActiveConversation()
             }
         }
+        sidePanel.onCredentialsChanged = {
+            home.handleCredentialsChanged()
+        }
+        sidePanel.onReasoningModelChanged = {
+            home.handleReasoningModelChanged()
+        }
+        sidePanel.onProviderChanged = { providerID in
+            Task { await home.handleProviderChanged(providerID) }
+        }
+    }
+
+    private func syncSidePanelFromHome() {
+        sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
     }
 
     private func dismissComposerKeyboard() {
@@ -246,12 +268,20 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView(
+    let credentialStore = SidePanelInMemoryCredentialStore()
+    let providerPreference = SidePanelInMemoryProviderPreferenceStore(
+        preference: SidePanelProviderPreference(modelID: "meta-llama/llama-3.3-70b-instruct:free")
+    )
+    return HomeView(
         sidePanel: SidePanelFlowController(
-            credentialStore: SidePanelInMemoryCredentialStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
         ),
-        chat: ChatFlowController()
+        home: HomeFlowController(
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ),
+        chat: ChatFlowController(providerPreference: providerPreference)
     )
     .environment(\.sharedPalette, SharedOpenZonePalette.resolve(.light))
 }
