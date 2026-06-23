@@ -49,8 +49,13 @@ final class SidePanelConversationEntity {
 @Model
 final class SidePanelMessageEntity {
     @Attribute(.unique) var id: UUID
+    /// Discriminator for rich chat message kinds (`text`, `thinking`, `system`).
+    /// Defaults to `text` so existing stores migrate cleanly.
+    var kindRaw: String = ChatMessageKind.text.rawValue
     var role: String
     var content: String
+    /// Whether streaming for this row has finished. Defaults to true for legacy rows.
+    var isComplete: Bool = true
     var timestamp: Date
     /// Monotonic insertion index within the conversation. Sorting by this
     /// (not timestamp) keeps user/assistant turns in the exact emitted order.
@@ -60,15 +65,19 @@ final class SidePanelMessageEntity {
 
     init(
         id: UUID,
+        kindRaw: String = ChatMessageKind.text.rawValue,
         role: String,
         content: String,
+        isComplete: Bool = true,
         timestamp: Date,
         order: Int,
         conversation: SidePanelConversationEntity? = nil
     ) {
         self.id = id
+        self.kindRaw = kindRaw
         self.role = role
         self.content = content
+        self.isComplete = isComplete
         self.timestamp = timestamp
         self.order = order
         self.conversation = conversation
