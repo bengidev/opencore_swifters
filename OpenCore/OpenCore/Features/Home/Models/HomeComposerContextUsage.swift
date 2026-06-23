@@ -1,7 +1,7 @@
 import Foundation
 
 /// Context window usage surfaced in the composer rail.
-struct HomeComposerContextUsage: Equatable, Sendable {
+nonisolated struct HomeComposerContextUsage: Equatable, Sendable {
     var usedTokens: Int
     var tokenLimit: Int
 
