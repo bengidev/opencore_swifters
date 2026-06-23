@@ -1,12 +1,12 @@
 import Foundation
 
-enum ChatMessageRole: String, Equatable, Sendable, Codable {
+nonisolated enum ChatMessageRole: String, Equatable, Sendable, Codable {
     case user
     case assistant
     case system
 }
 
-enum ChatStreamingStatus: Equatable, Sendable {
+nonisolated enum ChatStreamingStatus: Equatable, Sendable {
     case idle
     case running
     case done

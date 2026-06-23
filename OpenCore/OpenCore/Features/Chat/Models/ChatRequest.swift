@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatRequest: Equatable, Sendable {
+nonisolated struct ChatRequest: Equatable, Sendable {
     let conversationID: UUID
     let messages: [ChatMessage]
     let provider: SidePanelProviderAPI
