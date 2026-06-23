@@ -4,6 +4,7 @@ import SwiftUI
 struct AppRootView: View {
     @Bindable var onboardingFlow: OnboardingFlowController
     @Bindable var sidePanel: SidePanelFlowController
+    @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
 
     let onThemeToggle: () -> Void
@@ -11,7 +12,7 @@ struct AppRootView: View {
     var body: some View {
         Group {
             if onboardingFlow.state.isFinished {
-                HomeView(sidePanel: sidePanel, chat: chat)
+                HomeView(sidePanel: sidePanel, home: home, chat: chat)
             } else {
                 OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)
             }
