@@ -53,6 +53,10 @@ final class SidePanelSessionFlowController {
 
     // MARK: - Sidebar toggle
 
+    func mirrorActiveConversationID(_ id: UUID?) {
+        state.activeConversationID = id
+    }
+
     func toggleSidebar() async {
         dispatch(SidePanelSessionSidebarToggleCommand())
 

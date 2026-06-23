@@ -2,11 +2,8 @@ import SwiftUI
 
 /// Prompt panel with context rail, speed/model chips, and send action.
 struct HomeComposerView: View {
-    @Binding var draftMessage: String
-    @Binding var speedMode: HomeComposerSpeedMode
-    let selectedModelTitle: String
-    let contextUsage: HomeComposerContextUsage
-    let availableSpeedModes: [HomeComposerSpeedMode]
+    @Bindable var home: HomeFlowController
+    @Bindable var chat: ChatFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
@@ -14,14 +11,12 @@ struct HomeComposerView: View {
     var body: some View {
         VStack(spacing: 8) {
             HomeComposerPromptPanel(
-                draftMessage: $draftMessage,
+                home: home,
+                chat: chat,
                 isComposerFocused: isComposerFocused
             )
             HomeComposerContextRail(
-                selectedModelTitle: selectedModelTitle,
-                speedMode: $speedMode,
-                availableSpeedModes: availableSpeedModes,
-                contextUsage: contextUsage,
+                home: home,
                 dismissKeyboard: dismissKeyboard
             )
         }
@@ -40,21 +35,32 @@ struct HomeComposerView: View {
 }
 
 private struct HomeComposerPromptPanel: View {
-    @Binding var draftMessage: String
+    @Bindable var home: HomeFlowController
+    @Bindable var chat: ChatFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
     @State private var sendFeedbackTrigger = false
 
     private var canSend: Bool {
-        !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !chat.state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !chat.state.isSending
+            && home.state.hasAPIKey
+            && home.state.hasSelectedModel
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if !home.state.hasAPIKey {
+                MissingAPIKeyHint { home.onOpenSettings?() }
+            }
+
             TextField(
                 "Ask anything... @files, $skills, /commands",
-                text: $draftMessage,
+                text: Binding(
+                    get: { chat.state.draftMessage },
+                    set: { chat.setDraftMessage($0) }
+                ),
                 axis: .vertical
             )
             .frame(minHeight: 50)
@@ -93,6 +99,7 @@ private struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
+        Task { await chat.sendMessage() }
     }
 
     private func dismissKeyboard() {
@@ -101,10 +108,7 @@ private struct HomeComposerPromptPanel: View {
 }
 
 private struct HomeComposerContextRail: View {
-    let selectedModelTitle: String
-    @Binding var speedMode: HomeComposerSpeedMode
-    let availableSpeedModes: [HomeComposerSpeedMode]
-    let contextUsage: HomeComposerContextUsage
+    @Bindable var home: HomeFlowController
     let dismissKeyboard: () -> Void
 
     @State private var isContextUsagePresented = false
@@ -113,43 +117,70 @@ private struct HomeComposerContextRail: View {
         HStack(spacing: 8) {
             HStack(spacing: 8) {
                 HomeComposerModelButton(
-                    title: selectedModelTitle,
-                    dismissKeyboard: dismissKeyboard,
-                    action: dismissKeyboard
-                )
-                .accessibilityLabel("Model, \(selectedModelTitle)")
+                    title: home.state.selectedModelOption?.title ?? "Select model",
+                    dismissKeyboard: dismissKeyboard
+                ) {
+                    dismissKeyboard()
+                    home.setModelPopupPresented(true)
+                }
+                .accessibilityLabel("Model, \(home.state.selectedModelOption?.title ?? "none selected")")
+
+                if home.state.selectedModelOption?.supportsReasoning == true {
+                    HomeComposerMenuChip(
+                        title: home.state.reasoningModel.title,
+                        systemImage: "circle.hexagongrid",
+                        minWidth: 92,
+                        dismissKeyboard: dismissKeyboard
+                    ) {
+                        Section("Reasoning") {
+                            ForEach(SidePanelReasoningModel.allCases) { level in
+                                Button {
+                                    dismissKeyboard()
+                                    home.selectReasoningModel(level)
+                                } label: {
+                                    Label(
+                                        level.title,
+                                        systemImage: home.state.reasoningModel == level ? "checkmark" : "circle"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityLabel("Reasoning, \(home.state.reasoningModel.title)")
+                }
             }
             .layoutPriority(1)
 
             Spacer(minLength: 8)
 
             HStack(spacing: 8) {
-                if !availableSpeedModes.isEmpty {
+                if let speedModes = home.state.selectedModelOption?.availableSpeedModes,
+                   !speedModes.isEmpty {
                     HomeComposerMenuChip(
-                        title: speedMode.title,
-                        systemImage: speedMode.systemImage,
+                        title: home.state.speedMode.title,
+                        systemImage: home.state.speedMode.systemImage,
                         displaysTitle: false,
                         displaysChevron: false,
-                        isSignal: speedMode == .fast,
+                        isSignal: home.state.speedMode == .fast,
                         minWidth: 38,
                         dismissKeyboard: dismissKeyboard
                     ) {
                         Section("Speed") {
-                            ForEach(availableSpeedModes) { mode in
+                            ForEach(speedModes) { speedMode in
                                 Button {
                                     dismissKeyboard()
-                                    speedMode = mode
+                                    home.selectSpeedMode(speedMode)
                                 } label: {
-                                    Label(mode.title, systemImage: mode.systemImage)
+                                    Label(speedMode.title, systemImage: speedMode.systemImage)
                                 }
                             }
                         }
                     }
-                    .accessibilityLabel("Speed, \(speedMode.title)")
+                    .accessibilityLabel("Speed, \(home.state.speedMode.title)")
                 }
 
                 HomeComposerContextUsageButton(
-                    usage: contextUsage,
+                    usage: home.state.contextUsage,
                     isPresented: $isContextUsagePresented,
                     dismissKeyboard: dismissKeyboard
                 )
@@ -159,13 +190,56 @@ private struct HomeComposerContextRail: View {
         .padding(.bottom, 4)
         .overlay(alignment: .bottomTrailing) {
             if isContextUsagePresented {
-                HomeComposerContextUsagePopover(usage: contextUsage)
+                HomeComposerContextUsagePopover(usage: home.state.contextUsage)
                     .offset(x: -2, y: -46)
                     .transition(.opacity)
                     .zIndex(2)
             }
         }
         .animation(.easeInOut(duration: 0.16), value: isContextUsagePresented)
+    }
+}
+
+private struct MissingAPIKeyHint: View {
+    let openSettings: () -> Void
+
+    @Environment(\.sharedPalette) private var palette
+
+    var body: some View {
+        Button(action: openSettings) {
+            HStack(spacing: 8) {
+                Image(systemName: "key.slash")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+
+                Text("Add an API key in Settings to start sending")
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 6)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(palette.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.5 : 0.8))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(palette.lineSoft.opacity(palette.isDark ? 0.45 : 0.6), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add an API key in Settings to start sending")
+        .accessibilityIdentifier("composer-missing-key-hint")
     }
 }
 
@@ -233,9 +307,7 @@ private struct HomeComposerMenuChip<MenuItems: View>: View {
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
-            TapGesture().onEnded {
-                dismissKeyboard()
-            }
+            TapGesture().onEnded { dismissKeyboard() }
         )
     }
 }
@@ -453,28 +525,28 @@ private struct HomeComposerModelButton: View {
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
-            TapGesture().onEnded {
-                dismissKeyboard()
-            }
+            TapGesture().onEnded { dismissKeyboard() }
         )
     }
 }
 
 #Preview {
     struct PreviewHost: View {
-        @State private var draftMessage = ""
-        @State private var speedMode = HomeVisualDefaults.speedMode
         @FocusState private var isComposerFocused: Bool
 
         var body: some View {
             ZStack {
                 SharedOpenCorePalette.resolve(.light).surfaceBase.ignoresSafeArea()
                 HomeComposerView(
-                    draftMessage: $draftMessage,
-                    speedMode: $speedMode,
-                    selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
-                    contextUsage: HomeVisualDefaults.contextUsage,
-                    availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
+                    home: HomeFlowController(
+                        credentialStore: SidePanelInMemoryCredentialStore(),
+                        providerPreference: SidePanelInMemoryProviderPreferenceStore(
+                            preference: SidePanelProviderPreference(
+                                modelID: "meta-llama/llama-3.3-70b-instruct:free"
+                            )
+                        )
+                    ),
+                    chat: ChatFlowController(),
                     isComposerFocused: $isComposerFocused
                 )
             }

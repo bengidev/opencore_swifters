@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// Root home screen — welcome state with composer, matching the home layout.
+/// Root home screen — welcome state or active chat thread with composer.
 struct HomeView: View {
     @Bindable var sidePanel: SidePanelFlowController
+    @Bindable var home: HomeFlowController
+    @Bindable var chat: ChatFlowController
 
-    @State private var draftMessage = ""
-    @State private var speedMode = HomeVisualDefaults.speedMode
     @FocusState private var isComposerFocused: Bool
 
     @Environment(\.sharedPalette) private var palette
+
+    private var showsWelcome: Bool {
+        !chat.state.hasMessages
+    }
 
     var body: some View {
         ZStack {
@@ -22,11 +26,29 @@ struct HomeView: View {
                         dismissComposerKeyboard()
                     }
 
-                welcomeContent
+                if showsWelcome {
+                    welcomeContent
+                } else {
+                    chatThreadContent
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityHidden(sidePanel.isSidebarVisible)
 
             SidePanelView(flow: sidePanel)
+        }
+        .onAppear {
+            wireDelegates()
+        }
+        .task {
+            await home.onAppear()
+            syncSidePanelFromHome()
+        }
+        .sheet(isPresented: Binding(
+            get: { home.state.isModelPopupPresented },
+            set: { home.setModelPopupPresented($0) }
+        )) {
+            HomeModelPopupView(home: home)
         }
     }
 
@@ -37,20 +59,51 @@ struct HomeView: View {
         ) { viewportHeight in
             HomeWelcomeView(viewportHeight: viewportHeight)
         } composer: {
-            HomeComposerView(
-                draftMessage: $draftMessage,
-                speedMode: $speedMode,
-                selectedModelTitle: HomeVisualDefaults.selectedModelTitle,
-                contextUsage: HomeVisualDefaults.contextUsage,
-                availableSpeedModes: HomeVisualDefaults.availableSpeedModes,
-                isComposerFocused: $isComposerFocused
-            )
+            composer
         }
+    }
+
+    private var chatThreadContent: some View {
+        VStack(spacing: 0) {
+            if let conversation = chat.state.conversation {
+                Text(conversation.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(palette.textPrimary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            }
+
+            ChatThreadView(flow: chat)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissComposerKeyboard()
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                ChatErrorBannerView(flow: chat)
+                    .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+
+                composer
+            }
+        }
+    }
+
+    private var composer: some View {
+        HomeComposerView(
+            home: home,
+            chat: chat,
+            isComposerFocused: $isComposerFocused
+        )
     }
 
     private var topBar: some View {
         HStack {
             Button {
+                sidePanel.session.mirrorActiveConversationID(chat.state.conversation?.id)
                 Task { await sidePanel.session.toggleSidebar() }
             } label: {
                 Image(systemName: "line.3.horizontal")
@@ -63,6 +116,7 @@ struct HomeView: View {
 
             Button {
                 dismissComposerKeyboard()
+                chat.clearActiveConversation()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .medium))
@@ -72,6 +126,40 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private func wireDelegates() {
+        home.onOpenSettings = {
+            sidePanel.settingsButtonTapped()
+        }
+        home.onModelSelectionChanged = {
+            syncSidePanelFromHome()
+        }
+
+        sidePanel.onOpenConversation = { conversation in
+            Task { await chat.reopenConversation(conversation) }
+        }
+        sidePanel.onActiveConversationRenamed = { id, title in
+            chat.renameActiveConversation(id: id, title: title)
+        }
+        sidePanel.onActiveConversationDeleted = { id in
+            if chat.state.conversation?.id == id {
+                chat.clearActiveConversation()
+            }
+        }
+        sidePanel.onCredentialsChanged = {
+            home.handleCredentialsChanged()
+        }
+        sidePanel.onReasoningModelChanged = {
+            home.handleReasoningModelChanged()
+        }
+        sidePanel.onProviderChanged = { providerID in
+            Task { await home.handleProviderChanged(providerID) }
+        }
+    }
+
+    private func syncSidePanelFromHome() {
+        sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
     }
 
     private func dismissComposerKeyboard() {
@@ -180,9 +268,20 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    HomeView(sidePanel: SidePanelFlowController(
-        credentialStore: SidePanelInMemoryCredentialStore(),
-        providerPreference: SidePanelInMemoryProviderPreferenceStore()
-    ))
-        .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
+    let credentialStore = SidePanelInMemoryCredentialStore()
+    let providerPreference = SidePanelInMemoryProviderPreferenceStore(
+        preference: SidePanelProviderPreference(modelID: "meta-llama/llama-3.3-70b-instruct:free")
+    )
+    return HomeView(
+        sidePanel: SidePanelFlowController(
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ),
+        home: HomeFlowController(
+            credentialStore: credentialStore,
+            providerPreference: providerPreference
+        ),
+        chat: ChatFlowController(providerPreference: providerPreference)
+    )
+    .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }

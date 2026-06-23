@@ -6,7 +6,7 @@
 | **Layout** | [docs/architecture/modules.md](../docs/architecture/modules.md) |
 | **Map** | [CONTEXT-MAP.md](../CONTEXT-MAP.md) |
 
-OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (first-run tour) and **Home** (welcome + composer visual shell).
+OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (first-run tour), **Home** (welcome + composer shell), **Chat** (live streaming), and **SidePanel** (history + settings).
 
 ## Onboarding
 
@@ -16,10 +16,18 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (firs
 
 ## Home
 
+- **Flow controller**: `HomeFlowController` (model catalog, selection, send gating)
 - **Entry view**: `HomeView`
-- **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`
-- **Demo defaults**: `HomeVisualDefaults` (static model label, context usage, speed mode)
-- **Scope**: visual layout only — sidebar, chat, model catalog, and send flow are not wired yet
+- **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`, `HomeModelPopupView`
+- **Catalog**: `HomeModelCatalogClient` + `HomeModelCatalogCachePreferenceClient`
+- **Composition**: owns `ChatFlowController` + `SidePanelFlowController`; switches welcome vs thread layout
+
+## Chat
+
+- **Flow controller**: `ChatFlowController` (commands + async send/retry/stream)
+- **Streaming**: `ChatStreamingClient` + `ChatOpenAICompatibleStreamingClient`
+- **Persistence**: `ChatHistoryClient` maps `ChatMessage` ↔ `SidePanelMessageEntity` (SwiftData)
+- **Views**: `ChatThreadView`, `ChatMessageRowView`, `ChatReasoningCardView`, `ChatErrorBannerView`
 
 ## SidePanel
 
