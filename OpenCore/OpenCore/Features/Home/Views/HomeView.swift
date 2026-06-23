@@ -125,17 +125,28 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeInOut(duration: duration)) {
-                    scrollProxy.scrollTo(HomeScrollAnchor.welcomeBottom, anchor: .bottom)
+            .onChange(of: isComposerFocused) { _, isFocused in
+                if isFocused {
+                    scrollWelcomeAboveComposer(with: scrollProxy)
+                } else {
+                    scrollWelcomeToTop(with: scrollProxy)
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
-                let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
-                withAnimation(.easeInOut(duration: duration)) {
-                    scrollProxy.scrollTo(HomeScrollAnchor.welcomeTop, anchor: .top)
-                }
+        }
+    }
+
+    private func scrollWelcomeAboveComposer(with proxy: ScrollViewProxy) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(HomeScrollAnchor.welcomeBottom, anchor: .bottom)
+            }
+        }
+    }
+
+    private func scrollWelcomeToTop(with proxy: ScrollViewProxy) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(HomeScrollAnchor.welcomeTop, anchor: .top)
             }
         }
     }
