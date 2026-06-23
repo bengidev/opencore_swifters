@@ -91,6 +91,7 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
     @ViewBuilder let composer: () -> Composer
 
     @State private var viewportHeight: CGFloat = 0
+    @State private var pendingScrollWork: DispatchWorkItem?
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -127,28 +128,46 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
             }
             .onChange(of: isComposerFocused) { _, isFocused in
                 if isFocused {
-                    scrollWelcomeAboveComposer(with: scrollProxy)
+                    scheduleWelcomeScroll(
+                        to: .welcomeBottom,
+                        scrollAnchor: .bottom,
+                        delay: HomeWelcomeLayoutMetrics.welcomeScrollDelay,
+                        with: scrollProxy
+                    )
                 } else {
-                    scrollWelcomeToTop(with: scrollProxy)
+                    scheduleWelcomeScroll(
+                        to: .welcomeTop,
+                        scrollAnchor: .top,
+                        delay: 0,
+                        with: scrollProxy
+                    )
                 }
             }
-        }
-    }
-
-    private func scrollWelcomeAboveComposer(with proxy: ScrollViewProxy) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            withAnimation(.easeOut(duration: 0.22)) {
-                proxy.scrollTo(HomeScrollAnchor.welcomeBottom, anchor: .bottom)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                scheduleWelcomeScroll(
+                    to: .welcomeTop,
+                    scrollAnchor: .top,
+                    delay: 0,
+                    with: scrollProxy
+                )
             }
         }
     }
 
-    private func scrollWelcomeToTop(with proxy: ScrollViewProxy) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            withAnimation(.easeOut(duration: 0.22)) {
-                proxy.scrollTo(HomeScrollAnchor.welcomeTop, anchor: .top)
+    private func scheduleWelcomeScroll(
+        to anchor: HomeScrollAnchor,
+        scrollAnchor: UnitPoint,
+        delay: TimeInterval,
+        with proxy: ScrollViewProxy
+    ) {
+        pendingScrollWork?.cancel()
+        let work = DispatchWorkItem {
+            withAnimation(HomeWelcomeLayoutMetrics.welcomeAnimation) {
+                proxy.scrollTo(anchor, anchor: scrollAnchor)
             }
         }
+        pendingScrollWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
 
