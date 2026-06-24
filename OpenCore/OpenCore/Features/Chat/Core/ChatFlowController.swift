@@ -12,6 +12,7 @@ final class ChatFlowController {
     private let providerPreference: any SidePanelProviderPreferenceStore
     private let invoker = ChatCommandInvoker()
     private var streamTask: Task<Void, Never>?
+    private var lastProviderSortBy: String?
     private let makeID: () -> UUID
     private let now: () -> Date
 
@@ -64,7 +65,7 @@ final class ChatFlowController {
 
     // MARK: - Send / Retry
 
-    func sendMessage(speedMode: HomeComposerSpeedMode? = nil) async {
+    func sendMessage(providerSortBy: String? = nil) async {
         let content = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         let preference = providerPreference.preference()
         guard !content.isEmpty,
@@ -103,11 +104,11 @@ final class ChatFlowController {
             }
         }
 
-        startStream(modelID: modelID, preference: preference, speedMode: speedMode)
+        startStream(modelID: modelID, preference: preference, providerSortBy: providerSortBy)
         await streamTask?.value
     }
 
-    func retry(speedMode: HomeComposerSpeedMode? = nil) async {
+    func retry(providerSortBy: String? = nil) async {
         let preference = providerPreference.preference()
         guard !state.isSending,
               let modelID = preference.modelID,
@@ -116,7 +117,11 @@ final class ChatFlowController {
         }
 
         beginTurn(draft: nil)
-        startStream(modelID: modelID, preference: preference, speedMode: speedMode)
+        startStream(
+            modelID: modelID,
+            preference: preference,
+            providerSortBy: providerSortBy ?? lastProviderSortBy
+        )
         await streamTask?.value
     }
 
@@ -136,9 +141,10 @@ final class ChatFlowController {
     private func startStream(
         modelID: String,
         preference: SidePanelProviderPreference,
-        speedMode: HomeComposerSpeedMode? = nil
+        providerSortBy: String? = nil
     ) {
         cancelStream()
+        lastProviderSortBy = providerSortBy
 
         let conversationID = state.conversation?.id ?? makeID()
         let request = ChatRequest(
@@ -147,7 +153,7 @@ final class ChatFlowController {
             provider: SidePanelProviderAPI.resolve(id: preference.providerID),
             modelID: modelID,
             reasoningEffort: preference.reasoningModel.effort,
-            speedMode: speedMode
+            providerSortBy: providerSortBy
         )
 
         let stream = streaming.stream(request)

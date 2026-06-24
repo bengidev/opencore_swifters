@@ -17,7 +17,7 @@ nonisolated protocol ModelCatalogCachePreferenceStore: Sendable {
 
 nonisolated struct UserDefaultsModelCatalogCachePreferenceStore: ModelCatalogCachePreferenceStore {
     private enum Key {
-        static let cachedCatalog = "opencore.provider.cachedModelCatalog"
+        static let cachedCatalog = "opencore.provider.cachedModelCatalog.v2"
     }
 
     func cachedCatalog() -> ModelCatalogCachePreference? {

@@ -44,4 +44,10 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     }
 
     var hasSelectedModel: Bool { selectedModelOption != nil }
+
+    /// OpenRouter throughput routing when the selected model supports speed modes.
+    var activeProviderSortBy: String? {
+        guard let modes = selectedModelOption?.availableSpeedModes, !modes.isEmpty else { return nil }
+        return speedMode.providerSortBy
+    }
 }

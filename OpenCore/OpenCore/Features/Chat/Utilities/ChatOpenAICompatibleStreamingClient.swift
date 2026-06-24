@@ -113,7 +113,7 @@ nonisolated struct ChatOpenAICompatibleStreamingClient: Sendable {
             reasoning: chatRequest.reasoningEffort.map {
                 ChatCompletionsRequestBody.Reasoning(effort: $0)
             },
-            provider: chatRequest.speedMode?.providerSortBy.map {
+            provider: chatRequest.providerSortBy.map {
                 ChatCompletionsRequestBody.Provider(sortBy: $0)
             }
         )
