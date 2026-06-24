@@ -42,8 +42,10 @@ final class HomeFlowController {
         state.hasAPIKey = credentialStore.secret(for: state.selectedProviderID) != nil
     }
 
-    func handleCredentialsChanged() {
+    func handleCredentialsChanged() async {
         refreshAPIKeyStatus()
+        state.shouldAutoSelectDefaultModel = state.selectedModelID == nil
+        await loadCatalog()
     }
 
     func handleProviderChanged(_ providerID: String) async {
@@ -99,7 +101,7 @@ final class HomeFlowController {
         if isPresented {
             state.modelSearchQuery = ""
             state.appliedSearchQuery = ""
-            state.modelFilterFreeOnly = state.selectedProviderID == SidePanelProviderAPI.openRouter.id
+            state.modelFilterFreeOnly = false
         }
     }
 
@@ -130,12 +132,18 @@ final class HomeFlowController {
 
     private func reconcileModelSelection(allowAutoSelect: Bool) {
         let models = state.availableModels
-        guard !models.isEmpty else { return }
+        guard !models.isEmpty else {
+            clearSelectedModelIfNeeded()
+            return
+        }
 
         if let selectedModelID = state.selectedModelID,
            models.contains(where: { $0.id == selectedModelID }) {
             return
-        } else if !allowAutoSelect {
+        }
+
+        guard allowAutoSelect else {
+            clearSelectedModelIfNeeded()
             return
         }
 
@@ -148,5 +156,11 @@ final class HomeFlowController {
            !option.availableSpeedModes.contains(state.speedMode) {
             state.speedMode = .standard
         }
+    }
+
+    private func clearSelectedModelIfNeeded() {
+        guard state.selectedModelID != nil else { return }
+        state.selectedModelID = nil
+        providerPreference.setModelID(nil)
     }
 }
