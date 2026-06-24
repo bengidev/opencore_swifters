@@ -10,21 +10,14 @@ nonisolated struct HomeModelOption: Equatable, Identifiable, Sendable {
     var contextLength: Int? { model.contextLength }
     var supportsReasoning: Bool { model.supportsReasoning }
 
-    init(
-        model: ChatModel,
-        availableSpeedModes: [HomeComposerSpeedMode] = HomeComposerSpeedMode.allCases
-    ) {
+    init(model: ChatModel) {
         self.model = model
-        self.availableSpeedModes = availableSpeedModes
+        self.availableSpeedModes = model.supportsSpeedModes ? HomeComposerSpeedMode.allCases : []
     }
 
-    init(
-        id: String,
-        title: String,
-        availableSpeedModes: [HomeComposerSpeedMode] = HomeComposerSpeedMode.allCases
-    ) {
+    init(id: String, title: String) {
         self.model = ChatModel(id: id, displayName: title)
-        self.availableSpeedModes = availableSpeedModes
+        self.availableSpeedModes = []
     }
 }
 

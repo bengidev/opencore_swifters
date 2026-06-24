@@ -6,19 +6,23 @@ nonisolated struct ChatRequest: Equatable, Sendable {
     let provider: SidePanelProviderAPI
     let modelID: String
     let reasoningEffort: String?
+    /// OpenRouter `provider.sort.by` value, or `nil` for default routing.
+    let providerSortBy: String?
 
     init(
         conversationID: UUID,
         messages: [ChatMessage],
         provider: SidePanelProviderAPI,
         modelID: String,
-        reasoningEffort: String? = nil
+        reasoningEffort: String? = nil,
+        providerSortBy: String? = nil
     ) {
         self.conversationID = conversationID
         self.messages = messages
         self.provider = provider
         self.modelID = modelID
         self.reasoningEffort = reasoningEffort
+        self.providerSortBy = providerSortBy
     }
 }
 

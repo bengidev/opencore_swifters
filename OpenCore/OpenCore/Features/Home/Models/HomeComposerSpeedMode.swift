@@ -1,7 +1,7 @@
 import Foundation
 
 /// Response speed preset for supported models.
-enum HomeComposerSpeedMode: String, CaseIterable, Equatable, Identifiable, Sendable {
+nonisolated enum HomeComposerSpeedMode: String, CaseIterable, Equatable, Identifiable, Sendable {
     case standard
     case fast
 
@@ -22,6 +22,16 @@ enum HomeComposerSpeedMode: String, CaseIterable, Equatable, Identifiable, Senda
             return "bolt"
         case .fast:
             return "bolt.fill"
+        }
+    }
+
+    /// OpenRouter `provider.sort.by` value, or `nil` for default routing.
+    var providerSortBy: String? {
+        switch self {
+        case .standard:
+            return nil
+        case .fast:
+            return "throughput"
         }
     }
 }

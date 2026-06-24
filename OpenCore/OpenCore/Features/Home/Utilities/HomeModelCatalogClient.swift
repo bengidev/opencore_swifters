@@ -22,6 +22,7 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
 
     nonisolated struct Architecture: Decodable, Sendable {
         let modality: String?
+        let tokenizer: String?
     }
 
     nonisolated struct Pricing: Decodable, Sendable {
@@ -53,13 +54,18 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
         return false
     }
 
+    var supportsSpeedModes: Bool {
+        architecture?.tokenizer == "Router" || id == "openrouter/free"
+    }
+
     func toChatModel() -> ChatModel {
         ChatModel(
             id: id,
             displayName: name ?? id,
             isFree: isFree,
             contextLength: contextLength,
-            supportsReasoning: supportsReasoning
+            supportsReasoning: supportsReasoning,
+            supportsSpeedModes: supportsSpeedModes
         )
     }
 }
@@ -172,5 +178,12 @@ nonisolated struct HomeModelCatalogClient: Sendable {
                 if lhs.isFree != rhs.isFree { return lhs.isFree }
                 return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
             }
+    }
+}
+
+extension HomeModelCatalogClient {
+    nonisolated static func chatModel(fromCatalogEntryJSON data: Data) throws -> ChatModel {
+        let entry = try JSONDecoder().decode(ProviderModelEntry.self, from: data)
+        return entry.toChatModel()
     }
 }

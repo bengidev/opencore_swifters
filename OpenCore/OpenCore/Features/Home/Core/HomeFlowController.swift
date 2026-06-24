@@ -81,6 +81,8 @@ final class HomeFlowController {
     }
 
     func selectSpeedMode(_ speedMode: HomeComposerSpeedMode) {
+        guard let option = state.selectedModelOption,
+              option.availableSpeedModes.contains(speedMode) else { return }
         state.speedMode = speedMode
     }
 
