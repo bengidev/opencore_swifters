@@ -112,6 +112,9 @@ nonisolated struct ChatOpenAICompatibleStreamingClient: Sendable {
             stream: true,
             reasoning: chatRequest.reasoningEffort.map {
                 ChatCompletionsRequestBody.Reasoning(effort: $0)
+            },
+            provider: chatRequest.speedMode?.providerSortBy.map {
+                ChatCompletionsRequestBody.Provider(sortBy: $0)
             }
         )
         urlRequest.httpBody = try JSONEncoder().encode(payload)
@@ -204,10 +207,24 @@ nonisolated struct ChatCompletionsRequestBody: Encodable, Sendable {
         let effort: String
     }
 
+    nonisolated struct Provider: Encodable, Sendable {
+        nonisolated struct Sort: Encodable, Sendable {
+            let by: String
+            let partition: String
+        }
+
+        let sort: Sort
+
+        init(sortBy: String) {
+            sort = Sort(by: sortBy, partition: "none")
+        }
+    }
+
     let model: String
     let messages: [Message]
     let stream: Bool
     let reasoning: Reasoning?
+    let provider: Provider?
 }
 
 nonisolated struct ChatCompletionsStreamChunk: Decodable, Sendable {
