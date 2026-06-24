@@ -9,15 +9,32 @@ private nonisolated struct ProviderModelsResponse: Decodable, Sendable {
 private nonisolated struct ProviderModelEntry: Decodable, Sendable {
     let id: String
     let name: String?
-    let contextLength: Int?
+    let resolvedContextLength: Int?
     let architecture: Architecture?
     let pricing: Pricing?
+    let supportedParameters: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id, name
         case contextLength = "context_length"
+        case context
+        case maxModelLen = "max_model_len"
         case architecture
         case pricing
+        case supportedParameters = "supported_parameters"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        let contextLength = try container.decodeIfPresent(Int.self, forKey: .contextLength)
+        let context = try container.decodeIfPresent(Int.self, forKey: .context)
+        let maxModelLen = try container.decodeIfPresent(Int.self, forKey: .maxModelLen)
+        resolvedContextLength = contextLength ?? context ?? maxModelLen
+        architecture = try container.decodeIfPresent(Architecture.self, forKey: .architecture)
+        pricing = try container.decodeIfPresent(Pricing.self, forKey: .pricing)
+        supportedParameters = try container.decodeIfPresent([String].self, forKey: .supportedParameters)
     }
 
     nonisolated struct Architecture: Decodable, Sendable {
@@ -34,28 +51,26 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
         if let pricing {
             return pricing.prompt == "0" && pricing.completion == "0"
         }
-        if let name { return name.lowercased().contains("free") }
+        if id.hasSuffix(":free") { return true }
+        if let name, name.localizedCaseInsensitiveContains("free") { return true }
         return false
     }
 
     var supportsReasoning: Bool {
-        let reasoningIDs: Set<String> = [
-            "deepseek-r1", "deepseek-r1-distill",
-            "deepseek/deepseek-r1", "deepseek/deepseek-r1-distill",
-            "openai/o1", "openai/o3", "openai/o1-mini", "openai/o3-mini",
-            "qwen/qwq", "qwen/qvq",
-            "deepseek-v4-pro", "deepseek-v4-flash",
-            "kimi-k2.5", "kimi-k2.6"
-        ]
-        for prefix in reasoningIDs where id.hasPrefix(prefix) || id.contains(prefix) {
+        if let modality = architecture?.modality, modality.localizedCaseInsensitiveContains("reasoning") {
             return true
         }
-        if let modality = architecture?.modality, modality.contains("reasoning") { return true }
+        if supportedParameters?.contains(where: {
+            $0.localizedCaseInsensitiveContains("reasoning")
+        }) == true {
+            return true
+        }
+        if id.localizedCaseInsensitiveContains(":thinking") { return true }
         return false
     }
 
     var supportsSpeedModes: Bool {
-        architecture?.tokenizer == "Router" || id == "openrouter/free"
+        architecture?.tokenizer == "Router"
     }
 
     func toChatModel() -> ChatModel {
@@ -63,7 +78,7 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
             id: id,
             displayName: name ?? id,
             isFree: isFree,
-            contextLength: contextLength,
+            contextLength: resolvedContextLength,
             supportsReasoning: supportsReasoning,
             supportsSpeedModes: supportsSpeedModes
         )
@@ -94,7 +109,7 @@ nonisolated struct HomeModelCatalogClient: Sendable {
 
     static let live = HomeModelCatalogClient { provider, secret, cachePreference, urlSession in
         guard let secret else {
-            return CatalogResult(models: ChatModel.curatedFallback(for: provider.id))
+            return CatalogResult(models: [])
         }
 
         let now = Date()
@@ -108,7 +123,7 @@ nonisolated struct HomeModelCatalogClient: Sendable {
         do {
             let models = try await Self.fetchModels(from: provider, secret: secret, urlSession: urlSession)
             guard !models.isEmpty else {
-                return CatalogResult(models: ChatModel.curatedFallback(for: provider.id))
+                return CatalogResult(models: [])
             }
             cachePreference.setCachedCatalog(
                 ModelCatalogCachePreference(providerID: provider.id, models: models, fetchedAt: now)
@@ -121,7 +136,7 @@ nonisolated struct HomeModelCatalogClient: Sendable {
                 return CatalogResult(models: cached.models, errorHint: catalogError.errorHint)
             }
             return CatalogResult(
-                models: ChatModel.curatedFallback(for: provider.id),
+                models: [],
                 errorHint: catalogError.errorHint
             )
         } catch {
@@ -130,12 +145,12 @@ nonisolated struct HomeModelCatalogClient: Sendable {
                !cached.models.isEmpty {
                 return CatalogResult(models: cached.models)
             }
-            return CatalogResult(models: ChatModel.curatedFallback(for: provider.id))
+            return CatalogResult(models: [])
         }
     }
 
-    static let preview = HomeModelCatalogClient { provider, _, _, _ in
-        CatalogResult(models: ChatModel.curatedFallback(for: provider.id))
+    static let preview = HomeModelCatalogClient { _, _, _, _ in
+        CatalogResult(models: [])
     }
 
     private static func fetchModels(
