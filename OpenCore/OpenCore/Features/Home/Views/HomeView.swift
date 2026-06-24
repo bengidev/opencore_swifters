@@ -43,6 +43,13 @@ struct HomeView: View {
         .task {
             await home.onAppear()
             syncSidePanelFromHome()
+            refreshContextUsage()
+        }
+        .onChange(of: chat.state.messages) { _, _ in
+            refreshContextUsage()
+        }
+        .onChange(of: chat.state.draftMessage) { _, _ in
+            refreshContextUsage()
         }
         .sheet(isPresented: Binding(
             get: { home.state.isModelPopupPresented },
@@ -134,6 +141,7 @@ struct HomeView: View {
         }
         home.onModelSelectionChanged = {
             syncSidePanelFromHome()
+            refreshContextUsage()
         }
 
         sidePanel.onOpenConversation = { conversation in
@@ -160,6 +168,13 @@ struct HomeView: View {
 
     private func syncSidePanelFromHome() {
         sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
+    }
+
+    private func refreshContextUsage() {
+        home.refreshContextUsage(
+            messages: chat.state.messages,
+            draftMessage: chat.state.draftMessage
+        )
     }
 
     private func dismissComposerKeyboard() {

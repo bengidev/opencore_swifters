@@ -5,7 +5,7 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     var selectedModelID: String?
     var reasoningModel: SidePanelReasoningModel = .high
     var speedMode: HomeComposerSpeedMode = .standard
-    var contextUsage = HomeComposerContextUsage(usedTokens: 107_000, tokenLimit: 258_000)
+    var contextUsage = ContextWindowUsage.zero
     var hasAPIKey = false
     var catalogModels: [ChatModel] = []
     var catalogError: String?
