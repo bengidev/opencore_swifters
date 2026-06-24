@@ -156,7 +156,7 @@ nonisolated struct ChatOpenAICompatibleStreamingClient: Sendable {
                !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 events.append(.thinkingDelta(reasoning))
             }
-            if let content = choice.delta?.content, !content.isEmpty {
+            if let content = choice.delta?.contentText, !content.isEmpty {
                 events.append(.textDelta(content))
             }
         }
@@ -233,7 +233,8 @@ nonisolated struct ChatCompletionsStreamChunk: Decodable, Sendable {
     }
 
     nonisolated struct Delta: Decodable, Sendable {
-        let content: String?
+        let contentString: String?
+        let contentParts: [ChatStreamContentPart]?
         let reasoning: String?
         let reasoningContent: String?
 
@@ -241,10 +242,38 @@ nonisolated struct ChatCompletionsStreamChunk: Decodable, Sendable {
             reasoning ?? reasoningContent
         }
 
+        var contentText: String? {
+            if let contentString, !contentString.isEmpty {
+                return contentString
+            }
+            if let contentParts {
+                let joined = contentParts.compactMap(\.renderedText).joined()
+                return joined.isEmpty ? nil : joined
+            }
+            return nil
+        }
+
         enum CodingKeys: String, CodingKey {
             case content
             case reasoning
             case reasoningContent = "reasoning_content"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
+            reasoningContent = try container.decodeIfPresent(String.self, forKey: .reasoningContent)
+
+            if let string = try? container.decode(String.self, forKey: .content) {
+                contentString = string
+                contentParts = nil
+            } else if let parts = try? container.decode([ChatStreamContentPart].self, forKey: .content) {
+                contentString = nil
+                contentParts = parts
+            } else {
+                contentString = nil
+                contentParts = nil
+            }
         }
     }
 
