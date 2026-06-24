@@ -86,6 +86,14 @@ final class HomeFlowController {
         state.speedMode = speedMode
     }
 
+    func refreshContextUsage(messages: [ChatMessage], draftMessage: String) {
+        state.contextUsage = ContextWindowEstimator.estimate(
+            messages: messages,
+            draft: draftMessage,
+            contextLength: state.selectedModelOption?.contextLength
+        )
+    }
+
     func setModelPopupPresented(_ isPresented: Bool) {
         state.isModelPopupPresented = isPresented
         if isPresented {

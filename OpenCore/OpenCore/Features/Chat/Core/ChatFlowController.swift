@@ -227,6 +227,7 @@ final class ChatFlowController {
             if let answerID = state.streamingAnswerID,
                let index = state.messages.firstIndex(where: { $0.id == answerID }),
                case .text(var textMessage) = state.messages[index] {
+                textMessage.content = ChatAssistantContentNormalizer.displayText(from: textMessage.content)
                 textMessage.isComplete = true
                 state.messages[index] = .text(textMessage)
             }
