@@ -12,7 +12,7 @@ struct HomeModelSelectionTests {
         let credentialStore = SidePanelInMemoryCredentialStore()
         try? credentialStore.save("test-key", for: SidePanelProviderAPI.default.id)
         let home = HomeFlowController(
-            catalog: .preview,
+            catalog: HomeTestCatalog.client,
             credentialStore: credentialStore,
             providerPreference: preference
         )
@@ -45,9 +45,12 @@ struct HomeModelSelectionTests {
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
+        let credentialStore = SidePanelInMemoryCredentialStore()
+        try? credentialStore.save("test-key", for: SidePanelProviderAPI.openRouter.id)
+        try? credentialStore.save("test-key", for: SidePanelProviderAPI.commandCode.id)
         let home = HomeFlowController(
-            catalog: .preview,
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            catalog: HomeTestCatalog.client,
+            credentialStore: credentialStore,
             providerPreference: preference
         )
         await home.onAppear()

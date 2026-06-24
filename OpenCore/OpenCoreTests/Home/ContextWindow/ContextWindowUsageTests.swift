@@ -57,6 +57,7 @@ struct ContextWindowUsageTests {
 
         #expect(usage.tokensUsedFormatted == "512")
         #expect(usage.tokenLimitFormatted == "999")
+        #expect(usage.tokensRemainingFormatted == "487")
     }
 
     @Test("Unknown limit reports zero fraction")
