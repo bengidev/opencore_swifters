@@ -12,8 +12,9 @@ App
 ├── Onboarding    # First-run product tour
 ├── SidePanel     # Conversation browser + settings (self-contained internal module)
 ├── Chat          # Live message stream, send/receive, active conversation
-├── ContextWindow # Context usage estimation and display model
 └── Home          # Welcome hero + composer shell (wires Chat + SidePanel)
+    ├── ContextWindow  # Context usage estimation and display model
+    └── SpeedMode      # Response speed presets and provider routing
 ```
 
 ## Current layout
@@ -33,15 +34,17 @@ OpenCore/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Utilities/
-│   │   └── Views/
+│   │   ├── Views/
+│   │   ├── ContextWindow/
+│   │   │   ├── Core/
+│   │   │   ├── Models/
+│   │   │   └── Utilities/
+│   │   └── SpeedMode/
+│   │       └── Models/
 │   ├── Chat/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Views/
-│   │   └── Utilities/
-│   ├── ContextWindow/
-│   │   ├── Core/
-│   │   ├── Models/
 │   │   └── Utilities/
 │   └── SidePanel/
 │       ├── Core/
@@ -60,6 +63,8 @@ OpenCore/
 ```
 
 SidePanel is a self-contained internal module combining two scopes (session + setting) with feature-owned infrastructure in `Utilities/`. Its role folders nest `Session/` and `Setting/` sub-folders, each with their own `Core/` and `Views/`.
+
+Home nests `ContextWindow/` and `SpeedMode/` sub-modules for composer-specific concerns (token budget display and response speed routing).
 
 ## Role-based folders
 

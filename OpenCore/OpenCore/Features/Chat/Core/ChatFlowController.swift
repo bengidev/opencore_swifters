@@ -196,11 +196,12 @@ final class ChatFlowController {
         case let .textDelta(delta):
             state.currentPartialText += delta
             state.streamingStatus = .running
+            let displayContent = ChatAssistantContentNormalizer.displayText(from: state.currentPartialText)
 
             if let answerID = state.streamingAnswerID,
                let index = state.messages.firstIndex(where: { $0.id == answerID }),
                case .text(var textMessage) = state.messages[index] {
-                textMessage.content = state.currentPartialText
+                textMessage.content = displayContent
                 textMessage.isComplete = false
                 state.messages[index] = .text(textMessage)
             } else {
@@ -210,7 +211,7 @@ final class ChatFlowController {
                     .text(
                         id: newID,
                         role: .assistant,
-                        content: state.currentPartialText,
+                        content: displayContent,
                         isComplete: false,
                         timestamp: now()
                     )

@@ -194,6 +194,7 @@ private struct HomeComposerContextRail: View {
                     .offset(x: -2, y: -46)
                     .transition(.opacity)
                     .zIndex(2)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .animation(.easeInOut(duration: 0.16), value: isContextUsagePresented)
@@ -383,17 +384,21 @@ private struct HomeComposerContextUsagePopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
                 Text("Context window")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(palette.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
-                Spacer(minLength: 10)
+                Spacer(minLength: 12)
 
                 if usage.hasKnownLimit {
                     Text("\(usage.percentRemaining)% left")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(palette.accentPrimary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1), in: Capsule())
@@ -401,6 +406,8 @@ private struct HomeComposerContextUsagePopover: View {
                     Text("\(usage.tokensUsedFormatted) used")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(palette.textSecondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
             }
 
@@ -412,22 +419,29 @@ private struct HomeComposerContextUsagePopover: View {
                 HStack(spacing: 10) {
                     Text("\(usage.percentUsed)% used")
                         .foregroundStyle(palette.textPrimary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
 
                     Spacer(minLength: 8)
 
                     Text("\(usage.percentRemaining)% left")
                         .foregroundStyle(palette.textTertiary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
 
                 Text("\(usage.tokensUsedFormatted) / \(usage.tokenLimitFormatted) tokens")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(palette.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
-        .frame(width: 202)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: 220)
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.isDark ? palette.surfacePaper.opacity(0.78) : palette.surfaceRaised.opacity(0.82))
