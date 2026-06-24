@@ -13,7 +13,6 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     var modelSearchQuery = ""
     var appliedSearchQuery = ""
     var modelFilterFreeOnly = false
-    var shouldAutoSelectDefaultModel = true
 
     var availableModels: [HomeModelOption] {
         catalogModels.map { HomeModelOption(model: $0) }

@@ -147,6 +147,17 @@ struct HomeSpeedModeTests {
         #expect(maxModelLenField.contextLength == 200_000)
     }
 
+    @Test("Catalog entry treats zero decimal pricing as free")
+    func catalogZeroDecimalPricingIsFree() throws {
+        let json = Data("""
+        {"id":"vendor/model","name":"Free Model","pricing":{"prompt":"0.0","completion":"0.000"}}
+        """.utf8)
+
+        let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.isFree)
+    }
+
     @Test("Fast requests include provider routing payload")
     func fastRequestIncludesProviderRouting() throws {
         let request = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
