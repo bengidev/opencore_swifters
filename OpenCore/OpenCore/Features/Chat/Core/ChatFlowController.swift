@@ -64,7 +64,7 @@ final class ChatFlowController {
 
     // MARK: - Send / Retry
 
-    func sendMessage() async {
+    func sendMessage(speedMode: HomeComposerSpeedMode? = nil) async {
         let content = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         let preference = providerPreference.preference()
         guard !content.isEmpty,
@@ -103,11 +103,11 @@ final class ChatFlowController {
             }
         }
 
-        startStream(modelID: modelID, preference: preference)
+        startStream(modelID: modelID, preference: preference, speedMode: speedMode)
         await streamTask?.value
     }
 
-    func retry() async {
+    func retry(speedMode: HomeComposerSpeedMode? = nil) async {
         let preference = providerPreference.preference()
         guard !state.isSending,
               let modelID = preference.modelID,
@@ -116,7 +116,7 @@ final class ChatFlowController {
         }
 
         beginTurn(draft: nil)
-        startStream(modelID: modelID, preference: preference)
+        startStream(modelID: modelID, preference: preference, speedMode: speedMode)
         await streamTask?.value
     }
 
@@ -133,7 +133,11 @@ final class ChatFlowController {
         state.streamingAnswerID = nil
     }
 
-    private func startStream(modelID: String, preference: SidePanelProviderPreference) {
+    private func startStream(
+        modelID: String,
+        preference: SidePanelProviderPreference,
+        speedMode: HomeComposerSpeedMode? = nil
+    ) {
         cancelStream()
 
         let conversationID = state.conversation?.id ?? makeID()
@@ -142,7 +146,8 @@ final class ChatFlowController {
             messages: state.messages,
             provider: SidePanelProviderAPI.resolve(id: preference.providerID),
             modelID: modelID,
-            reasoningEffort: preference.reasoningModel.effort
+            reasoningEffort: preference.reasoningModel.effort,
+            speedMode: speedMode
         )
 
         let stream = streaming.stream(request)
