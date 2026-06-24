@@ -117,13 +117,18 @@ private struct HomeComposerContextRail: View {
         HStack(spacing: 8) {
             HStack(spacing: 8) {
                 HomeComposerModelButton(
-                    title: home.state.selectedModelOption?.title ?? "Select model",
+                    title: home.state.modelPickerTitle,
+                    isEnabled: home.state.isModelCatalogAvailable,
                     dismissKeyboard: dismissKeyboard
                 ) {
                     dismissKeyboard()
                     home.setModelPopupPresented(true)
                 }
-                .accessibilityLabel("Model, \(home.state.selectedModelOption?.title ?? "none selected")")
+                .accessibilityLabel(
+                    home.state.isModelCatalogAvailable
+                        ? "Model, \(home.state.modelPickerTitle)"
+                        : "Model, not available"
+                )
 
                 if home.state.selectedModelOption?.supportsReasoning == true {
                     HomeComposerMenuChip(
@@ -376,7 +381,7 @@ private struct HomeComposerContextUsagePopover: View {
     private let cornerRadius: CGFloat = 28
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
                 Text("Context window")
                     .font(.system(size: 11, weight: .semibold))
@@ -386,29 +391,32 @@ private struct HomeComposerContextUsagePopover: View {
 
                 Spacer(minLength: 12)
 
-                if usage.showsUsageBreakdown {
-                    Text(usage.popoverBadgeText)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(palette.accentPrimary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1), in: Capsule())
-                } else {
-                    Text(usage.popoverBadgeText)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(palette.textSecondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
+                Text(usage.popoverBadgeText)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(usage.showsUsageBreakdown ? palette.accentPrimary : palette.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background {
+                        if usage.showsUsageBreakdown {
+                            Capsule()
+                                .fill(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1))
+                        }
+                    }
             }
 
             if usage.showsUsageBreakdown {
-                ProgressView(value: usage.fractionUsed)
-                    .tint(palette.accentPrimary)
-                    .scaleEffect(x: 1, y: 0.72, anchor: .center)
+                contextProgressBar
+            }
 
+            VStack(alignment: .leading, spacing: 8) {
+                contextMetricRow(label: "Free", value: usage.hasKnownLimit ? usage.tokensRemainingFormatted : "—")
+                contextMetricRow(label: "Used", value: usage.tokensUsedFormatted)
+                contextMetricRow(label: "Total", value: usage.hasKnownLimit ? usage.tokenLimitFormatted : "—")
+            }
+
+            if usage.showsUsageBreakdown {
                 HStack(spacing: 10) {
                     Text("\(usage.percentUsed)% used")
                         .foregroundStyle(palette.textPrimary)
@@ -423,18 +431,12 @@ private struct HomeComposerContextUsagePopover: View {
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-
-                Text(usage.tokenSummaryLabel)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(palette.textSecondary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .fixedSize(horizontal: true, vertical: false)
-        .frame(minWidth: 220, maxWidth: 280)
+        .frame(minWidth: 240, maxWidth: 300)
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.isDark ? palette.surfacePaper.opacity(0.78) : palette.surfaceRaised.opacity(0.82))
@@ -445,6 +447,40 @@ private struct HomeComposerContextUsagePopover: View {
                 .stroke(palette.lineSoft.opacity(palette.isDark ? 0.45 : 0.65), lineWidth: 1)
         }
         .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 8)
+    }
+
+    private var contextProgressBar: some View {
+        GeometryReader { geometry in
+            let totalWidth = max(geometry.size.width, 1)
+            let clampedProgress = min(max(usage.fractionUsed, 0), 1)
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(palette.lineSoft.opacity(palette.isDark ? 0.35 : 0.55))
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(palette.accentPrimary.opacity(palette.isDark ? 0.92 : 0.82))
+                    .frame(width: totalWidth * CGFloat(clampedProgress))
+            }
+        }
+        .frame(height: 10)
+    }
+
+    private func contextMetricRow(label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(label):")
+                .foregroundStyle(palette.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .foregroundStyle(palette.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
     }
 }
 
@@ -518,6 +554,7 @@ private extension View {
 
 private struct HomeComposerModelButton: View {
     let title: String
+    let isEnabled: Bool
     let dismissKeyboard: () -> Void
     let action: () -> Void
 
@@ -535,17 +572,20 @@ private struct HomeComposerModelButton: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .accessibilityHidden(true)
+                if isEnabled {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
             }
-            .foregroundStyle(palette.textSecondary)
+            .foregroundStyle(isEnabled ? palette.textSecondary : palette.textTertiary)
             .frame(minWidth: 104)
             .frame(height: 30)
             .padding(.horizontal, 10)
             .homeComposerGlass(cornerRadius: 16, shadowOpacity: 0.06)
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .simultaneousGesture(
             TapGesture().onEnded { dismissKeyboard() }
         )
@@ -562,11 +602,7 @@ private struct HomeComposerModelButton: View {
                 HomeComposerView(
                     home: HomeFlowController(
                         credentialStore: SidePanelInMemoryCredentialStore(),
-                        providerPreference: SidePanelInMemoryProviderPreferenceStore(
-                            preference: SidePanelProviderPreference(
-                                modelID: "meta-llama/llama-3.3-70b-instruct:free"
-                            )
-                        )
+                        providerPreference: SidePanelInMemoryProviderPreferenceStore()
                     ),
                     chat: ChatFlowController(),
                     isComposerFocused: $isComposerFocused
