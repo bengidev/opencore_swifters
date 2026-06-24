@@ -41,8 +41,15 @@ struct HomeView: View {
             wireDelegates()
         }
         .task {
+            wireDelegates()
             await home.onAppear()
             syncSidePanelFromHome()
+            refreshContextUsage()
+        }
+        .onChange(of: home.state.catalogModels) { _, _ in
+            refreshContextUsage()
+        }
+        .onChange(of: home.state.selectedModelID) { _, _ in
             refreshContextUsage()
         }
         .onChange(of: chat.state.messages) { _, _ in
@@ -156,13 +163,19 @@ struct HomeView: View {
             }
         }
         sidePanel.onCredentialsChanged = {
-            home.handleCredentialsChanged()
+            Task {
+                await home.handleCredentialsChanged()
+                refreshContextUsage()
+            }
         }
         sidePanel.onReasoningModelChanged = {
             home.handleReasoningModelChanged()
         }
         sidePanel.onProviderChanged = { providerID in
-            Task { await home.handleProviderChanged(providerID) }
+            Task {
+                await home.handleProviderChanged(providerID)
+                refreshContextUsage()
+            }
         }
     }
 
@@ -284,9 +297,7 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 
 #Preview {
     let credentialStore = SidePanelInMemoryCredentialStore()
-    let providerPreference = SidePanelInMemoryProviderPreferenceStore(
-        preference: SidePanelProviderPreference(modelID: "meta-llama/llama-3.3-70b-instruct:free")
-    )
+    let providerPreference = SidePanelInMemoryProviderPreferenceStore()
     return HomeView(
         sidePanel: SidePanelFlowController(
             credentialStore: credentialStore,
