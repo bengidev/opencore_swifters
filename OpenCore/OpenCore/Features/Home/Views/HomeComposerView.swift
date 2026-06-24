@@ -99,7 +99,7 @@ private struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
-        Task { await chat.sendMessage() }
+        Task { await chat.sendMessage(providerSortBy: home.state.activeProviderSortBy) }
     }
 
     private func dismissKeyboard() {
