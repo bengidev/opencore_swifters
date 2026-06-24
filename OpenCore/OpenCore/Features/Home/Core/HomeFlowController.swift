@@ -10,7 +10,6 @@ final class HomeFlowController {
     private let credentialStore: any SidePanelCredentialStore
     private let providerPreference: any SidePanelProviderPreferenceStore
     private var searchDebounceTask: Task<Void, Never>?
-    private var contextWindowTracker = ContextWindowTracker()
 
     var onModelSelectionChanged: (() -> Void)?
     var onOpenSettings: (() -> Void)?
@@ -88,12 +87,11 @@ final class HomeFlowController {
     }
 
     func refreshContextUsage(messages: [ChatMessage], draftMessage: String) {
-        contextWindowTracker.refresh(
+        state.contextUsage = ContextWindowEstimator.estimate(
             messages: messages,
             draft: draftMessage,
             contextLength: state.selectedModelOption?.contextLength
         )
-        state.contextUsage = contextWindowTracker.usage
     }
 
     func setModelPopupPresented(_ isPresented: Bool) {

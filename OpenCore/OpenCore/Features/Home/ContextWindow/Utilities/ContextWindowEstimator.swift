@@ -24,8 +24,10 @@ nonisolated enum ContextWindowEstimator {
     private static func messageText(_ message: ChatMessage) -> String {
         switch message {
         case let .text(textMessage):
+            guard textMessage.isComplete else { return "" }
             return textMessage.content
         case let .thinking(thinkingMessage):
+            guard thinkingMessage.isComplete else { return "" }
             return thinkingMessage.content
         case let .system(systemMessage):
             return systemMessage.content

@@ -247,7 +247,7 @@ nonisolated struct ChatCompletionsStreamChunk: Decodable, Sendable {
                 return contentString
             }
             if let contentParts {
-                let joined = contentParts.compactMap(\.renderedText).joined()
+                let joined = ChatStreamContentPart.joinedText(from: contentParts)
                 return joined.isEmpty ? nil : joined
             }
             return nil

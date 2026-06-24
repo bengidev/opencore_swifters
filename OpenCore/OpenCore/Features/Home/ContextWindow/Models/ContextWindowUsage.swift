@@ -42,6 +42,26 @@ nonisolated struct ContextWindowUsage: Equatable, Sendable {
         Self.compactTokenLabel(tokenLimit)
     }
 
+    var ringCenterLabel: String {
+        hasKnownLimit ? "\(percentUsed)" : "—"
+    }
+
+    var accessibilitySummary: String {
+        hasKnownLimit
+            ? "\(percentUsed)% used, \(percentRemaining)% left"
+            : "\(tokensUsedFormatted) used"
+    }
+
+    var popoverBadgeText: String {
+        hasKnownLimit ? "\(percentRemaining)% left" : "\(tokensUsedFormatted) used"
+    }
+
+    var showsUsageBreakdown: Bool { hasKnownLimit }
+
+    var tokenSummaryLabel: String {
+        "\(tokensUsedFormatted) / \(tokenLimitFormatted) tokens"
+    }
+
     private static func compactTokenLabel(_ tokens: Int) -> String {
         if tokens >= 1_000_000 {
             return formatCompact(Double(tokens) / 1_000_000, suffix: "M")

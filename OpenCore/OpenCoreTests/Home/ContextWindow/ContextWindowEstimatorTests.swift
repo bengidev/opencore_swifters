@@ -107,4 +107,21 @@ struct ContextWindowEstimatorTests {
         #expect(usage.tokenLimit == 0)
         #expect(usage.fractionUsed == 0)
     }
+
+    @Test("Incomplete assistant and thinking messages are excluded")
+    func incompleteMessagesExcluded() {
+        let completeText = "Done"
+        let streamingText = String(repeating: "x", count: 400)
+        let usage = ContextWindowEstimator.estimate(
+            messages: [
+                .text(role: .user, content: completeText),
+                .text(role: .assistant, content: streamingText, isComplete: false),
+                .thinking(content: streamingText, isComplete: false),
+            ],
+            draft: nil,
+            contextLength: 100_000
+        )
+
+        #expect(usage.tokensUsed == estimatedTokens(for: completeText))
+    }
 }
