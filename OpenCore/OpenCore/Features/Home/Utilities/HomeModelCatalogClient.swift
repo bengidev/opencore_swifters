@@ -55,7 +55,7 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
     }
 
     var supportsSpeedModes: Bool {
-        architecture?.tokenizer == "Router"
+        architecture?.tokenizer == "Router" || id == "openrouter/free"
     }
 
     func toChatModel() -> ChatModel {
@@ -178,5 +178,12 @@ nonisolated struct HomeModelCatalogClient: Sendable {
                 if lhs.isFree != rhs.isFree { return lhs.isFree }
                 return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
             }
+    }
+}
+
+extension HomeModelCatalogClient {
+    nonisolated static func chatModel(fromCatalogEntryJSON data: Data) throws -> ChatModel {
+        let entry = try JSONDecoder().decode(ProviderModelEntry.self, from: data)
+        return entry.toChatModel()
     }
 }

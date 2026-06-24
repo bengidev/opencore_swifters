@@ -90,10 +90,33 @@ extension ChatModel {
         ChatModel(id: "qwen/qwen3-14b:free", displayName: "Qwen3 14B", isFree: true, contextLength: 40_960, supportsReasoning: true)
     ]
 
+    nonisolated static let openRouterFallback: [ChatModel] = [
+        ChatModel(
+            id: "openrouter/free",
+            displayName: "Free Models Router",
+            isFree: true,
+            supportsSpeedModes: true
+        ),
+        ChatModel(
+            id: "meta-llama/llama-3.3-70b-instruct:free",
+            displayName: "Llama 3.3 70B",
+            isFree: true,
+            contextLength: 131_072
+        ),
+        ChatModel(
+            id: "deepseek/deepseek-r1:free",
+            displayName: "DeepSeek R1",
+            isFree: true,
+            contextLength: 163_840,
+            supportsReasoning: true
+        )
+    ]
+
     nonisolated static func curatedFallback(for providerID: String?) -> [ChatModel] {
         switch providerID {
         case "commandcode": return commandCodeFallback
         case "opencode": return openCodeFallback
+        case "openrouter": return openRouterFallback
         default: return curatedFallback
         }
     }
