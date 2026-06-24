@@ -42,6 +42,10 @@ nonisolated struct ContextWindowUsage: Equatable, Sendable {
         Self.compactTokenLabel(tokenLimit)
     }
 
+    var tokensRemainingFormatted: String {
+        Self.compactTokenLabel(tokensRemaining)
+    }
+
     var ringCenterLabel: String {
         hasKnownLimit ? "\(percentUsed)" : "—"
     }
