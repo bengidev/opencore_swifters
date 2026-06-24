@@ -326,7 +326,14 @@ private struct HomeComposerContextUsageButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Context usage")
-        .accessibilityValue("\(usage.usedPercent)% used, \(usage.remainingPercent)% left")
+        .accessibilityValue(contextUsageAccessibilityValue)
+    }
+
+    private var contextUsageAccessibilityValue: String {
+        if usage.hasKnownLimit {
+            return "\(usage.percentUsed)% used, \(usage.percentRemaining)% left"
+        }
+        return "\(usage.tokensUsedFormatted) used"
     }
 }
 
@@ -345,7 +352,7 @@ private struct HomeComposerContextUsageIndicator: View {
                 .frame(width: 23, height: 23)
 
             Circle()
-                .trim(from: 0, to: usage.usedFraction)
+                .trim(from: 0, to: usage.fractionUsed)
                 .stroke(
                     palette.accentPrimary.opacity(palette.isDark ? 0.92 : 0.82),
                     style: StrokeStyle(lineWidth: 3, lineCap: .round)
@@ -353,7 +360,7 @@ private struct HomeComposerContextUsageIndicator: View {
                 .rotationEffect(.degrees(-90))
                 .frame(width: 23, height: 23)
 
-            Text("\(usage.usedPercent)")
+            Text(usage.hasKnownLimit ? "\(usage.percentUsed)" : "—")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .foregroundStyle(palette.accentPrimary)
         }
@@ -383,32 +390,40 @@ private struct HomeComposerContextUsagePopover: View {
 
                 Spacer(minLength: 10)
 
-                Text("\(usage.usedPercent)%")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(palette.accentPrimary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1), in: Capsule())
+                if usage.hasKnownLimit {
+                    Text("\(usage.percentRemaining)% left")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(palette.accentPrimary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1), in: Capsule())
+                } else {
+                    Text("\(usage.tokensUsedFormatted) used")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(palette.textSecondary)
+                }
             }
 
-            ProgressView(value: usage.usedFraction)
-                .tint(palette.accentPrimary)
-                .scaleEffect(x: 1, y: 0.72, anchor: .center)
+            if usage.hasKnownLimit {
+                ProgressView(value: usage.fractionUsed)
+                    .tint(palette.accentPrimary)
+                    .scaleEffect(x: 1, y: 0.72, anchor: .center)
 
-            HStack(spacing: 10) {
-                Text("\(usage.usedPercent)% used")
-                    .foregroundStyle(palette.textPrimary)
+                HStack(spacing: 10) {
+                    Text("\(usage.percentUsed)% used")
+                        .foregroundStyle(palette.textPrimary)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
 
-                Text("\(usage.remainingPercent)% left")
-                    .foregroundStyle(palette.textTertiary)
-            }
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-
-            Text("\(usage.usedTokensLabel) / \(usage.tokenLimitLabel) tokens")
+                    Text("\(usage.percentRemaining)% left")
+                        .foregroundStyle(palette.textTertiary)
+                }
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(palette.textSecondary)
+
+                Text("\(usage.tokensUsedFormatted) / \(usage.tokenLimitFormatted) tokens")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(palette.textSecondary)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
