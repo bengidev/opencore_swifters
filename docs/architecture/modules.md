@@ -12,6 +12,7 @@ App
 ├── Onboarding    # First-run product tour
 ├── SidePanel     # Conversation browser + settings (self-contained internal module)
 ├── Chat          # Live message stream, send/receive, active conversation
+├── ContextWindow # Context usage estimation and display model
 └── Home          # Welcome hero + composer shell (wires Chat + SidePanel)
 ```
 
@@ -37,6 +38,10 @@ OpenCore/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Views/
+│   │   └── Utilities/
+│   ├── ContextWindow/
+│   │   ├── Core/
+│   │   ├── Models/
 │   │   └── Utilities/
 │   └── SidePanel/
 │       ├── Core/
