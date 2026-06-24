@@ -42,6 +42,10 @@ nonisolated struct ContextWindowUsage: Equatable, Sendable {
         Self.compactTokenLabel(tokenLimit)
     }
 
+    var tokensRemainingFormatted: String {
+        Self.compactTokenLabel(tokensRemaining)
+    }
+
     var ringCenterLabel: String {
         hasKnownLimit ? "\(percentUsed)" : "—"
     }
@@ -57,10 +61,6 @@ nonisolated struct ContextWindowUsage: Equatable, Sendable {
     }
 
     var showsUsageBreakdown: Bool { hasKnownLimit }
-
-    var tokenSummaryLabel: String {
-        "\(tokensUsedFormatted) / \(tokenLimitFormatted) tokens"
-    }
 
     private static func compactTokenLabel(_ tokens: Int) -> String {
         if tokens >= 1_000_000 {

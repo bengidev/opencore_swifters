@@ -37,19 +37,26 @@ struct HomeView: View {
 
             SidePanelView(flow: sidePanel)
         }
-        .onAppear {
-            wireDelegates()
-        }
         .task {
+            wireDelegates()
             await home.onAppear()
             syncSidePanelFromHome()
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .onChange(of: chat.state.messages) { _, _ in
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .onChange(of: chat.state.draftMessage) { _, _ in
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .sheet(isPresented: Binding(
             get: { home.state.isModelPopupPresented },
@@ -141,7 +148,6 @@ struct HomeView: View {
         }
         home.onModelSelectionChanged = {
             syncSidePanelFromHome()
-            refreshContextUsage()
         }
 
         sidePanel.onOpenConversation = { conversation in
@@ -156,7 +162,7 @@ struct HomeView: View {
             }
         }
         sidePanel.onCredentialsChanged = {
-            home.handleCredentialsChanged()
+            Task { await home.handleCredentialsChanged() }
         }
         sidePanel.onReasoningModelChanged = {
             home.handleReasoningModelChanged()
@@ -168,13 +174,6 @@ struct HomeView: View {
 
     private func syncSidePanelFromHome() {
         sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
-    }
-
-    private func refreshContextUsage() {
-        home.refreshContextUsage(
-            messages: chat.state.messages,
-            draftMessage: chat.state.draftMessage
-        )
     }
 
     private func dismissComposerKeyboard() {
@@ -284,9 +283,7 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 
 #Preview {
     let credentialStore = SidePanelInMemoryCredentialStore()
-    let providerPreference = SidePanelInMemoryProviderPreferenceStore(
-        preference: SidePanelProviderPreference(modelID: "meta-llama/llama-3.3-70b-instruct:free")
-    )
+    let providerPreference = SidePanelInMemoryProviderPreferenceStore()
     return HomeView(
         sidePanel: SidePanelFlowController(
             credentialStore: credentialStore,

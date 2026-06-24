@@ -97,15 +97,19 @@ struct SidePanelSettingView: View {
         }
     }
 
+    private var selectedProvider: SidePanelProviderAPI {
+        SidePanelProviderAPI.resolve(id: flow.state.selectedProviderID)
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Provider API key")
+            Text(selectedProvider.credentialLabel)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(palette.textPrimary)
 
             Text(flow.state.hasStoredKey
-                 ? "A key is stored securely in the Keychain. Enter a new value to replace it."
-                 : "Add your \(SidePanelProviderAPI.resolve(id: flow.state.selectedProviderID).displayName) API key to enable sending. It is stored securely in the Keychain and never leaves this device.")
+                 ? "A \(selectedProvider.credentialLabel) is stored in the Keychain. Enter a new value to replace it."
+                 : selectedProvider.credentialPrompt)
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -121,7 +125,7 @@ struct SidePanelSettingView: View {
                     .accessibilityHidden(true)
 
                 SecureField(
-                    "sk-...",
+                    selectedProvider.credentialPlaceholder,
                     text: Binding(
                         get: { flow.state.draftAPIKey },
                         set: { flow.dispatch(SidePanelSettingDraftChangedCommand($0)) }

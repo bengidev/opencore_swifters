@@ -6,6 +6,50 @@ import Testing
 @MainActor
 @Suite("Home Context Window")
 struct HomeContextWindowTests {
+    @Test("Catalog fetch applies selected model context limit")
+    func catalogFetchAppliesContextLimit() async {
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(
+                modelID: "meta-llama/llama-3.3-70b-instruct:free"
+            )
+        )
+        let home = HomeFlowController(
+            catalog: HomeTestCatalog.client,
+            credentialStore: HomeTestCatalog.credentialStoreWithKey(),
+            providerPreference: preference
+        )
+
+        home.refreshContextUsage(messages: [], draftMessage: "")
+        #expect(home.state.contextUsage.tokenLimit == 0)
+
+        await home.onAppear()
+        home.refreshContextUsage(messages: [], draftMessage: "")
+
+        #expect(home.state.contextUsage.tokenLimit == 131_072)
+    }
+
+    @Test("Credentials change reloads catalog and updates context limit")
+    func credentialsChangeReloadsCatalog() async {
+        let credentialStore = SidePanelInMemoryCredentialStore()
+        let preference = SidePanelInMemoryProviderPreferenceStore()
+        let home = HomeFlowController(
+            catalog: HomeTestCatalog.client,
+            credentialStore: credentialStore,
+            providerPreference: preference
+        )
+
+        await home.onAppear()
+        home.refreshContextUsage(messages: [], draftMessage: "")
+        #expect(home.state.contextUsage.tokenLimit == 0)
+
+        try? credentialStore.save("test-key", for: SidePanelProviderAPI.default.id)
+        await home.handleCredentialsChanged()
+        home.refreshContextUsage(messages: [], draftMessage: "")
+
+        #expect(!home.state.catalogModels.isEmpty)
+        #expect(home.state.contextUsage.tokenLimit == 131_072)
+    }
+
     @Test("Refresh reflects messages, draft, and selected model limit")
     func refreshReflectsConversationAndModel() async {
         let preference = SidePanelInMemoryProviderPreferenceStore(
@@ -14,11 +58,10 @@ struct HomeContextWindowTests {
             )
         )
         let home = HomeFlowController(
-            catalog: .preview,
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            catalog: HomeTestCatalog.client,
+            credentialStore: HomeTestCatalog.credentialStoreWithKey(),
             providerPreference: preference
         )
-
         await home.onAppear()
 
         home.refreshContextUsage(
@@ -39,8 +82,10 @@ struct HomeContextWindowTests {
             )
         )
         let home = HomeFlowController(
-            catalog: .preview,
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            catalog: HomeTestCatalog.client,
+            credentialStore: HomeTestCatalog.credentialStoreWithKey(
+                for: SidePanelProviderAPI.openRouter.id
+            ),
             providerPreference: preference
         )
         await home.onAppear()

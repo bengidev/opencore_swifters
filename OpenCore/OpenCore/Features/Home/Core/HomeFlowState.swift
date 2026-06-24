@@ -13,21 +13,28 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     var modelSearchQuery = ""
     var appliedSearchQuery = ""
     var modelFilterFreeOnly = false
-    var shouldAutoSelectDefaultModel = true
 
     var availableModels: [HomeModelOption] {
-        let source = catalogModels.isEmpty
-            ? ChatModel.curatedFallback(for: selectedProviderID)
-            : catalogModels
-        return source.map { HomeModelOption(model: $0) }
+        catalogModels.map { HomeModelOption(model: $0) }
+    }
+
+    /// True when the provider catalog has been loaded and offers at least one model.
+    var isModelCatalogAvailable: Bool { !catalogModels.isEmpty }
+
+    /// True when the loaded catalog includes at least one free-tier model.
+    var hasFreeTierModels: Bool { catalogModels.contains(where: \.isFree) }
+
+    var modelPickerTitle: String {
+        guard isModelCatalogAvailable else { return "Not Available" }
+        return selectedModelOption?.title ?? "Select model"
     }
 
     var selectedModelOption: HomeModelOption? {
-        guard let selectedModelID else { return nil }
-        if let match = availableModels.first(where: { $0.id == selectedModelID }) {
-            return match
+        guard let selectedModelID,
+              let model = catalogModels.first(where: { $0.id == selectedModelID }) else {
+            return nil
         }
-        return HomeModelOption(id: selectedModelID, title: HomeModelCatalog.displayTitle(for: selectedModelID))
+        return HomeModelOption(model: model)
     }
 
     var filteredModels: [HomeModelOption] {
@@ -43,7 +50,7 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
         }
     }
 
-    var hasSelectedModel: Bool { selectedModelOption != nil }
+    var hasSelectedModel: Bool { isModelCatalogAvailable && selectedModelOption != nil }
 
     /// OpenRouter throughput routing when the selected model supports speed modes.
     var activeProviderSortBy: String? {

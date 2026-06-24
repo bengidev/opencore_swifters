@@ -12,7 +12,7 @@ struct HomeModelSelectionTests {
         let credentialStore = SidePanelInMemoryCredentialStore()
         try? credentialStore.save("test-key", for: SidePanelProviderAPI.default.id)
         let home = HomeFlowController(
-            catalog: .preview,
+            catalog: HomeTestCatalog.client,
             credentialStore: credentialStore,
             providerPreference: preference
         )
@@ -45,9 +45,12 @@ struct HomeModelSelectionTests {
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
+        let credentialStore = SidePanelInMemoryCredentialStore()
+        try? credentialStore.save("test-key", for: SidePanelProviderAPI.openRouter.id)
+        try? credentialStore.save("test-key", for: SidePanelProviderAPI.commandCode.id)
         let home = HomeFlowController(
-            catalog: .preview,
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            catalog: HomeTestCatalog.client,
+            credentialStore: credentialStore,
             providerPreference: preference
         )
         await home.onAppear()
@@ -57,5 +60,58 @@ struct HomeModelSelectionTests {
 
         #expect(preference.preference().modelID != "meta-llama/llama-3.3-70b-instruct:free")
         #expect(home.state.selectedProviderID == SidePanelProviderAPI.commandCode.id)
+    }
+
+    @Test("Empty catalog without API key disables model selection")
+    func emptyCatalogWithoutKey() async {
+        let home = HomeFlowController(
+            catalog: HomeTestCatalog.client,
+            credentialStore: SidePanelInMemoryCredentialStore(),
+            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+        )
+
+        await home.onAppear()
+
+        #expect(!home.state.isModelCatalogAvailable)
+        #expect(!home.state.hasSelectedModel)
+        #expect(home.state.modelPickerTitle == "Not Available")
+    }
+
+    @Test("Stale persisted model auto-replaces with first catalog model")
+    func stalePersistedModelAutoReplaced() async {
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(modelID: "removed-model-id")
+        )
+        let home = HomeFlowController(
+            catalog: HomeTestCatalog.client,
+            credentialStore: HomeTestCatalog.credentialStoreWithKey(),
+            providerPreference: preference
+        )
+
+        await home.onAppear()
+
+        #expect(home.state.hasSelectedModel)
+        #expect(preference.preference().modelID == HomeTestCatalog.sampleModels[0].id)
+    }
+
+    @Test("Catalog fetch error is stored when models unavailable")
+    func catalogErrorStored() async {
+        let catalog = HomeModelCatalogClient { _, secret, _, _ in
+            guard secret != nil else { return HomeModelCatalogClient.CatalogResult(models: []) }
+            return HomeModelCatalogClient.CatalogResult(
+                models: [],
+                errorHint: "Plan upgrade required"
+            )
+        }
+        let home = HomeFlowController(
+            catalog: catalog,
+            credentialStore: HomeTestCatalog.credentialStoreWithKey(),
+            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+        )
+
+        await home.onAppear()
+
+        #expect(home.state.catalogError == "Plan upgrade required")
+        #expect(!home.state.isModelCatalogAvailable)
     }
 }
