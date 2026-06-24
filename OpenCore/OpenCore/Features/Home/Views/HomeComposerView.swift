@@ -314,7 +314,7 @@ private struct HomeComposerMenuChip<MenuItems: View>: View {
 }
 
 private struct HomeComposerContextUsageButton: View {
-    let usage: HomeComposerContextUsage
+    let usage: ContextWindowUsage
     @Binding var isPresented: Bool
     let dismissKeyboard: () -> Void
 
@@ -327,19 +327,12 @@ private struct HomeComposerContextUsageButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Context usage")
-        .accessibilityValue(contextUsageAccessibilityValue)
-    }
-
-    private var contextUsageAccessibilityValue: String {
-        if usage.hasKnownLimit {
-            return "\(usage.percentUsed)% used, \(usage.percentRemaining)% left"
-        }
-        return "\(usage.tokensUsedFormatted) used"
+        .accessibilityValue(usage.accessibilitySummary)
     }
 }
 
 private struct HomeComposerContextUsageIndicator: View {
-    let usage: HomeComposerContextUsage
+    let usage: ContextWindowUsage
 
     @Environment(\.sharedPalette) private var palette
 
@@ -361,7 +354,7 @@ private struct HomeComposerContextUsageIndicator: View {
                 .rotationEffect(.degrees(-90))
                 .frame(width: 23, height: 23)
 
-            Text(usage.hasKnownLimit ? "\(usage.percentUsed)" : "—")
+            Text(usage.ringCenterLabel)
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .foregroundStyle(palette.accentPrimary)
         }
@@ -376,7 +369,7 @@ private struct HomeComposerContextUsageIndicator: View {
 }
 
 private struct HomeComposerContextUsagePopover: View {
-    let usage: HomeComposerContextUsage
+    let usage: ContextWindowUsage
 
     @Environment(\.sharedPalette) private var palette
 
@@ -393,8 +386,8 @@ private struct HomeComposerContextUsagePopover: View {
 
                 Spacer(minLength: 12)
 
-                if usage.hasKnownLimit {
-                    Text("\(usage.percentRemaining)% left")
+                if usage.showsUsageBreakdown {
+                    Text(usage.popoverBadgeText)
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(palette.accentPrimary)
                         .lineLimit(1)
@@ -403,7 +396,7 @@ private struct HomeComposerContextUsagePopover: View {
                         .padding(.vertical, 4)
                         .background(palette.accentSoft.opacity(palette.isDark ? 0.35 : 1), in: Capsule())
                 } else {
-                    Text("\(usage.tokensUsedFormatted) used")
+                    Text(usage.popoverBadgeText)
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(palette.textSecondary)
                         .lineLimit(1)
@@ -411,7 +404,7 @@ private struct HomeComposerContextUsagePopover: View {
                 }
             }
 
-            if usage.hasKnownLimit {
+            if usage.showsUsageBreakdown {
                 ProgressView(value: usage.fractionUsed)
                     .tint(palette.accentPrimary)
                     .scaleEffect(x: 1, y: 0.72, anchor: .center)
@@ -431,7 +424,7 @@ private struct HomeComposerContextUsagePopover: View {
                 }
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
 
-                Text("\(usage.tokensUsedFormatted) / \(usage.tokenLimitFormatted) tokens")
+                Text(usage.tokenSummaryLabel)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(palette.textSecondary)
                     .lineLimit(1)
@@ -441,7 +434,7 @@ private struct HomeComposerContextUsagePopover: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .fixedSize(horizontal: true, vertical: false)
-        .frame(minWidth: 220)
+        .frame(minWidth: 220, maxWidth: 280)
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.isDark ? palette.surfacePaper.opacity(0.78) : palette.surfaceRaised.opacity(0.82))
