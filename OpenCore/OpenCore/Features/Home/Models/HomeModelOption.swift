@@ -14,23 +14,4 @@ nonisolated struct HomeModelOption: Equatable, Identifiable, Sendable {
         self.model = model
         self.availableSpeedModes = model.supportsSpeedModes ? HomeComposerSpeedMode.allCases : []
     }
-
-    init(id: String, title: String) {
-        self.model = ChatModel(id: id, displayName: title)
-        self.availableSpeedModes = []
-    }
-}
-
-enum HomeModelCatalog {
-    nonisolated static func models(for providerID: String?) -> [HomeModelOption] {
-        ChatModel.curatedFallback(for: providerID).map { HomeModelOption(model: $0) }
-    }
-
-    nonisolated static func displayTitle(for modelID: String) -> String {
-        let leaf = modelID.split(separator: "/").last.map(String.init) ?? modelID
-        let withoutFreeSuffix = leaf.replacingOccurrences(of: ":free", with: "")
-        return withoutFreeSuffix
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
-    }
 }
