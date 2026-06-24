@@ -85,36 +85,38 @@ struct ChatReasoningCardView: View {
         }
     }
 
-    @ViewBuilder
     private var streamingBody: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 0) {
-            Text(displayedContent)
-                .font(SharedOpenZoneTypography.monoSM)
-                .foregroundStyle(palette.textSecondary)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isStreaming)) { timeline in
+            Text(streamingAttributedText(cursorOpacity: cursorOpacity(at: timeline.date)))
                 .lineLimit(nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-                .animation(.easeInOut(duration: 0.08), value: content.count)
-
-            if isStreaming {
-                Text("▍")
-                    .font(SharedOpenZoneTypography.monoSM)
-                    .foregroundStyle(palette.accentPrimary)
-                    .opacity(streamingCursorOpacity)
-                    .accessibilityHidden(true)
-            }
         }
         .frame(maxHeight: isExpanded ? .infinity : 0, alignment: .top)
         .opacity(isExpanded ? 1 : 0)
         .clipped()
         .accessibilityHidden(!isExpanded)
-        .onAppear {
-            guard isStreaming else { return }
-            withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) {
-                streamingCursorOpacity = 0.2
-            }
-        }
+    }
+
+    private func streamingAttributedText(cursorOpacity: Double) -> AttributedString {
+        var result = AttributedString(displayedContent)
+        result.font = SharedOpenZoneTypography.monoSM
+        result.foregroundColor = palette.textSecondary
+
+        guard isStreaming else { return result }
+
+        var cursor = AttributedString("▍")
+        cursor.font = SharedOpenZoneTypography.monoSM
+        cursor.foregroundColor = palette.accentPrimary.opacity(cursorOpacity)
+        result.append(cursor)
+        return result
+    }
+
+    private func cursorOpacity(at date: Date) -> Double {
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.1) / 1.1
+        // 1 → 0.15 → 1 each cycle; stays in the layout, only alpha changes.
+        return phase < 0.5 ? 1 - phase * 1.7 : 0.15 + (phase - 0.5) * 1.7
     }
 
     private var displayedContent: String {
@@ -123,8 +125,6 @@ struct ChatReasoningCardView: View {
         }
         return isStreaming ? "…" : ""
     }
-
-    @State private var streamingCursorOpacity = 1.0
 }
 
 extension ChatReasoningCardView {
