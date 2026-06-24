@@ -99,7 +99,10 @@ private struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
-        Task { await chat.sendMessage() }
+        let speedMode = home.state.selectedModelOption?.availableSpeedModes.isEmpty == false
+            ? home.state.speedMode
+            : nil
+        Task { await chat.sendMessage(speedMode: speedMode) }
     }
 
     private func dismissKeyboard() {
