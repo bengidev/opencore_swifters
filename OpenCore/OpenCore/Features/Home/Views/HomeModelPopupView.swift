@@ -15,7 +15,7 @@ struct HomeModelPopupView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
-                if home.state.selectedProviderID == SidePanelProviderAPI.openRouter.id {
+                if home.state.hasFreeTierModels {
                     filterBar
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)

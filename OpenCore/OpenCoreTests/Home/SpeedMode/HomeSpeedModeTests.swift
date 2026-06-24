@@ -36,7 +36,10 @@ struct HomeSpeedModeTests {
     @Test("Model selection resets unsupported speed mode")
     func selectModelResetsUnsupportedSpeed() {
         let home = HomeFlowController(
-            state: HomeFlowState(speedMode: .fast),
+            state: HomeFlowState(
+                speedMode: .fast,
+                catalogModels: HomeTestCatalog.sampleModels
+            ),
             credentialStore: SidePanelInMemoryCredentialStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
         )
@@ -51,7 +54,8 @@ struct HomeSpeedModeTests {
         let home = HomeFlowController(
             state: HomeFlowState(
                 selectedModelID: "meta-llama/llama-3.3-70b-instruct:free",
-                speedMode: .standard
+                speedMode: .standard,
+                catalogModels: HomeTestCatalog.sampleModels
             ),
             credentialStore: SidePanelInMemoryCredentialStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
@@ -71,6 +75,7 @@ struct HomeSpeedModeTests {
     @Test("Active provider sort is nil for unsupported models")
     func activeProviderSortNilForStandardModel() {
         var state = HomeFlowState(speedMode: .fast)
+        state.catalogModels = HomeTestCatalog.sampleModels
         state.selectedModelID = "meta-llama/llama-3.3-70b-instruct:free"
 
         #expect(state.activeProviderSortBy == nil)
@@ -112,6 +117,45 @@ struct HomeSpeedModeTests {
         let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
 
         #expect(!model.supportsSpeedModes)
+    }
+
+    @Test("Catalog entry exposes reasoning from supported parameters")
+    func catalogReasoningFromSupportedParameters() throws {
+        let json = Data("""
+        {"id":"vendor/model","name":"Reasoning Model","supported_parameters":["reasoning"],"architecture":{"modality":"text->text"}}
+        """.utf8)
+
+        let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsReasoning)
+    }
+
+    @Test("Catalog entry resolves context length from alternate provider fields")
+    func catalogContextLengthFromAlternateFields() throws {
+        let contextField = try HomeModelCatalogClient.chatModel(
+            fromCatalogEntryJSON: Data("""
+            {"id":"gemma3","name":"Gemma 3","context":131072}
+            """.utf8)
+        )
+        let maxModelLenField = try HomeModelCatalogClient.chatModel(
+            fromCatalogEntryJSON: Data("""
+            {"id":"vendor/model","name":"Model","max_model_len":200000}
+            """.utf8)
+        )
+
+        #expect(contextField.contextLength == 131_072)
+        #expect(maxModelLenField.contextLength == 200_000)
+    }
+
+    @Test("Catalog entry treats zero decimal pricing as free")
+    func catalogZeroDecimalPricingIsFree() throws {
+        let json = Data("""
+        {"id":"vendor/model","name":"Free Model","pricing":{"prompt":"0.0","completion":"0.000"}}
+        """.utf8)
+
+        let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.isFree)
     }
 
     @Test("Fast requests include provider routing payload")
