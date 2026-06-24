@@ -62,10 +62,6 @@ nonisolated struct ContextWindowUsage: Equatable, Sendable {
 
     var showsUsageBreakdown: Bool { hasKnownLimit }
 
-    var tokenSummaryLabel: String {
-        "\(tokensUsedFormatted) / \(tokenLimitFormatted) tokens"
-    }
-
     private static func compactTokenLabel(_ tokens: Int) -> String {
         if tokens >= 1_000_000 {
             return formatCompact(Double(tokens) / 1_000_000, suffix: "M")

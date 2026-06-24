@@ -49,10 +49,9 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
 
     var isFree: Bool {
         if let pricing {
-            return pricing.prompt == "0" && pricing.completion == "0"
+            return Self.isZeroPrice(pricing.prompt) && Self.isZeroPrice(pricing.completion)
         }
         if id.hasSuffix(":free") { return true }
-        if let name, name.localizedCaseInsensitiveContains("free") { return true }
         return false
     }
 
@@ -82,6 +81,12 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
             supportsReasoning: supportsReasoning,
             supportsSpeedModes: supportsSpeedModes
         )
+    }
+
+    private static func isZeroPrice(_ value: String?) -> Bool {
+        guard let value else { return false }
+        guard let decimal = Decimal(string: value) else { return value == "0" }
+        return decimal == 0
     }
 }
 
@@ -123,34 +128,40 @@ nonisolated struct HomeModelCatalogClient: Sendable {
         do {
             let models = try await Self.fetchModels(from: provider, secret: secret, urlSession: urlSession)
             guard !models.isEmpty else {
-                return CatalogResult(models: [])
+                return Self.staleCachedModels(for: provider, cachePreference: cachePreference)
+                    ?? CatalogResult(models: [])
             }
             cachePreference.setCachedCatalog(
                 ModelCatalogCachePreference(providerID: provider.id, models: models, fetchedAt: now)
             )
             return CatalogResult(models: models)
         } catch let catalogError as CatalogFetchError {
-            if let cached = cachePreference.cachedCatalog(),
-               cached.providerID == provider.id,
-               !cached.models.isEmpty {
-                return CatalogResult(models: cached.models, errorHint: catalogError.errorHint)
-            }
-            return CatalogResult(
-                models: [],
+            return Self.staleCachedModels(
+                for: provider,
+                cachePreference: cachePreference,
                 errorHint: catalogError.errorHint
-            )
+            ) ?? CatalogResult(models: [], errorHint: catalogError.errorHint)
         } catch {
-            if let cached = cachePreference.cachedCatalog(),
-               cached.providerID == provider.id,
-               !cached.models.isEmpty {
-                return CatalogResult(models: cached.models)
-            }
-            return CatalogResult(models: [])
+            return Self.staleCachedModels(for: provider, cachePreference: cachePreference)
+                ?? CatalogResult(models: [])
         }
     }
 
     static let preview = HomeModelCatalogClient { _, _, _, _ in
         CatalogResult(models: [])
+    }
+
+    private static func staleCachedModels(
+        for provider: SidePanelProviderAPI,
+        cachePreference: HomeModelCatalogCachePreferenceClient,
+        errorHint: String? = nil
+    ) -> CatalogResult? {
+        guard let cached = cachePreference.cachedCatalog(),
+              cached.providerID == provider.id,
+              !cached.models.isEmpty else {
+            return nil
+        }
+        return CatalogResult(models: cached.models, errorHint: errorHint)
     }
 
     private static func fetchModels(

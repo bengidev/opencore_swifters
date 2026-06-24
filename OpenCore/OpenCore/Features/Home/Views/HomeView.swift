@@ -37,26 +37,26 @@ struct HomeView: View {
 
             SidePanelView(flow: sidePanel)
         }
-        .onAppear {
-            wireDelegates()
-        }
         .task {
             wireDelegates()
             await home.onAppear()
             syncSidePanelFromHome()
-            refreshContextUsage()
-        }
-        .onChange(of: home.state.catalogModels) { _, _ in
-            refreshContextUsage()
-        }
-        .onChange(of: home.state.selectedModelID) { _, _ in
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .onChange(of: chat.state.messages) { _, _ in
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .onChange(of: chat.state.draftMessage) { _, _ in
-            refreshContextUsage()
+            home.updateContextInputs(
+                messages: chat.state.messages,
+                draftMessage: chat.state.draftMessage
+            )
         }
         .sheet(isPresented: Binding(
             get: { home.state.isModelPopupPresented },
@@ -148,7 +148,6 @@ struct HomeView: View {
         }
         home.onModelSelectionChanged = {
             syncSidePanelFromHome()
-            refreshContextUsage()
         }
 
         sidePanel.onOpenConversation = { conversation in
@@ -163,31 +162,18 @@ struct HomeView: View {
             }
         }
         sidePanel.onCredentialsChanged = {
-            Task {
-                await home.handleCredentialsChanged()
-                refreshContextUsage()
-            }
+            Task { await home.handleCredentialsChanged() }
         }
         sidePanel.onReasoningModelChanged = {
             home.handleReasoningModelChanged()
         }
         sidePanel.onProviderChanged = { providerID in
-            Task {
-                await home.handleProviderChanged(providerID)
-                refreshContextUsage()
-            }
+            Task { await home.handleProviderChanged(providerID) }
         }
     }
 
     private func syncSidePanelFromHome() {
         sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
-    }
-
-    private func refreshContextUsage() {
-        home.refreshContextUsage(
-            messages: chat.state.messages,
-            draftMessage: chat.state.draftMessage
-        )
     }
 
     private func dismissComposerKeyboard() {
