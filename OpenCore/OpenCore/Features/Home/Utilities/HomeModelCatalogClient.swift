@@ -22,6 +22,7 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
 
     nonisolated struct Architecture: Decodable, Sendable {
         let modality: String?
+        let tokenizer: String?
     }
 
     nonisolated struct Pricing: Decodable, Sendable {
@@ -53,13 +54,18 @@ private nonisolated struct ProviderModelEntry: Decodable, Sendable {
         return false
     }
 
+    var supportsSpeedModes: Bool {
+        architecture?.tokenizer == "Router"
+    }
+
     func toChatModel() -> ChatModel {
         ChatModel(
             id: id,
             displayName: name ?? id,
             isFree: isFree,
             contextLength: contextLength,
-            supportsReasoning: supportsReasoning
+            supportsReasoning: supportsReasoning,
+            supportsSpeedModes: supportsSpeedModes
         )
     }
 }
