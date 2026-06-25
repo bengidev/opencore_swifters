@@ -9,8 +9,8 @@ struct HomeModelSelectionTests {
     @Test("Catalog load auto-selects first model when none stored")
     func autoSelectsDefaultModel() async {
         let preference = SidePanelInMemoryProviderPreferenceStore()
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try? credentialStore.save("test-key", for: SidePanelProviderAPI.default.id)
+        let credentialStore = CredentialInMemoryStore()
+        try? credentialStore.save("test-key", for: ProviderDescriptor.openRouter.id)
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
             credentialStore: credentialStore,
@@ -27,7 +27,7 @@ struct HomeModelSelectionTests {
     func selectModelPersists() {
         let preference = SidePanelInMemoryProviderPreferenceStore()
         let home = HomeFlowController(
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            credentialStore: CredentialInMemoryStore(),
             providerPreference: preference
         )
 
@@ -41,13 +41,13 @@ struct HomeModelSelectionTests {
     func providerChangeClearsModel() async {
         let preference = SidePanelInMemoryProviderPreferenceStore(
             preference: SidePanelProviderPreference(
-                providerID: SidePanelProviderAPI.openRouter.id,
+                providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try? credentialStore.save("test-key", for: SidePanelProviderAPI.openRouter.id)
-        try? credentialStore.save("test-key", for: SidePanelProviderAPI.commandCode.id)
+        let credentialStore = CredentialInMemoryStore()
+        try? credentialStore.save("test-key", for: ProviderDescriptor.openRouter.id)
+        try? credentialStore.save("test-key", for: ProviderDescriptor.commandCode.id)
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
             credentialStore: credentialStore,
@@ -56,17 +56,17 @@ struct HomeModelSelectionTests {
         await home.onAppear()
         #expect(home.state.selectedModelID != nil)
 
-        await home.handleProviderChanged(SidePanelProviderAPI.commandCode.id)
+        await home.handleProviderChanged(ProviderDescriptor.commandCode.id)
 
         #expect(preference.preference().modelID != "meta-llama/llama-3.3-70b-instruct:free")
-        #expect(home.state.selectedProviderID == SidePanelProviderAPI.commandCode.id)
+        #expect(home.state.selectedProviderID == ProviderDescriptor.commandCode.id)
     }
 
     @Test("Empty catalog without API key disables model selection")
     func emptyCatalogWithoutKey() async {
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            credentialStore: CredentialInMemoryStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
         )
 

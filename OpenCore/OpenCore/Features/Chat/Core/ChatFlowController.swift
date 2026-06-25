@@ -13,6 +13,7 @@ final class ChatFlowController {
     private let invoker = ChatCommandInvoker()
     private var streamTask: Task<Void, Never>?
     private var lastProviderSortBy: String?
+    private var lastReasoningEffort: String?
     private var accumulatedPartialText = ""
     private var accumulatedPartialThinking = ""
     private var streamingFlushTask: Task<Void, Never>?
@@ -68,7 +69,7 @@ final class ChatFlowController {
 
     // MARK: - Send / Retry
 
-    func sendMessage(providerSortBy: String? = nil) async {
+    func sendMessage(providerSortBy: String? = nil, reasoningEffort: String? = nil) async {
         let content = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         let preference = providerPreference.preference()
         guard !content.isEmpty,
@@ -107,11 +108,16 @@ final class ChatFlowController {
             }
         }
 
-        startStream(modelID: modelID, preference: preference, providerSortBy: providerSortBy)
+        startStream(
+            modelID: modelID,
+            preference: preference,
+            providerSortBy: providerSortBy,
+            reasoningEffort: reasoningEffort
+        )
         await streamTask?.value
     }
 
-    func retry(providerSortBy: String? = nil) async {
+    func retry(providerSortBy: String? = nil, reasoningEffort: String? = nil) async {
         let preference = providerPreference.preference()
         guard !state.isSending,
               let modelID = preference.modelID,
@@ -123,7 +129,8 @@ final class ChatFlowController {
         startStream(
             modelID: modelID,
             preference: preference,
-            providerSortBy: providerSortBy ?? lastProviderSortBy
+            providerSortBy: providerSortBy ?? lastProviderSortBy,
+            reasoningEffort: reasoningEffort ?? lastReasoningEffort
         )
         await streamTask?.value
     }
@@ -248,18 +255,20 @@ final class ChatFlowController {
     private func startStream(
         modelID: String,
         preference: SidePanelProviderPreference,
-        providerSortBy: String? = nil
+        providerSortBy: String? = nil,
+        reasoningEffort: String? = nil
     ) {
         cancelStream()
         lastProviderSortBy = providerSortBy
+        lastReasoningEffort = reasoningEffort
 
         let conversationID = state.conversation?.id ?? makeID()
         let request = ChatRequest(
             conversationID: conversationID,
             messages: state.messages,
-            provider: SidePanelProviderAPI.resolve(id: preference.providerID),
+            providerID: preference.providerID ?? ProviderDescriptor.openRouter.id,
             modelID: modelID,
-            reasoningEffort: preference.reasoningModel.effort,
+            reasoningEffort: reasoningEffort,
             providerSortBy: providerSortBy
         )
 
