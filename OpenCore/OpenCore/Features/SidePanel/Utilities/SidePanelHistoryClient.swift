@@ -3,9 +3,7 @@ import SwiftData
 
 // MARK: - Placeholder message type
 
-/// Minimal message struct that types the history client's `loadMessages`
-/// and `appendMessage` closures. This is a placeholder pending a full Chat
-/// feature — it carries only the fields the SwiftData entity stores.
+/// Minimal message struct for the session sidebar load API.
 struct SidePanelMessage: Equatable, Identifiable, Sendable {
     let id: UUID
     let role: String
@@ -15,26 +13,16 @@ struct SidePanelMessage: Equatable, Identifiable, Sendable {
 
 // MARK: - Client
 
-/// Persistence boundary for side panel history. Pure domain types cross this
-/// API; SwiftData entities never leak past it.
+/// Session-history facade over `PersistenceConversationHistoryStore`.
 struct SidePanelHistoryClient: Sendable {
-    /// All conversations, most-recently-updated first, for the sidebar list.
     var listConversations: @Sendable () async throws -> [SidePanelConversation]
-    /// Restore the ordered messages for a conversation when it is reopened.
     var loadMessages: @Sendable (_ conversationID: UUID) async throws -> [SidePanelMessage]
-    /// Upsert a conversation's metadata (id/title/timestamps).
     var saveConversation: @Sendable (_ conversation: SidePanelConversation) async throws -> Void
-    /// Append (or upsert by id) a single message into a conversation.
     var appendMessage: @Sendable (_ conversationID: UUID, _ message: SidePanelMessage) async throws -> Void
-    /// Delete a conversation and its messages.
     var deleteConversation: @Sendable (_ conversationID: UUID) async throws -> Void
-    /// Pin or unpin a conversation, floating it to the top of history.
     var setPinned: @Sendable (_ conversationID: UUID, _ isPinned: Bool) async throws -> Void
-    /// Rename a conversation's title.
     var renameConversation: @Sendable (_ conversationID: UUID, _ title: String) async throws -> Void
-    /// Assign a conversation to a named group, or ungroup if groupName is nil.
     var setGroup: @Sendable (_ conversationID: UUID, _ groupName: String?) async throws -> Void
-    /// List all distinct group names currently in use across conversations.
     var listGroups: @Sendable () async throws -> [String]
 
     init(
@@ -59,9 +47,6 @@ struct SidePanelHistoryClient: Sendable {
         self.listGroups = listGroups
     }
 
-    /// Inert no-op store used by tests and previews. Returns empty lists,
-    /// drops writes. The app overrides this with `.live(modelContainer:)`
-    /// in the root feature.
     static let preview = SidePanelHistoryClient(
         listConversations: { [] },
         loadMessages: { _ in [] },
@@ -75,173 +60,61 @@ struct SidePanelHistoryClient: Sendable {
     )
 }
 
-// MARK: - Live (SwiftData)
-
 extension SidePanelHistoryClient {
-    /// Live client backed by SwiftData. Each call opens a fresh `ModelContext`
-    /// on the container; mapping to/from the pure domain types happens here at
-    /// the boundary so consumers never see an entity.
     @MainActor
     static func live(modelContainer: ModelContainer) -> Self {
-        Self(
-            listConversations: { @MainActor in
-                let context = ModelContext(modelContainer)
-                let descriptor = FetchDescriptor<SidePanelConversationEntity>(
-                    sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-                )
-                let mapped = try context.fetch(descriptor)
-                    .map(Self.conversation(from:))
-                    .sorted { lhs, rhs in
-                        if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
-                        return lhs.updatedAt > rhs.updatedAt
-                    }
-                var seen = Set<UUID>()
-                return mapped.filter { seen.insert($0.id).inserted }
-            },
+        let store = PersistenceConversationHistoryStore.live(modelContainer: modelContainer)
+        return Self(
+            listConversations: { try await store.listConversations() },
             loadMessages: { @MainActor conversationID in
-                let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
-                    return []
-                }
-                return entity.messages
-                    .sorted { $0.order < $1.order }
-                    .map(Self.message(from:))
+                let messages = try await store.loadChatMessages(conversationID: conversationID)
+                return messages.compactMap(Self.sidePanelMessage(from:))
             },
             saveConversation: { @MainActor conversation in
-                let context = ModelContext(modelContainer)
-                let entity: SidePanelConversationEntity
-                if let existing = try Self.fetchConversation(conversation.id, in: context) {
-                    entity = existing
-                    entity.title = conversation.title
-                    entity.updatedAt = conversation.updatedAt
-                } else {
-                    entity = SidePanelConversationEntity(
-                        id: conversation.id,
-                        title: conversation.title,
-                        createdAt: conversation.createdAt,
-                        updatedAt: conversation.updatedAt
-                    )
-                    context.insert(entity)
-                }
-                try context.save()
+                try await store.saveConversation(conversation)
             },
             appendMessage: { @MainActor conversationID, message in
-                let context = ModelContext(modelContainer)
-                guard let conversation = try Self.fetchConversation(conversationID, in: context) else {
-                    return
-                }
-                if let existing = conversation.messages.first(where: { $0.id == message.id }) {
-                    Self.apply(message, to: existing)
-                } else {
-                    let nextOrder = (conversation.messages.map(\.order).max() ?? -1) + 1
-                    let entity = Self.entity(from: message, order: nextOrder)
-                    entity.conversation = conversation
-                    conversation.messages.append(entity)
-                    context.insert(entity)
-                }
-                conversation.updatedAt = message.createdAt
-                try context.save()
+                guard let chatMessage = Self.chatMessage(from: message) else { return }
+                try await store.appendChatMessage(conversationID: conversationID, message: chatMessage)
             },
-            deleteConversation: { @MainActor conversationID in
-                let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
-                    return
-                }
-                context.delete(entity)
-                try context.save()
-            },
-            setPinned: { @MainActor conversationID, isPinned in
-                let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
-                    return
-                }
-                entity.isPinned = isPinned
-                try context.save()
-            },
-            renameConversation: { @MainActor conversationID, title in
-                let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
-                    return
-                }
-                entity.title = trimmed
-                entity.updatedAt = .now
-                try context.save()
-            },
-            setGroup: { @MainActor conversationID, groupName in
-                let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
-                    return
-                }
-                if let groupName {
-                    let trimmed = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    entity.groupName = trimmed
-                } else {
-                    entity.groupName = nil
-                }
-                try context.save()
-            },
-            listGroups: { @MainActor in
-                let context = ModelContext(modelContainer)
-                let descriptor = FetchDescriptor<SidePanelConversationEntity>(
-                    predicate: #Predicate { $0.groupName != nil }
-                )
-                let entities = try context.fetch(descriptor)
-                let groups = Set(entities.compactMap(\.groupName))
-                return groups.sorted()
-            }
+            deleteConversation: { try await store.deleteConversation(conversationID: $0) },
+            setPinned: { try await store.setPinned(conversationID: $0, isPinned: $1) },
+            renameConversation: { try await store.renameConversation(conversationID: $0, title: $1) },
+            setGroup: { try await store.setGroup(conversationID: $0, groupName: $1) },
+            listGroups: { try await store.listGroups() }
         )
     }
 
     @MainActor
-    private static func fetchConversation(
-        _ id: UUID,
-        in context: ModelContext
-    ) throws -> SidePanelConversationEntity? {
-        var descriptor = FetchDescriptor<SidePanelConversationEntity>(
-            predicate: #Predicate { $0.id == id }
-        )
-        descriptor.fetchLimit = 1
-        return try context.fetch(descriptor).first
+    private static func sidePanelMessage(from message: ChatMessage) -> SidePanelMessage? {
+        switch message {
+        case let .text(text):
+            return SidePanelMessage(
+                id: text.id,
+                role: text.role.rawValue,
+                content: text.content,
+                createdAt: text.timestamp
+            )
+        case let .system(system):
+            return SidePanelMessage(
+                id: system.id,
+                role: system.role.rawValue,
+                content: system.content,
+                createdAt: system.timestamp
+            )
+        case .thinking:
+            return nil
+        }
     }
 
-    // MARK: Entity <-> Domain
-
-    private static func conversation(from entity: SidePanelConversationEntity) -> SidePanelConversation {
-        SidePanelConversation(
-            id: entity.id,
-            title: entity.title,
-            createdAt: entity.createdAt,
-            updatedAt: entity.updatedAt,
-            isPinned: entity.isPinned,
-            groupName: entity.groupName
-        )
-    }
-
-    private static func message(from entity: SidePanelMessageEntity) -> SidePanelMessage {
-        SidePanelMessage(
-            id: entity.id,
-            role: entity.role,
-            content: entity.content,
-            createdAt: entity.timestamp
-        )
-    }
-
-    private static func entity(from message: SidePanelMessage, order: Int) -> SidePanelMessageEntity {
-        SidePanelMessageEntity(
+    @MainActor
+    private static func chatMessage(from message: SidePanelMessage) -> ChatMessage? {
+        let role = ChatMessageRole(rawValue: message.role) ?? .user
+        return .text(
             id: message.id,
-            role: message.role,
+            role: role,
             content: message.content,
-            timestamp: message.createdAt,
-            order: order
+            timestamp: message.createdAt
         )
-    }
-
-    private static func apply(_ message: SidePanelMessage, to entity: SidePanelMessageEntity) {
-        entity.role = message.role
-        entity.content = message.content
-        entity.timestamp = message.createdAt
     }
 }
