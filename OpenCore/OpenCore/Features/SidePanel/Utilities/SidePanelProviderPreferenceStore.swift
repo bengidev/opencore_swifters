@@ -2,7 +2,7 @@ import Foundation
 
 /// The persisted selection of provider and model.
 ///
-/// Pure value data: a provider id (matching a `SidePanelProviderAPI` descriptor in the
+/// Pure value data: a provider id (matching a `ProviderDescriptor` in the
 /// catalog) plus a dynamic model id string. The model id is intentionally a
 /// free-form string — model identity is no longer a closed enum, so any model
 /// the provider exposes can be selected without a code change.
@@ -13,18 +13,17 @@ nonisolated struct SidePanelProviderPreference: Equatable, Sendable {
     /// Dynamic model identifier (e.g. `"meta-llama/llama-3.3-70b-instruct:free"`).
     /// `nil` until a model is selected; send is gated until this is set.
     var modelID: String?
-    /// Persisted reasoning effort tier. Defaults to `.high` so a capable model
-    /// reasons by default; persists across launches once the user changes it.
-    var reasoningModel: SidePanelReasoningModel
+    /// Persisted reasoning effort wire value. `nil` omits reasoning on requests.
+    var reasoningEffortWireValue: String?
 
     init(
-        providerID: String? = SidePanelProviderAPI.default.id,
+        providerID: String? = ProviderDescriptor.openRouter.id,
         modelID: String? = nil,
-        reasoningModel: SidePanelReasoningModel = .high
+        reasoningEffortWireValue: String? = "high"
     ) {
         self.providerID = providerID
         self.modelID = modelID
-        self.reasoningModel = reasoningModel
+        self.reasoningEffortWireValue = reasoningEffortWireValue
     }
 }
 
@@ -38,7 +37,7 @@ nonisolated struct SidePanelProviderPreference: Equatable, Sendable {
 ///
 /// The preference is read lazily (`preference()`), never cached by callers, so
 /// a change made in one surface takes effect on the next read with no stale
-/// value — mirroring how `SidePanelCredentialStore` resolves the secret per request.
+/// value — mirroring how `CredentialStoring` resolves the secret per request.
 nonisolated protocol SidePanelProviderPreferenceStore: Sendable {
     /// The current stored preference.
     func preference() -> SidePanelProviderPreference
@@ -46,8 +45,8 @@ nonisolated protocol SidePanelProviderPreferenceStore: Sendable {
     func setProviderID(_ providerID: String?)
     /// Persists the selected model id.
     func setModelID(_ modelID: String?)
-    /// Persists the selected reasoning effort tier.
-    func setReasoningModel(_ model: SidePanelReasoningModel)
+    /// Persists the selected reasoning effort wire value (`nil` = off).
+    func setReasoningEffort(_ effort: ModelReasoningEffort)
 }
 
 // MARK: - UserDefaults adapter
@@ -71,11 +70,11 @@ nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProvid
     }
 
     func preference() -> SidePanelProviderPreference {
-        SidePanelProviderPreference(
+        let stored = defaults.string(forKey: Key.reasoningLevel) ?? "high"
+        return SidePanelProviderPreference(
             providerID: nonEmpty(defaults.string(forKey: Key.providerID)),
             modelID: nonEmpty(defaults.string(forKey: Key.modelID)),
-            reasoningModel: SidePanelReasoningModel(rawValue: defaults.string(forKey: Key.reasoningLevel) ?? "")
-                ?? .high
+            reasoningEffortWireValue: SidePanelReasoningModel.migrateStoredValue(stored)
         )
     }
 
@@ -95,8 +94,12 @@ nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProvid
         }
     }
 
-    func setReasoningModel(_ model: SidePanelReasoningModel) {
-        defaults.set(model.rawValue, forKey: Key.reasoningLevel)
+    func setReasoningEffort(_ effort: ModelReasoningEffort) {
+        if let wireValue = effort.wireValue {
+            defaults.set(wireValue, forKey: Key.reasoningLevel)
+        } else {
+            defaults.set(SidePanelReasoningModel.off.rawValue, forKey: Key.reasoningLevel)
+        }
     }
 
     private func nonEmpty(_ value: String?) -> String? {
@@ -135,9 +138,9 @@ nonisolated final class SidePanelInMemoryProviderPreferenceStore: SidePanelProvi
         stored.modelID = modelID
     }
 
-    func setReasoningModel(_ model: SidePanelReasoningModel) {
+    func setReasoningEffort(_ effort: ModelReasoningEffort) {
         lock.lock()
         defer { lock.unlock() }
-        stored.reasoningModel = model
+        stored.reasoningEffortWireValue = effort.wireValue
     }
 }

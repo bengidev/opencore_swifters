@@ -40,7 +40,7 @@ struct HomeSpeedModeTests {
                 speedMode: .fast,
                 catalogModels: HomeTestCatalog.sampleModels
             ),
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            credentialStore: CredentialInMemoryStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
         )
 
@@ -57,7 +57,7 @@ struct HomeSpeedModeTests {
                 speedMode: .standard,
                 catalogModels: HomeTestCatalog.sampleModels
             ),
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            credentialStore: CredentialInMemoryStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
         )
 
@@ -128,6 +128,78 @@ struct HomeSpeedModeTests {
         let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
 
         #expect(model.supportsReasoning)
+        #expect(!model.supportedReasoningEfforts.isEmpty)
+    }
+
+    @Test("Catalog entry parses supported reasoning efforts")
+    func catalogParsesSupportedReasoningEfforts() throws {
+        let json = Data("""
+        {"id":"openai/o4-mini","name":"O4 Mini","supported_parameters":["reasoning"],"reasoning":{"supported_efforts":["high","medium","low","none"],"mandatory":false}}
+        """.utf8)
+
+        let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportedReasoningEfforts == ["high", "medium", "low", "none"])
+        #expect(!model.reasoningMandatory)
+    }
+
+    @Test("Catalog provider parameter enables speed modes")
+    func catalogProviderParameterEnablesSpeedModes() throws {
+        let json = Data("""
+        {"id":"vendor/router","name":"Router","supported_parameters":["provider"]}
+        """.utf8)
+
+        let model = try HomeModelCatalogClient.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsSpeedModes)
+    }
+
+    @Test("Non-router provider hides speed modes for router-capable models")
+    func nonRouterProviderHidesSpeedModes() {
+        let option = HomeModelOption(
+            model: ChatModel(
+                id: "openrouter/free",
+                displayName: "Free Models Router",
+                isFree: true,
+                supportsSpeedModes: true
+            ),
+            providerSupportsRouting: false
+        )
+
+        #expect(option.availableSpeedModes.isEmpty)
+    }
+
+    @Test("Reasoning menu uses catalog efforts")
+    func reasoningMenuUsesCatalogEfforts() {
+        let option = HomeModelOption(
+            model: ChatModel(
+                id: "openai/o4-mini",
+                displayName: "O4 Mini",
+                supportedReasoningEfforts: ["max", "high", "low"],
+                reasoningMandatory: true
+            )
+        )
+
+        #expect(option.availableReasoningEfforts.map(\.wireValue) == ["max", "high", "low"])
+    }
+
+    @Test("OpenCode requests use top-level reasoning_effort")
+    func openCodeUsesTopLevelReasoningEffort() throws {
+        let request = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
+            providerID: ProviderDescriptor.openCode.id,
+            secret: "test-key",
+            chatRequest: ChatRequest(
+                conversationID: UUID(),
+                messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
+                providerID: ProviderDescriptor.openCode.id,
+                modelID: "glm-5",
+                reasoningEffort: "high"
+            )
+        )
+
+        let body = try JSONDecoder().decode(ReasoningProbe.self, from: request.httpBody ?? Data())
+        #expect(body.reasoning == nil)
+        #expect(body.reasoningEffort == "high")
     }
 
     @Test("Catalog entry resolves context length from alternate provider fields")
@@ -161,12 +233,12 @@ struct HomeSpeedModeTests {
     @Test("Fast requests include provider routing payload")
     func fastRequestIncludesProviderRouting() throws {
         let request = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
-            provider: .openRouter,
+            providerID: ProviderDescriptor.openRouter.id,
             secret: "test-key",
             chatRequest: ChatRequest(
                 conversationID: UUID(),
                 messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
-                provider: .openRouter,
+                providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free",
                 providerSortBy: "throughput"
             )
@@ -180,12 +252,12 @@ struct HomeSpeedModeTests {
     @Test("Standard requests omit provider routing payload")
     func standardRequestOmitsProviderRouting() throws {
         let request = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
-            provider: .openRouter,
+            providerID: ProviderDescriptor.openRouter.id,
             secret: "test-key",
             chatRequest: ChatRequest(
                 conversationID: UUID(),
                 messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
-                provider: .openRouter,
+                providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"
             )
         )
@@ -216,7 +288,7 @@ struct HomeSpeedModeTests {
         let log = RequestLog()
         let preference = SidePanelInMemoryProviderPreferenceStore(
             preference: SidePanelProviderPreference(
-                providerID: SidePanelProviderAPI.openRouter.id,
+                providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"
             )
         )
@@ -232,17 +304,46 @@ struct HomeSpeedModeTests {
         )
 
         controller.setDraftMessage("Hello")
-        await controller.sendMessage(providerSortBy: "throughput")
+        await controller.sendMessage(providerSortBy: "throughput", reasoningEffort: "high")
         await controller.retry()
 
         let requests = log.all()
         #expect(requests.count == 2)
         #expect(requests[0].providerSortBy == "throughput")
         #expect(requests[1].providerSortBy == "throughput")
+        #expect(requests[0].reasoningEffort == "high")
+        #expect(requests[1].reasoningEffort == "high")
+    }
+}
+
+private nonisolated struct ReasoningProbe: Decodable {
+    struct Reasoning: Decodable {
+        let effort: String
+    }
+
+    let reasoning: Reasoning?
+    let reasoningEffort: String?
+
+    enum CodingKeys: String, CodingKey {
+        case reasoning
+        case reasoningEffort = "reasoning_effort"
     }
 }
 
 private nonisolated struct RequestProbe: Decodable {
+    struct Reasoning: Decodable {
+        let effort: String
+    }
+
+    let reasoning: Reasoning?
+    let reasoningEffort: String?
+
+    enum CodingKeys: String, CodingKey {
+        case reasoning
+        case reasoningEffort = "reasoning_effort"
+        case provider
+    }
+
     struct Provider: Decodable {
         struct Sort: Decodable {
             let by: String

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Settings sheet for secure provider credential entry.
 ///
-/// Provider selection is a menu picker over the built-in `SidePanelProviderAPI` catalog.
+/// Provider selection is a menu picker over the built-in `ProviderRegistry` catalog.
 /// Users choose from app-shipped providers only; custom endpoints are out of scope.
 ///
 /// A single secure field accepts the API key; saving persists it to the Keychain
@@ -33,7 +33,7 @@ struct SidePanelSettingView: View {
                                 .accessibilityIdentifier("settings-error")
                         }
                         actions
-                        if flow.state.modelSupportsReasoning {
+                        if !flow.state.availableReasoningEfforts.isEmpty {
                             reasoningControl
                         }
                         Spacer(minLength: 0)
@@ -72,7 +72,7 @@ struct SidePanelSettingView: View {
                         set: { flow.selectProvider($0) }
                     )
                 ) {
-                    ForEach(SidePanelProviderAPI.all, id: \.id) { provider in
+                    ForEach(ProviderRegistry.allDescriptors, id: \.id) { provider in
                         Text(provider.displayName).tag(provider.id)
                     }
                 }
@@ -97,8 +97,8 @@ struct SidePanelSettingView: View {
         }
     }
 
-    private var selectedProvider: SidePanelProviderAPI {
-        SidePanelProviderAPI.resolve(id: flow.state.selectedProviderID)
+    private var selectedProvider: ProviderDescriptor {
+        ProviderRegistry.resolve(id: flow.state.selectedProviderID).descriptor
     }
 
     private var header: some View {
@@ -175,12 +175,12 @@ struct SidePanelSettingView: View {
             Picker(
                 "Reasoning level",
                 selection: Binding(
-                    get: { flow.state.reasoningModel },
-                    set: { flow.selectReasoningModel($0) }
+                    get: { flow.state.selectedReasoningEffort },
+                    set: { flow.selectReasoningEffort($0) }
                 )
             ) {
-                ForEach(SidePanelReasoningModel.allCases) { level in
-                    Text(level.title).tag(level)
+                ForEach(flow.state.availableReasoningEfforts) { effort in
+                    Text(effort.title).tag(effort)
                 }
             }
             .pickerStyle(.segmented)
@@ -227,7 +227,7 @@ struct SidePanelSettingView: View {
 #Preview {
     SidePanelSettingView(
         flow: SidePanelSettingFlowController(
-            credentialStore: SidePanelInMemoryCredentialStore(),
+            credentialStore: CredentialInMemoryStore(),
             providerPreference: SidePanelInMemoryProviderPreferenceStore()
         )
     )

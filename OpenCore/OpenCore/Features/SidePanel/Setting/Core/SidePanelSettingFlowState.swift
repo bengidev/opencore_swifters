@@ -12,32 +12,38 @@ nonisolated struct SidePanelSettingFlowState: Equatable, Sendable {
     var hasStoredKey = false
     /// Transient error surfaced when a Keychain write fails.
     var errorMessage: String?
-    /// The persisted reasoning effort tier, mirrored from the preference store.
-    var reasoningModel: SidePanelReasoningModel = .high
-    /// Whether the currently selected model supports reasoning. Seeded by the
-    /// parent when presenting the sheet.
-    var modelSupportsReasoning = false
+    /// Persisted reasoning effort wire value mirrored from the preference store.
+    var reasoningEffortWireValue: String? = "high"
+    /// Catalog-driven reasoning options for the selected model.
+    var availableReasoningEfforts: [ModelReasoningEffort] = []
     /// The provider whose credentials are currently being managed. Defaults to
     /// the catalog default so the control always has a valid selection.
-    var selectedProviderID: String = SidePanelProviderAPI.default.id
+    var selectedProviderID: String = ProviderDescriptor.openRouter.id
 
     var canSave: Bool {
         !draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var selectedReasoningEffort: ModelReasoningEffort {
+        ModelReasoningEffort.resolvedSelection(
+            storedWireValue: reasoningEffortWireValue,
+            available: availableReasoningEfforts
+        )
     }
 
     init(
         draftAPIKey: String = "",
         hasStoredKey: Bool = false,
         errorMessage: String? = nil,
-        reasoningModel: SidePanelReasoningModel = .high,
-        modelSupportsReasoning: Bool = false,
-        selectedProviderID: String = SidePanelProviderAPI.default.id
+        reasoningEffortWireValue: String? = "high",
+        availableReasoningEfforts: [ModelReasoningEffort] = [],
+        selectedProviderID: String = ProviderDescriptor.openRouter.id
     ) {
         self.draftAPIKey = draftAPIKey
         self.hasStoredKey = hasStoredKey
         self.errorMessage = errorMessage
-        self.reasoningModel = reasoningModel
-        self.modelSupportsReasoning = modelSupportsReasoning
+        self.reasoningEffortWireValue = reasoningEffortWireValue
+        self.availableReasoningEfforts = availableReasoningEfforts
         self.selectedProviderID = selectedProviderID
     }
 }

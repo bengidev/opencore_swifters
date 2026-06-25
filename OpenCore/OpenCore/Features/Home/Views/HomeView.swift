@@ -151,7 +151,9 @@ struct HomeView: View {
     }
 
     private func syncSidePanelFromHome() {
-        sidePanel.setModelSupportsReasoning(home.state.selectedModelOption?.supportsReasoning == true)
+        sidePanel.setAvailableReasoningEfforts(
+            home.state.selectedModelOption?.availableReasoningEfforts ?? []
+        )
     }
 
     private func refreshContextInputsIfNeeded() {
@@ -268,7 +270,7 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 }
 
 #Preview {
-    let credentialStore = SidePanelInMemoryCredentialStore()
+    let credentialStore = CredentialInMemoryStore()
     let providerPreference = SidePanelInMemoryProviderPreferenceStore()
     return HomeView(
         sidePanel: SidePanelFlowController(

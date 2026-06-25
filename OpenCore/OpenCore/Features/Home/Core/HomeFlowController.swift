@@ -7,7 +7,7 @@ final class HomeFlowController {
     private(set) var state: HomeFlowState
     private let catalog: HomeModelCatalogClient
     private let cachePreference: HomeModelCatalogCachePreferenceClient
-    private let credentialStore: any SidePanelCredentialStore
+    private let credentialStore: any CredentialStoring
     private let providerPreference: any SidePanelProviderPreferenceStore
     private var searchDebounceTask: Task<Void, Never>?
     private var contextMessages: [ChatMessage] = []
@@ -20,7 +20,7 @@ final class HomeFlowController {
         state: HomeFlowState = HomeFlowState(),
         catalog: HomeModelCatalogClient = .live,
         cachePreference: HomeModelCatalogCachePreferenceClient = .live,
-        credentialStore: any SidePanelCredentialStore,
+        credentialStore: any CredentialStoring,
         providerPreference: any SidePanelProviderPreferenceStore
     ) {
         self.state = state
@@ -33,9 +33,9 @@ final class HomeFlowController {
     func onAppear() async {
         refreshAPIKeyStatus()
         let preference = providerPreference.preference()
-        state.selectedProviderID = preference.providerID ?? SidePanelProviderAPI.default.id
+        state.selectedProviderID = preference.providerID ?? ProviderDescriptor.openRouter.id
         state.selectedModelID = preference.modelID
-        state.reasoningModel = preference.reasoningModel
+        state.reasoningEffortWireValue = preference.reasoningEffortWireValue
         await loadCatalog(allowAutoSelect: preference.modelID == nil)
     }
 
@@ -62,7 +62,7 @@ final class HomeFlowController {
     }
 
     func handleReasoningModelChanged() {
-        state.reasoningModel = providerPreference.preference().reasoningModel
+        state.reasoningEffortWireValue = providerPreference.preference().reasoningEffortWireValue
     }
 
     func selectModel(_ modelID: String) {
@@ -70,17 +70,21 @@ final class HomeFlowController {
         providerPreference.setModelID(modelID)
         state.selectedModelID = modelID
         state.isModelPopupPresented = false
-        if let option = state.selectedModelOption,
-           !option.availableSpeedModes.contains(state.speedMode) {
-            state.speedMode = .standard
+        if let option = state.selectedModelOption {
+            if !option.availableSpeedModes.contains(state.speedMode) {
+                state.speedMode = .standard
+            }
+            reconcileReasoningSelection(for: option)
         }
         refreshStoredContextUsage()
         onModelSelectionChanged?()
     }
 
-    func selectReasoningModel(_ level: SidePanelReasoningModel) {
-        providerPreference.setReasoningModel(level)
-        state.reasoningModel = level
+    func selectReasoningEffort(_ effort: ModelReasoningEffort) {
+        guard let option = state.selectedModelOption,
+              option.availableReasoningEfforts.contains(effort) else { return }
+        providerPreference.setReasoningEffort(effort)
+        state.reasoningEffortWireValue = effort.wireValue
     }
 
     func selectSpeedMode(_ speedMode: HomeComposerSpeedMode) {
@@ -127,9 +131,8 @@ final class HomeFlowController {
     }
 
     private func loadCatalog(allowAutoSelect: Bool) async {
-        let provider = SidePanelProviderAPI.resolve(id: state.selectedProviderID)
         let secret = credentialStore.secret(for: state.selectedProviderID)
-        let result = await catalog.listModels(provider, secret, cachePreference, .shared)
+        let result = await catalog.listModels(state.selectedProviderID, secret, cachePreference, .shared)
         state.catalogModels = result.models
         state.catalogError = result.errorHint
         reconcileModelSelection(allowAutoSelect: allowAutoSelect)
@@ -146,6 +149,9 @@ final class HomeFlowController {
 
         if let selectedModelID = state.selectedModelID,
            models.contains(where: { $0.id == selectedModelID }) {
+            if let option = state.selectedModelOption {
+                reconcileReasoningSelection(for: option)
+            }
             return
         }
 
@@ -160,9 +166,11 @@ final class HomeFlowController {
         providerPreference.setModelID(model.id)
         state.selectedModelID = model.id
 
-        if let option = state.selectedModelOption,
-           !option.availableSpeedModes.contains(state.speedMode) {
-            state.speedMode = .standard
+        if let option = state.selectedModelOption {
+            if !option.availableSpeedModes.contains(state.speedMode) {
+                state.speedMode = .standard
+            }
+            reconcileReasoningSelection(for: option)
         }
     }
 
@@ -170,6 +178,13 @@ final class HomeFlowController {
         guard state.selectedModelID != nil else { return }
         state.selectedModelID = nil
         providerPreference.setModelID(nil)
+    }
+
+    private func reconcileReasoningSelection(for option: HomeModelOption) {
+        let resolved = option.resolvedReasoningEffort(storedWireValue: state.reasoningEffortWireValue)
+        guard resolved.wireValue != state.reasoningEffortWireValue else { return }
+        providerPreference.setReasoningEffort(resolved)
+        state.reasoningEffortWireValue = resolved.wireValue
     }
 
     private func refreshStoredContextUsage() {

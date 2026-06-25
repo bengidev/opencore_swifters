@@ -19,9 +19,8 @@ final class SidePanelFlowController {
     /// Presented settings sheet. `nil` when the sheet is dismissed.
     private(set) var setting: SidePanelSettingFlowController?
 
-    /// Whether the parent's selected model supports reasoning. Mirrored from
-    /// Home so the settings sheet can gate the reasoning control.
-    var modelSupportsReasoning = false
+    /// Catalog-driven reasoning options for the selected model, mirrored from Home.
+    var availableReasoningEfforts: [ModelReasoningEffort] = []
 
     /// The currently selected provider id, mirrored from Home. Defaults to
     /// the catalog default so the control always has a valid selection.
@@ -33,7 +32,7 @@ final class SidePanelFlowController {
 
     // MARK: - Stores (held for settings presentation)
 
-    private let credentialStore: any SidePanelCredentialStore
+    private let credentialStore: any CredentialStoring
     private let providerPreference: any SidePanelProviderPreferenceStore
 
     // MARK: - Delegate outputs (surfaced to parent)
@@ -49,13 +48,13 @@ final class SidePanelFlowController {
 
     init(
         session: SidePanelSessionFlowController = .init(),
-        credentialStore: any SidePanelCredentialStore,
+        credentialStore: any CredentialStoring,
         providerPreference: any SidePanelProviderPreferenceStore
     ) {
         self.session = session
         self.credentialStore = credentialStore
         self.providerPreference = providerPreference
-        self.selectedProviderID = SidePanelProviderAPI.default.id
+        self.selectedProviderID = ProviderDescriptor.openRouter.id
 
         // Wire session delegate forwards.
         session.onOpenConversation = { [weak self] convo in
@@ -82,8 +81,8 @@ final class SidePanelFlowController {
         let settingController = SidePanelSettingFlowController(
             state: SidePanelSettingFlowState(
                 hasStoredKey: credentialStore.secret(for: providerID) != nil,
-                reasoningModel: prefs.reasoningModel,
-                modelSupportsReasoning: modelSupportsReasoning,
+                reasoningEffortWireValue: prefs.reasoningEffortWireValue,
+                availableReasoningEfforts: availableReasoningEfforts,
                 selectedProviderID: providerID
             ),
             credentialStore: credentialStore,
@@ -93,7 +92,7 @@ final class SidePanelFlowController {
         settingController.onCredentialsChanged = { [weak self] in
             guard let self else { return }
             self.selectedProviderID = self.providerPreference.preference().providerID
-                ?? SidePanelProviderAPI.default.id
+                ?? ProviderDescriptor.openRouter.id
             self.onCredentialsChanged?()
         }
 
@@ -104,7 +103,7 @@ final class SidePanelFlowController {
         settingController.onProviderChanged = { [weak self] id in
             guard let self else { return }
             self.selectedProviderID = self.providerPreference.preference().providerID
-                ?? SidePanelProviderAPI.default.id
+                ?? ProviderDescriptor.openRouter.id
             self.onProviderChanged?(id)
         }
 
@@ -120,7 +119,7 @@ final class SidePanelFlowController {
 
     /// Called by the parent when the selected model changes so the
     /// reasoning gate can be refreshed.
-    func setModelSupportsReasoning(_ value: Bool) {
-        modelSupportsReasoning = value
+    func setAvailableReasoningEfforts(_ efforts: [ModelReasoningEffort]) {
+        availableReasoningEfforts = efforts
     }
 }
