@@ -71,14 +71,14 @@ struct ChatStreamContentMappingTests {
   @Test("Maps string content deltas")
   func stringContent() {
     let payload = #"{"choices":[{"delta":{"content":"Hello"}}]}"#
-    let events = ChatOpenAICompatibleStreamingClient.mapDataPayload(payload)
+    let events = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload)
     #expect(events == [.textDelta("Hello")])
   }
 
   @Test("Maps array content blocks")
   func arrayContent() {
     let payload = #"{"choices":[{"delta":{"content":[{"type":"text","text":"Hi"}]}}]}"#
-    let events = ChatOpenAICompatibleStreamingClient.mapDataPayload(payload)
+    let events = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload)
     #expect(events == [.textDelta("Hi")])
   }
 
@@ -89,7 +89,7 @@ struct ChatStreamContentMappingTests {
       "[{'type': 'text', 'text': \"GeForce is NVIDIA's brand for consumer GPUs.\"}]"
     let preference = SidePanelInMemoryProviderPreferenceStore(
       preference: SidePanelProviderPreference(
-        providerID: SidePanelProviderAPI.openRouter.id,
+        providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )
     )
@@ -115,7 +115,7 @@ struct ChatStreamContentMappingTests {
     let raw = "User Safety: safe\nResponse Safety: safe"
     let preference = SidePanelInMemoryProviderPreferenceStore(
       preference: SidePanelProviderPreference(
-        providerID: SidePanelProviderAPI.openRouter.id,
+        providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )
     )
@@ -146,7 +146,7 @@ struct ChatStreamContentMappingTests {
     let events: [ChatStreamingEvent] = deltas.map { .textDelta($0) } + [.done]
     let preference = SidePanelInMemoryProviderPreferenceStore(
       preference: SidePanelProviderPreference(
-        providerID: SidePanelProviderAPI.openRouter.id,
+        providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )
     )

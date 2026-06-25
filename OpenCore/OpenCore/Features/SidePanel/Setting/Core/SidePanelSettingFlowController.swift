@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Drives the Settings sheet: entering, updating, and clearing the provider API
-/// key. The key is persisted to `SidePanelCredentialStore`; this controller
+/// key. The key is persisted to `CredentialStoring`; this controller
 /// never holds the secret beyond the in-flight draft the user is typing, and
 /// surfaces only whether a key is stored — never the value itself.
 ///
@@ -13,7 +13,7 @@ import Observation
 @Observable
 final class SidePanelSettingFlowController {
     private(set) var state: SidePanelSettingFlowState
-    private let credentialStore: any SidePanelCredentialStore
+    private let credentialStore: any CredentialStoring
     private let providerPreference: any SidePanelProviderPreferenceStore
     private let invoker = SidePanelSettingCommandInvoker()
 
@@ -29,7 +29,7 @@ final class SidePanelSettingFlowController {
 
     init(
         state: SidePanelSettingFlowState = SidePanelSettingFlowState(),
-        credentialStore: any SidePanelCredentialStore,
+        credentialStore: any CredentialStoring,
         providerPreference: any SidePanelProviderPreferenceStore
     ) {
         self.state = state
@@ -49,9 +49,9 @@ final class SidePanelSettingFlowController {
     /// Call once when the sheet appears.
     func onAppear() {
         let preference = providerPreference.preference()
-        state.selectedProviderID = preference.providerID ?? SidePanelProviderAPI.default.id
+        state.selectedProviderID = preference.providerID ?? ProviderDescriptor.openRouter.id
         state.hasStoredKey = credentialStore.secret(for: state.selectedProviderID) != nil
-        state.reasoningModel = preference.reasoningModel
+        state.reasoningEffortWireValue = preference.reasoningEffortWireValue
     }
 
     /// Trims the current draft, persists it, and clears the draft field on
@@ -85,9 +85,10 @@ final class SidePanelSettingFlowController {
 
     /// Persists the reasoning effort tier to the preference store and mirrors
     /// it into local state so the control reflects the change immediately.
-    func selectReasoningModel(_ level: SidePanelReasoningModel) {
-        providerPreference.setReasoningModel(level)
-        state.reasoningModel = level
+      func selectReasoningEffort(_ effort: ModelReasoningEffort) {
+        guard state.availableReasoningEfforts.contains(effort) else { return }
+        providerPreference.setReasoningEffort(effort)
+        state.reasoningEffortWireValue = effort.wireValue
         onReasoningModelChanged?()
     }
 

@@ -21,7 +21,7 @@ struct OpenCoreApp: App {
                 persistence: .live(modelContainer: modelContainer)
             )
         )
-        let credentialStore = SidePanelKeychainCredentialStore(service: SidePanelKeychainCredentialStore.openCoreService)
+        let credentialStore = CredentialKeychainStore(service: CredentialKeychainStore.openCoreService)
         let providerPreference = SidePanelUserDefaultsProviderPreferenceStore()
         let session = SidePanelSessionFlowController(history: .live(modelContainer: modelContainer))
         _sidePanel = State(initialValue: SidePanelFlowController(

@@ -99,7 +99,12 @@ private struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
-        Task { await chat.sendMessage(providerSortBy: home.state.activeProviderSortBy) }
+        Task {
+            await chat.sendMessage(
+                providerSortBy: home.state.activeProviderSortBy,
+                reasoningEffort: home.state.activeReasoningEffort
+            )
+        }
     }
 
     private func dismissKeyboard() {
@@ -137,28 +142,32 @@ private struct HomeComposerContextRail: View {
                             : "Model, not available"
                     )
 
-                    if home.state.selectedModelOption?.supportsReasoning == true {
+                    if let reasoningEfforts = home.state.selectedModelOption?.availableReasoningEfforts,
+                       !reasoningEfforts.isEmpty {
+                        let selectedEffort = home.state.selectedModelOption?.resolvedReasoningEffort(
+                            storedWireValue: home.state.reasoningEffortWireValue
+                        ) ?? .off
                         HomeComposerMenuChip(
-                            title: home.state.reasoningModel.title,
+                            title: selectedEffort.title,
                             systemImage: "circle.hexagongrid",
                             minWidth: 92,
                             dismissKeyboard: dismissKeyboard
                         ) {
                             Section("Reasoning") {
-                                ForEach(SidePanelReasoningModel.allCases) { level in
+                                ForEach(reasoningEfforts) { effort in
                                     Button {
                                         dismissKeyboard()
-                                        home.selectReasoningModel(level)
+                                        home.selectReasoningEffort(effort)
                                     } label: {
                                         Label(
-                                            level.title,
-                                            systemImage: home.state.reasoningModel == level ? "checkmark" : "circle"
+                                            effort.title,
+                                            systemImage: selectedEffort == effort ? "checkmark" : "circle"
                                         )
                                     }
                                 }
                             }
                         }
-                        .accessibilityLabel("Reasoning, \(home.state.reasoningModel.title)")
+                        .accessibilityLabel("Reasoning, \(selectedEffort.title)")
                     }
                 }
                 .layoutPriority(1)
@@ -640,7 +649,7 @@ private struct HomeComposerModelButton: View {
                 SharedOpenCorePalette.resolve(.light).surfaceBase.ignoresSafeArea()
                 HomeComposerView(
                     home: HomeFlowController(
-                        credentialStore: SidePanelInMemoryCredentialStore(),
+                        credentialStore: CredentialInMemoryStore(),
                         providerPreference: SidePanelInMemoryProviderPreferenceStore()
                     ),
                     chat: ChatFlowController(),

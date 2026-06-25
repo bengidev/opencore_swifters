@@ -10,7 +10,7 @@ struct SidePanelFlowControllerTests {
     /// hermetic and the backing stores can be asserted against directly.
     private func makeController(
         session: SidePanelSessionFlowController? = nil,
-        credentialStore: SidePanelInMemoryCredentialStore = .init(),
+        credentialStore: CredentialInMemoryStore = .init(),
         preferenceStore: SidePanelInMemoryProviderPreferenceStore = .init()
     ) -> SidePanelFlowController {
         let resolvedSession = session ?? SidePanelSessionFlowController()
@@ -25,8 +25,8 @@ struct SidePanelFlowControllerTests {
 
     @Test("settingsButtonTapped presents setting controller with stored key status")
     func settingsButtonTappedPresentsWithStoredKey() async throws {
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try credentialStore.save("sk-test-key", for: SidePanelProviderAPI.default.id)
+        let credentialStore = CredentialInMemoryStore()
+        try credentialStore.save("sk-test-key", for: ProviderDescriptor.openRouter.id)
 
         let controller = makeController(credentialStore: credentialStore)
         controller.settingsButtonTapped()
@@ -35,25 +35,29 @@ struct SidePanelFlowControllerTests {
         #expect(controller.setting?.state.hasStoredKey == true)
     }
 
-    @Test("settingsButtonTapped seeds reasoning model from preference")
-    func settingsButtonTappedSeedsReasoningModel() {
+    @Test("settingsButtonTapped seeds reasoning effort from preference")
+    func settingsButtonTappedSeedsReasoningEffort() {
         let preferenceStore = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(reasoningModel: .low)
+            preference: SidePanelProviderPreference(reasoningEffortWireValue: "low")
         )
 
         let controller = makeController(preferenceStore: preferenceStore)
         controller.settingsButtonTapped()
 
-        #expect(controller.setting?.state.reasoningModel == .low)
+        #expect(controller.setting?.state.reasoningEffortWireValue == "low")
     }
 
-    @Test("settingsButtonTapped seeds modelSupportsReasoning")
-    func settingsButtonTappedSeedsModelSupportsReasoning() {
+    @Test("settingsButtonTapped seeds available reasoning efforts")
+    func settingsButtonTappedSeedsAvailableReasoningEfforts() {
         let controller = makeController()
-        controller.modelSupportsReasoning = true
+        let efforts = [
+            ModelReasoningEffort(wireValue: "high"),
+            ModelReasoningEffort.off
+        ]
+        controller.setAvailableReasoningEfforts(efforts)
         controller.settingsButtonTapped()
 
-        #expect(controller.setting?.state.modelSupportsReasoning == true)
+        #expect(controller.setting?.state.availableReasoningEfforts == efforts)
     }
 
     @Test("session settingsButtonTapped presents setting controller on the host")
@@ -135,8 +139,8 @@ struct SidePanelFlowControllerTests {
 
     @Test("setting credentialsChanged delegate forwards to host")
     func settingCredentialsChangedForwardsToHost() async throws {
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try credentialStore.save("sk-test-key", for: SidePanelProviderAPI.default.id)
+        let credentialStore = CredentialInMemoryStore()
+        try credentialStore.save("sk-test-key", for: ProviderDescriptor.openRouter.id)
 
         let controller = makeController(credentialStore: credentialStore)
 

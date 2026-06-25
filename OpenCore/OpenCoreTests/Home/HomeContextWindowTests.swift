@@ -30,7 +30,7 @@ struct HomeContextWindowTests {
 
     @Test("Credentials change reloads catalog and updates context limit")
     func credentialsChangeReloadsCatalog() async {
-        let credentialStore = SidePanelInMemoryCredentialStore()
+        let credentialStore = CredentialInMemoryStore()
         let preference = SidePanelInMemoryProviderPreferenceStore()
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
@@ -42,7 +42,7 @@ struct HomeContextWindowTests {
         home.refreshContextUsage(messages: [], draftMessage: "")
         #expect(home.state.contextUsage.tokenLimit == 0)
 
-        try? credentialStore.save("test-key", for: SidePanelProviderAPI.default.id)
+        try? credentialStore.save("test-key", for: ProviderDescriptor.openRouter.id)
         await home.handleCredentialsChanged()
         home.refreshContextUsage(messages: [], draftMessage: "")
 
@@ -77,14 +77,14 @@ struct HomeContextWindowTests {
     func modelSelectionUpdatesLimit() async {
         let preference = SidePanelInMemoryProviderPreferenceStore(
             preference: SidePanelProviderPreference(
-                providerID: SidePanelProviderAPI.openRouter.id,
+                providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
             credentialStore: HomeTestCatalog.credentialStoreWithKey(
-                for: SidePanelProviderAPI.openRouter.id
+                for: ProviderDescriptor.openRouter.id
             ),
             providerPreference: preference
         )

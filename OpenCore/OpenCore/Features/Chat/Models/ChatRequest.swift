@@ -3,7 +3,7 @@ import Foundation
 nonisolated struct ChatRequest: Equatable, Sendable {
     let conversationID: UUID
     let messages: [ChatMessage]
-    let provider: SidePanelProviderAPI
+    let providerID: String
     let modelID: String
     let reasoningEffort: String?
     /// OpenRouter `provider.sort.by` value, or `nil` for default routing.
@@ -12,14 +12,14 @@ nonisolated struct ChatRequest: Equatable, Sendable {
     init(
         conversationID: UUID,
         messages: [ChatMessage],
-        provider: SidePanelProviderAPI,
+        providerID: String,
         modelID: String,
         reasoningEffort: String? = nil,
         providerSortBy: String? = nil
     ) {
         self.conversationID = conversationID
         self.messages = messages
-        self.provider = provider
+        self.providerID = providerID
         self.modelID = modelID
         self.reasoningEffort = reasoningEffort
         self.providerSortBy = providerSortBy

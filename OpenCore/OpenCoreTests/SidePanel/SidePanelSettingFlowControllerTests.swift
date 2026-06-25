@@ -10,7 +10,7 @@ struct SidePanelSettingFlowControllerTests {
     /// and the backing stores can be asserted against directly.
     private func makeController(
         state: SidePanelSettingFlowState = SidePanelSettingFlowState(),
-        credentialStore: SidePanelInMemoryCredentialStore = SidePanelInMemoryCredentialStore()
+        credentialStore: CredentialInMemoryStore = CredentialInMemoryStore()
     ) -> SidePanelSettingFlowController {
         let preferenceStore = SidePanelInMemoryProviderPreferenceStore()
         return SidePanelSettingFlowController(
@@ -24,8 +24,8 @@ struct SidePanelSettingFlowControllerTests {
 
     @Test("onAppear reflects an already-stored key")
     func onAppearReflectsStoredKey() {
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try! credentialStore.save("sk-existing", for: SidePanelProviderAPI.default.id)
+        let credentialStore = CredentialInMemoryStore()
+        try! credentialStore.save("sk-existing", for: ProviderDescriptor.openRouter.id)
 
         let controller = makeController(credentialStore: credentialStore)
         controller.onAppear()
@@ -37,7 +37,7 @@ struct SidePanelSettingFlowControllerTests {
 
     @Test("Saving a key persists it and flips hasStoredKey")
     func savePersistsKey() {
-        let credentialStore = SidePanelInMemoryCredentialStore()
+        let credentialStore = CredentialInMemoryStore()
         let controller = makeController(
             state: SidePanelSettingFlowState(draftAPIKey: "sk-new"),
             credentialStore: credentialStore
@@ -47,12 +47,12 @@ struct SidePanelSettingFlowControllerTests {
 
         #expect(controller.state.draftAPIKey == "")
         #expect(controller.state.hasStoredKey == true)
-        #expect(credentialStore.secret(for: SidePanelProviderAPI.default.id) == "sk-new")
+        #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == "sk-new")
     }
 
     @Test("Saving trims surrounding whitespace")
     func saveTrimsWhitespace() {
-        let credentialStore = SidePanelInMemoryCredentialStore()
+        let credentialStore = CredentialInMemoryStore()
         let controller = makeController(
             state: SidePanelSettingFlowState(draftAPIKey: "  sk-trim  "),
             credentialStore: credentialStore
@@ -62,12 +62,12 @@ struct SidePanelSettingFlowControllerTests {
 
         #expect(controller.state.draftAPIKey == "")
         #expect(controller.state.hasStoredKey == true)
-        #expect(credentialStore.secret(for: SidePanelProviderAPI.default.id) == "sk-trim")
+        #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == "sk-trim")
     }
 
     @Test("Saving a blank draft is a no-op")
     func saveBlankIsNoOp() {
-        let credentialStore = SidePanelInMemoryCredentialStore()
+        let credentialStore = CredentialInMemoryStore()
         let controller = makeController(
             state: SidePanelSettingFlowState(draftAPIKey: "   "),
             credentialStore: credentialStore
@@ -76,15 +76,15 @@ struct SidePanelSettingFlowControllerTests {
         controller.save()
 
         #expect(controller.state.hasStoredKey == false)
-        #expect(credentialStore.secret(for: SidePanelProviderAPI.default.id) == nil)
+        #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == nil)
     }
 
     // MARK: - clear
 
     @Test("Clearing removes the stored key and resets state")
     func clearRemovesKey() {
-        let credentialStore = SidePanelInMemoryCredentialStore()
-        try! credentialStore.save("sk-existing", for: SidePanelProviderAPI.default.id)
+        let credentialStore = CredentialInMemoryStore()
+        try! credentialStore.save("sk-existing", for: ProviderDescriptor.openRouter.id)
 
         let controller = makeController(credentialStore: credentialStore)
         controller.onAppear()
@@ -93,7 +93,7 @@ struct SidePanelSettingFlowControllerTests {
         controller.clear()
 
         #expect(controller.state.hasStoredKey == false)
-        #expect(credentialStore.secret(for: SidePanelProviderAPI.default.id) == nil)
+        #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == nil)
     }
 
     // MARK: - canSave

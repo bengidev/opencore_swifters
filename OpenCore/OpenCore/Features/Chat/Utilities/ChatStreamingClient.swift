@@ -12,7 +12,7 @@ nonisolated struct ChatStreamingClient: Sendable {
         AsyncStream { $0.finish() }
     }
 
-    static func live(credentialStore: any SidePanelCredentialStore) -> ChatStreamingClient {
+    static func live(credentialStore: any CredentialStoring) -> ChatStreamingClient {
         let client = ChatOpenAICompatibleStreamingClient(credentialStore: credentialStore)
         return ChatStreamingClient(stream: client.stream(request:))
     }
