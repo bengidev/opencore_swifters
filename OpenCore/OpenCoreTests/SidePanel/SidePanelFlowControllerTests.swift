@@ -35,31 +35,6 @@ struct SidePanelFlowControllerTests {
         #expect(controller.setting?.state.hasStoredKey == true)
     }
 
-    @Test("settingsButtonTapped seeds reasoning effort from preference")
-    func settingsButtonTappedSeedsReasoningEffort() {
-        let preferenceStore = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(reasoningEffortWireValue: "low")
-        )
-
-        let controller = makeController(preferenceStore: preferenceStore)
-        controller.settingsButtonTapped()
-
-        #expect(controller.setting?.state.reasoningEffortWireValue == "low")
-    }
-
-    @Test("settingsButtonTapped seeds available reasoning efforts")
-    func settingsButtonTappedSeedsAvailableReasoningEfforts() {
-        let controller = makeController()
-        let efforts = [
-            ModelReasoningEffort(wireValue: "high"),
-            ModelReasoningEffort.off
-        ]
-        controller.setAvailableReasoningEfforts(efforts)
-        controller.settingsButtonTapped()
-
-        #expect(controller.setting?.state.availableReasoningEfforts == efforts)
-    }
-
     @Test("session settingsButtonTapped presents setting controller on the host")
     func sessionSettingsButtonTappedPresentsSetting() {
         let session = SidePanelSessionFlowController()

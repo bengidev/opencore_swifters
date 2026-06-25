@@ -18,7 +18,7 @@ final class SidePanelSessionFlowController {
     /// The on-screen conversation was deleted and should be cleared.
     var onActiveConversationDeleted: ((UUID) -> Void)?
     /// The user tapped the settings gear. The session scope does not present
-    /// settings itself; the host owns the settings sheet, so this fires the
+    /// settings itself; the host owns the settings page, so this fires the
     /// delegate and the host presents.
     var onSettingsTapped: (() -> Void)?
 

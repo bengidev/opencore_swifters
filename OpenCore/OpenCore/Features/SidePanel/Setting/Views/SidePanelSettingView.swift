@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings sheet for secure provider credential entry.
+/// Fullscreen settings page for secure provider credential entry.
 ///
 /// Provider selection is a menu picker over the built-in `ProviderRegistry` catalog.
 /// Users choose from app-shipped providers only; custom endpoints are out of scope.
@@ -33,9 +33,6 @@ struct SidePanelSettingView: View {
                                 .accessibilityIdentifier("settings-error")
                         }
                         actions
-                        if !flow.state.availableReasoningEfforts.isEmpty {
-                            reasoningControl
-                        }
                         Spacer(minLength: 0)
                     }
                     .padding(20)
@@ -158,33 +155,6 @@ struct SidePanelSettingView: View {
                     .foregroundStyle(palette.textSecondary)
                     .accessibilityIdentifier("settings-key-stored")
             }
-        }
-    }
-
-    private var reasoningControl: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Reasoning")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(palette.textPrimary)
-
-            Text("Choose how much effort the model spends reasoning before it answers. Off sends no reasoning request.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Picker(
-                "Reasoning level",
-                selection: Binding(
-                    get: { flow.state.selectedReasoningEffort },
-                    set: { flow.selectReasoningEffort($0) }
-                )
-            ) {
-                ForEach(flow.state.availableReasoningEfforts) { effort in
-                    Text(effort.title).tag(effort)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("settings-reasoning-picker")
         }
     }
 

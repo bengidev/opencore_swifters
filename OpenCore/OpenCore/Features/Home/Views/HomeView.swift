@@ -40,7 +40,6 @@ struct HomeView: View {
         .task {
             wireDelegates()
             await home.onAppear()
-            syncSidePanelFromHome()
             home.updateContextInputs(
                 messages: chat.state.messages,
                 draftMessage: chat.state.draftMessage
@@ -124,9 +123,6 @@ struct HomeView: View {
         home.onOpenSettings = {
             sidePanel.settingsButtonTapped()
         }
-        home.onModelSelectionChanged = {
-            syncSidePanelFromHome()
-        }
 
         sidePanel.onOpenConversation = { conversation in
             Task { await chat.reopenConversation(conversation) }
@@ -142,18 +138,9 @@ struct HomeView: View {
         sidePanel.onCredentialsChanged = {
             Task { await home.handleCredentialsChanged() }
         }
-        sidePanel.onReasoningModelChanged = {
-            home.handleReasoningModelChanged()
-        }
         sidePanel.onProviderChanged = { providerID in
             Task { await home.handleProviderChanged(providerID) }
         }
-    }
-
-    private func syncSidePanelFromHome() {
-        sidePanel.setAvailableReasoningEfforts(
-            home.state.selectedModelOption?.availableReasoningEfforts ?? []
-        )
     }
 
     private func refreshContextInputsIfNeeded() {
