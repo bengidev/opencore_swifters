@@ -1,6 +1,7 @@
 import SwiftUI
+import UIKit
 
-struct ChatMessageRowView: View {
+struct ChatMessageRowView: View, Equatable {
     let message: ChatMessage
     let isLastAssistantMessage: Bool
     let streamingStatus: ChatStreamingStatus
@@ -9,6 +10,14 @@ struct ChatMessageRowView: View {
     @Environment(\.sharedPalette) private var palette
     private static let oppositeSpacerMinWidth: CGFloat = 60
     private static let userBubbleCornerRadius: CGFloat = 20
+    private static let assistantUIFont = UIFont.systemFont(ofSize: 16, weight: .regular)
+
+    static func == (lhs: ChatMessageRowView, rhs: ChatMessageRowView) -> Bool {
+        lhs.message == rhs.message
+            && lhs.isLastAssistantMessage == rhs.isLastAssistantMessage
+            && lhs.streamingStatus == rhs.streamingStatus
+            && lhs.streamErrorMessage == rhs.streamErrorMessage
+    }
 
     var body: some View {
         switch message {
@@ -48,12 +57,7 @@ struct ChatMessageRowView: View {
             .padding(.vertical, 4)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text(textMessage.content)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(palette.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .animation(.easeInOut(duration: 0.08), value: textMessage.content.count)
+                assistantTextBody(textMessage)
 
                 if isLastAssistantMessage, let streamErrorMessage, streamingStatus == .failed {
                     Text(streamErrorMessage)
@@ -67,6 +71,24 @@ struct ChatMessageRowView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
+        if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
+            ChatStreamingTextView(
+                text: textMessage.content,
+                font: Self.assistantUIFont,
+                textColor: UIColor(palette.textPrimary)
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(textMessage.content)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(palette.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 
