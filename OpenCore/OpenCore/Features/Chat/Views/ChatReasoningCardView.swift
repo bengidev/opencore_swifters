@@ -95,22 +95,19 @@ struct ChatReasoningCardView: View {
     private var streamingBody: some View {
         Group {
             if isStreaming {
-                HStack(alignment: .top, spacing: 0) {
+                TimelineView(.animation(
+                    minimumInterval: 1.0 / 30.0,
+                    paused: !isExpanded || reduceMotion
+                )) { timeline in
                     ChatStreamingTextView(
                         text: displayedContent,
                         font: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-                        textColor: UIColor(palette.textSecondary)
+                        textColor: UIColor(palette.textSecondary),
+                        showsCursor: true,
+                        cursorColor: UIColor(palette.accentPrimary),
+                        cursorOpacity: cursorOpacity(at: timeline.date)
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                    TimelineView(.animation(
-                        minimumInterval: 1.0 / 30.0,
-                        paused: !isExpanded || reduceMotion
-                    )) { timeline in
-                        Text("▍")
-                            .font(SharedOpenCoreTypography.monoSM)
-                            .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity(at: timeline.date)))
-                    }
                 }
             } else {
                 Text(displayedContent)
