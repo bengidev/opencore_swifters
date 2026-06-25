@@ -7,6 +7,12 @@ struct ChatReasoningCardView: View {
     let isStreaming: Bool
 
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let cursorBlinkPeriod = 1.1
+    private static let cursorMinOpacity = 0.15
+    /// Drives 1 → minOpacity → 1 each half-cycle (piecewise linear).
+    private static let cursorBlinkFade = 1.7
     /// Collapsed by default; auto-expands while reasoning is actively streaming,
     /// then collapses again once thinking completes. User can toggle manually anytime.
     @State private var isExpanded: Bool
@@ -85,36 +91,44 @@ struct ChatReasoningCardView: View {
         }
     }
 
-    @ViewBuilder
     private var streamingBody: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 0) {
-            Text(displayedContent)
-                .font(SharedOpenCoreTypography.monoSM)
-                .foregroundStyle(palette.textSecondary)
+        TimelineView(.animation(
+            minimumInterval: 1.0 / 30.0,
+            paused: !isStreaming || !isExpanded || reduceMotion
+        )) { timeline in
+            streamingText(cursorOpacity: cursorOpacity(at: timeline.date))
                 .lineLimit(nil)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .animation(.easeInOut(duration: 0.08), value: content.count)
-
-            if isStreaming {
-                Text("▍")
-                    .font(SharedOpenCoreTypography.monoSM)
-                    .foregroundStyle(palette.accentPrimary)
-                    .opacity(streamingCursorOpacity)
-                    .accessibilityHidden(true)
-            }
+                .accessibilityLabel(displayedContent)
         }
         .frame(maxHeight: isExpanded ? .infinity : 0, alignment: .top)
         .opacity(isExpanded ? 1 : 0)
         .clipped()
         .accessibilityHidden(!isExpanded)
-        .onAppear {
-            guard isStreaming else { return }
-            withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) {
-                streamingCursorOpacity = 0.2
-            }
-        }
+    }
+
+    private func streamingText(cursorOpacity: Double) -> Text {
+        let body = Text(displayedContent)
+            .font(SharedOpenCoreTypography.monoSM)
+            .foregroundStyle(palette.textSecondary)
+
+        guard isStreaming else { return body }
+
+        return body + Text("▍")
+            .font(SharedOpenCoreTypography.monoSM)
+            .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity))
+    }
+
+    private func cursorOpacity(at date: Date) -> Double {
+        guard !reduceMotion else { return 1 }
+        let phase = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: Self.cursorBlinkPeriod) / Self.cursorBlinkPeriod
+        return phase < 0.5
+            ? 1 - phase * Self.cursorBlinkFade
+            : Self.cursorMinOpacity + (phase - 0.5) * Self.cursorBlinkFade
     }
 
     private var displayedContent: String {
@@ -123,8 +137,6 @@ struct ChatReasoningCardView: View {
         }
         return isStreaming ? "…" : ""
     }
-
-    @State private var streamingCursorOpacity = 1.0
 }
 
 extension ChatReasoningCardView {
@@ -139,14 +151,16 @@ extension ChatReasoningCardView {
 
 private struct ChatReasoningPulseDot: View {
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var opacity = 0.35
 
     var body: some View {
         Circle()
             .fill(palette.accentPrimary)
             .frame(width: 6, height: 6)
-            .opacity(opacity)
+            .opacity(reduceMotion ? 1 : opacity)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
                     opacity = 1
                 }
