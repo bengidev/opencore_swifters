@@ -80,12 +80,7 @@ struct HomeView: View {
     private var chatContent: some View {
         ChatView(chat: chat, dismissKeyboard: dismissComposerKeyboard)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: 0) {
-                    ChatErrorBannerView(flow: chat)
-                        .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
-
-                    composer
-                }
+                composer
             }
     }
 

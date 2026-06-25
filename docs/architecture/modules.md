@@ -11,7 +11,7 @@ App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
 ├── SidePanel     # Conversation browser + settings (self-contained internal module)
-├── Chat          # Live message stream, send/receive, active conversation (ChatView — thread only)
+├── Chat          # Live message stream, send/receive, active conversation (ChatView — thread + error banner)
 └── Home          # Welcome hero + composer chatbox (wires Chat + SidePanel)
 ```
 

@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Active conversation screen — title and message thread only.
+/// Active conversation screen — title, error banner, and message thread.
+/// Composer stays in `HomeView`.
 struct ChatView: View {
     @Bindable var chat: ChatFlowController
     let dismissKeyboard: () -> Void
@@ -17,6 +18,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
+                    .accessibilityAddTraits(.isHeader)
             }
 
             ChatThreadView(flow: chat)
@@ -24,6 +26,10 @@ struct ChatView: View {
                 .onTapGesture(perform: dismissKeyboard)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ChatErrorBannerView(flow: chat)
+                .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+        }
     }
 }
 
