@@ -12,6 +12,8 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
     var streamErrorMessage: String?
     var streamingThinkingID: UUID?
     var streamingAnswerID: UUID?
+    /// Bumped when batched streaming content is applied to `messages` (scroll anchor).
+    var streamingRevision = 0
 
     var hasMessages: Bool { !messages.isEmpty }
 
@@ -25,7 +27,8 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         currentPartialThinking: String = "",
         streamErrorMessage: String? = nil,
         streamingThinkingID: UUID? = nil,
-        streamingAnswerID: UUID? = nil
+        streamingAnswerID: UUID? = nil,
+        streamingRevision: Int = 0
     ) {
         self.conversation = conversation
         self.messages = messages
@@ -37,5 +40,6 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         self.streamErrorMessage = streamErrorMessage
         self.streamingThinkingID = streamingThinkingID
         self.streamingAnswerID = streamingAnswerID
+        self.streamingRevision = streamingRevision
     }
 }

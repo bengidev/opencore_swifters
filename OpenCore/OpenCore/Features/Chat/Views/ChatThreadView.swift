@@ -7,45 +7,38 @@ struct ChatThreadView: View {
     @Bindable var flow: ChatFlowController
 
     @Environment(\.sharedPalette) private var palette
+    @State private var scrollTask: Task<Void, Never>?
 
     var body: some View {
         ScrollViewReader { proxy in
-            List {
-                ForEach(flow.state.messages) { message in
-                    ChatMessageRowView(
-                        message: message,
-                        isLastAssistantMessage: isLastAssistantMessage(message),
-                        streamingStatus: flow.state.streamingStatus,
-                        streamErrorMessage: flow.state.streamErrorMessage
-                    )
-                    .id(message.id)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(palette.surfaceBase)
-                    .listRowSeparator(.hidden)
-                }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(flow.state.messages) { message in
+                        ChatMessageRowView(
+                            message: message,
+                            isLastAssistantMessage: isLastAssistantMessage(message),
+                            streamingStatus: flow.state.streamingStatus,
+                            streamErrorMessage: flow.state.streamErrorMessage
+                        )
+                        .equatable()
+                        .id(message.id)
+                    }
 
-                if showLoadingIndicator {
-                    ChatLoadingIndicatorView()
-                        .id("loading-indicator")
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(palette.surfaceBase)
-                        .listRowSeparator(.hidden)
+                    if showLoadingIndicator {
+                        ChatLoadingIndicatorView()
+                            .id("loading-indicator")
+                    }
                 }
             }
-            .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 0)
             .background(palette.surfaceBase)
             .onChange(of: flow.state.messages.count) { _, _ in
-                scrollToLast(proxy: proxy, animate: true)
+                scheduleScrollToLast(proxy: proxy, animate: true)
             }
-            .onChange(of: flow.state.currentPartialText.count) { _, _ in
-                scrollToLast(proxy: proxy, animate: false)
-            }
-            .onChange(of: flow.state.currentPartialThinking.count) { _, _ in
-                scrollToLast(proxy: proxy, animate: false)
+            .onChange(of: flow.state.streamingRevision) { _, _ in
+                scheduleScrollToLast(proxy: proxy, animate: false)
             }
             .onChange(of: flow.state.streamingStatus) { _, _ in
-                scrollToLast(proxy: proxy, animate: true)
+                scheduleScrollToLast(proxy: proxy, animate: true)
             }
             .onChange(of: showLoadingIndicator) { _, showing in
                 if showing {
@@ -59,8 +52,6 @@ struct ChatThreadView: View {
 
     private var showLoadingIndicator: Bool {
         guard flow.state.streamingStatus == .running else { return false }
-        // Show indicator only when no assistant response yet — the last message
-        // must be a user message (covers both fresh send and retry).
         return flow.state.messages.last?.role == .user
     }
 
@@ -71,10 +62,29 @@ struct ChatThreadView: View {
         return flow.state.messages[lastAssistantIndex].id == message.id
     }
 
+    private func scheduleScrollToLast(proxy: ScrollViewProxy, animate: Bool) {
+        scrollTask?.cancel()
+        scrollTask = Task { @MainActor in
+            let delay = scrollCoalesceDelayNanoseconds()
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: delay)
+            } else {
+                await Task.yield()
+            }
+            guard !Task.isCancelled else { return }
+            scrollToLast(proxy: proxy, animate: animate)
+            scrollTask = nil
+        }
+    }
+
+    private func scrollCoalesceDelayNanoseconds() -> UInt64 {
+        let byteCount = flow.state.currentPartialText.utf8.count
+        if byteCount >= 32_000 { return 200_000_000 }
+        if byteCount >= 8_000 { return 120_000_000 }
+        return 0
+    }
+
     private func scrollToLast(proxy: ScrollViewProxy, animate: Bool) {
-        // The reasoning row is now an item-scoped message in `flow.state.messages`
-        // (see ChatFeature.streamingThinkingID), so the last message id is
-        // always the correct scroll anchor — no separate live-stream row.
         guard let scrollTarget = flow.state.messages.last?.id else { return }
 
         if animate {

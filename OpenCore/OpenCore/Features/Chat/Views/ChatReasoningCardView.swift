@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Collapsible reasoning card — streams monospace text while the model thinks.
 struct ChatReasoningCardView: View {
@@ -92,34 +93,39 @@ struct ChatReasoningCardView: View {
     }
 
     private var streamingBody: some View {
-        TimelineView(.animation(
-            minimumInterval: 1.0 / 30.0,
-            paused: !isStreaming || !isExpanded || reduceMotion
-        )) { timeline in
-            streamingText(cursorOpacity: cursorOpacity(at: timeline.date))
-                .lineLimit(nil)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .animation(.easeInOut(duration: 0.08), value: content.count)
-                .accessibilityLabel(displayedContent)
+        Group {
+            if isStreaming {
+                HStack(alignment: .top, spacing: 0) {
+                    ChatStreamingTextView(
+                        text: displayedContent,
+                        font: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                        textColor: UIColor(palette.textSecondary)
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TimelineView(.animation(
+                        minimumInterval: 1.0 / 30.0,
+                        paused: !isExpanded || reduceMotion
+                    )) { timeline in
+                        Text("▍")
+                            .font(SharedOpenCoreTypography.monoSM)
+                            .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity(at: timeline.date)))
+                    }
+                }
+            } else {
+                Text(displayedContent)
+                    .font(SharedOpenCoreTypography.monoSM)
+                    .foregroundStyle(palette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxHeight: isExpanded ? .infinity : 0, alignment: .top)
         .opacity(isExpanded ? 1 : 0)
         .clipped()
         .accessibilityHidden(!isExpanded)
-    }
-
-    private func streamingText(cursorOpacity: Double) -> Text {
-        let body = Text(displayedContent)
-            .font(SharedOpenCoreTypography.monoSM)
-            .foregroundStyle(palette.textSecondary)
-
-        guard isStreaming else { return body }
-
-        return body + Text("▍")
-            .font(SharedOpenCoreTypography.monoSM)
-            .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity))
+        .accessibilityLabel(displayedContent)
     }
 
     private func cursorOpacity(at date: Date) -> Double {
