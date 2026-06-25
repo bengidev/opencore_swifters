@@ -11,10 +11,8 @@ App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
 ├── SidePanel     # Conversation browser + settings (self-contained internal module)
-├── Chat          # Live message stream, send/receive, active conversation
-└── Home          # Welcome hero + composer shell (wires Chat + SidePanel)
-    ├── ContextWindow  # Context usage estimation and display model
-    └── SpeedMode      # Response speed presets and provider routing
+├── Chat          # Live message stream, send/receive, active conversation (ChatView — thread only)
+└── Home          # Welcome hero + composer chatbox (wires Chat + SidePanel)
 ```
 
 ## Current layout
@@ -32,15 +30,9 @@ OpenCore/
 │   │   └── Utilities/
 │   ├── Home/
 │   │   ├── Core/
-│   │   ├── Models/
-│   │   ├── Utilities/
-│   │   ├── Views/
-│   │   ├── ContextWindow/
-│   │   │   ├── Core/
-│   │   │   ├── Models/
-│   │   │   └── Utilities/
-│   │   └── SpeedMode/
-│   │       └── Models/
+│   │   ├── Models/           # HomeModelOption, ContextWindowUsage, HomeComposerSpeedMode
+│   │   ├── Utilities/        # HomeModelCatalogClient, ContextWindowEstimator
+│   │   └── Views/
 │   ├── Chat/
 │   │   ├── Core/
 │   │   ├── Models/
@@ -64,7 +56,7 @@ OpenCore/
 
 SidePanel is a self-contained internal module combining two scopes (session + setting) with feature-owned infrastructure in `Utilities/`. Its role folders nest `Session/` and `Setting/` sub-folders, each with their own `Core/` and `Views/`.
 
-Home nests `ContextWindow/` and `SpeedMode/` sub-modules for composer-specific concerns (token budget display and response speed routing).
+Home uses flat role folders only (`Core/`, `Models/`, `Utilities/`, `Views/`). Context window and speed mode types live alongside other Home models and utilities.
 
 ## Role-based folders
 

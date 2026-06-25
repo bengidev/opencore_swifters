@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Root home screen — welcome state or active chat thread with composer.
+/// Root home screen — welcome state or active chat, with top bar and side panel.
 struct HomeView: View {
     @Bindable var sidePanel: SidePanelFlowController
     @Bindable var home: HomeFlowController
@@ -29,7 +29,7 @@ struct HomeView: View {
                 if showsWelcome {
                     welcomeContent
                 } else {
-                    chatThreadContent
+                    chatContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,33 +77,16 @@ struct HomeView: View {
         }
     }
 
-    private var chatThreadContent: some View {
-        VStack(spacing: 0) {
-            if let conversation = chat.state.conversation {
-                Text(conversation.title)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(palette.textPrimary)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-            }
+    private var chatContent: some View {
+        ChatView(chat: chat, dismissKeyboard: dismissComposerKeyboard)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    ChatErrorBannerView(flow: chat)
+                        .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
 
-            ChatThreadView(flow: chat)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    dismissComposerKeyboard()
+                    composer
                 }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                ChatErrorBannerView(flow: chat)
-                    .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
-
-                composer
             }
-        }
     }
 
     private var composer: some View {

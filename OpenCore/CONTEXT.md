@@ -20,13 +20,14 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding** (firs
 - **Entry view**: `HomeView`
 - **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`, `HomeModelPopupView`
 - **Catalog**: `HomeModelCatalogClient` + `HomeModelCatalogCachePreferenceClient`
-- **Composition**: owns `ChatFlowController` + `SidePanelFlowController`; switches welcome vs thread layout
-- **ContextWindow** (sub-module): `ContextWindowEstimator`, `ContextWindowUsage`
-- **SpeedMode** (sub-module): `HomeComposerSpeedMode` (standard vs fast provider routing)
+- **Composition**: wires `ChatView` + `SidePanelView`; switches welcome vs active chat
+- **Context window**: `ContextWindowEstimator`, `ContextWindowUsage`
+- **Speed mode**: `HomeComposerSpeedMode` (standard vs fast provider routing)
 
 ## Chat
 
 - **Flow controller**: `ChatFlowController` (commands + async send/retry/stream)
+- **Entry view**: `ChatView` (thread only; composer stays in Home)
 - **Streaming**: `ChatStreamingClient` + `ChatOpenAICompatibleStreamingClient`
 - **Persistence**: `ChatHistoryClient` maps `ChatMessage` ↔ `SidePanelMessageEntity` (SwiftData)
 - **Views**: `ChatThreadView`, `ChatMessageRowView`, `ChatReasoningCardView`, `ChatErrorBannerView`
