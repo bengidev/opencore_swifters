@@ -36,6 +36,7 @@ struct ChatStreamingTextView: UIViewRepresentable {
         )
     }
 
+    @MainActor
     final class Coordinator {
         private var appliedText = ""
         private var pendingText = ""
@@ -92,6 +93,7 @@ struct ChatStreamingTextView: UIViewRepresentable {
 }
 
 /// Non-scrolling `UITextView` that reports height for SwiftUI layout.
+@MainActor
 final class ChatStreamingSizingTextView: UITextView {
     private var measuredWidth: CGFloat = 0
     private var measuredHeight: CGFloat?
