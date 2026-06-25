@@ -12,7 +12,7 @@ struct ChatMessageRowView: View, Equatable {
     private static let userBubbleCornerRadius: CGFloat = 20
     private static let assistantUIFont = UIFont.systemFont(ofSize: 16, weight: .regular)
 
-    static func == (lhs: ChatMessageRowView, rhs: ChatMessageRowView) -> Bool {
+    nonisolated static func == (lhs: ChatMessageRowView, rhs: ChatMessageRowView) -> Bool {
         lhs.message == rhs.message
             && lhs.isLastAssistantMessage == rhs.isLastAssistantMessage
             && lhs.streamingStatus == rhs.streamingStatus
