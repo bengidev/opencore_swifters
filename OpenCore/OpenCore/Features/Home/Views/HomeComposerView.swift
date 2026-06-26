@@ -52,7 +52,7 @@ private struct HomeComposerPromptPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !home.state.hasAPIKey {
-                MissingAPIKeyHint { home.onOpenSettings?() }
+                MissingAPIKeyHint { home.openSettingsTab() }
             }
 
             TextField(

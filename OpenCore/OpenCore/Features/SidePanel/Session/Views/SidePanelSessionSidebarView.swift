@@ -98,15 +98,6 @@ struct SidePanelSessionSidebarView: View {
                 .foregroundStyle(palette.textPrimary)
             Spacer()
             Button {
-                flow.settingsButtonTapped()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(palette.textPrimary)
-            }
-            .accessibilityLabel("Settings")
-            .accessibilityIdentifier("sidepanel-settings-button")
-            Button {
                 flow.dispatch(SidePanelSessionSidebarDismissCommand())
             } label: {
                 Image(systemName: "xmark")

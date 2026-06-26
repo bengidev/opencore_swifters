@@ -38,7 +38,6 @@ struct HomeView: View {
             SidePanelView(flow: sidePanel)
         }
         .task {
-            wireDelegates()
             await home.onAppear()
             home.updateContextInputs(
                 messages: chat.state.messages,
@@ -117,30 +116,6 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-    }
-
-    private func wireDelegates() {
-        home.onOpenSettings = {
-            sidePanel.settingsButtonTapped()
-        }
-
-        sidePanel.onOpenConversation = { conversation in
-            Task { await chat.reopenConversation(conversation) }
-        }
-        sidePanel.onActiveConversationRenamed = { id, title in
-            chat.renameActiveConversation(id: id, title: title)
-        }
-        sidePanel.onActiveConversationDeleted = { id in
-            if chat.state.conversation?.id == id {
-                chat.clearActiveConversation()
-            }
-        }
-        sidePanel.onCredentialsChanged = {
-            Task { await home.handleCredentialsChanged() }
-        }
-        sidePanel.onProviderChanged = { providerID in
-            Task { await home.handleProviderChanged(providerID) }
-        }
     }
 
     private func refreshContextInputsIfNeeded() {
@@ -260,10 +235,7 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
     let credentialStore = CredentialInMemoryStore()
     let providerPreference = SidePanelInMemoryProviderPreferenceStore()
     return HomeView(
-        sidePanel: SidePanelFlowController(
-            credentialStore: credentialStore,
-            providerPreference: providerPreference
-        ),
+        sidePanel: SidePanelFlowController(),
         home: HomeFlowController(
             credentialStore: credentialStore,
             providerPreference: providerPreference

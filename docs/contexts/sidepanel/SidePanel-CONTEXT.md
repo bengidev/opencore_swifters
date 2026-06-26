@@ -7,41 +7,34 @@
 | **Map** | [CONTEXT-MAP.md](../../../CONTEXT-MAP.md) |
 | **Layout rules** | [docs/architecture/modules.md](../../architecture/modules.md) |
 
-The SidePanel feature manages the navigation drawer and settings menu, providing access to app-wide settings and conversation browsing.
+The SidePanel feature manages the navigation drawer for conversation browsing.
 
 ## Folder Structure
 
 ```text
 OpenCore/Features/SidePanel/
 ├── Core/
-│   └── SidePanelFlowController.swift          # Host flow controller (composes session + setting)
+│   └── SidePanelFlowController.swift          # Host flow controller (session only)
 ├── Models/
-│   ├── SidePanelConversation.swift             # Pure domain value
-│   └── SidePanelConversationEntity.swift       # SwiftData entities
+│   ├── SidePanelConversation.swift
+│   └── SidePanelConversationEntity.swift
 ├── Session/
 │   ├── Core/
-│   │   ├── SidePanelSessionFlowController.swift # Session browser flow controller
+│   │   ├── SidePanelSessionFlowController.swift
 │   │   ├── SidePanelSessionFlowState.swift
-│   │   ├── SidePanelSessionSection.swift        # Recency-bucketed grouping
-│   │   └── SidePanelSessionCommand.swift        # Command pattern
+│   │   ├── SidePanelSessionSection.swift
+│   │   └── SidePanelSessionCommand.swift
 │   └── Views/
-│       └── SidePanelSessionSidebarView.swift   # Sliding drawer
-├── Setting/
-│   ├── Core/
-│   │   ├── SidePanelSettingFlowController.swift # Settings flow controller
-│   │   ├── SidePanelSettingFlowState.swift
-│   │   └── SidePanelSettingCommand.swift
-│   └── Views/
-│       └── SidePanelSettingView.swift          # Settings sheet
+│       └── SidePanelSessionSidebarView.swift
 ├── Utilities/
-│   ├── SidePanelHistoryClient.swift            # SwiftData persistence boundary
-│   ├── SidePanelCredentialStore.swift           # Keychain adapter + in-memory double
-│   ├── SidePanelProviderAPI.swift              # Provider catalog
-│   ├── SidePanelProviderPreferenceStore.swift  # UserDefaults preference store
-│   └── SidePanelReasoningModel.swift           # Reasoning effort enum
+│   ├── SidePanelHistoryClient.swift
+│   ├── SidePanelProviderPreferenceStore.swift
+│   └── ModelReasoningEffort.swift
 └── Views/
-    └── SidePanelView.swift                      # Host view
+    └── SidePanelView.swift
 ```
+
+Settings moved to the top-level **Settings** module (`OpenCore/Features/Settings/`). See [Settings context](../settings/Settings-CONTEXT.md).
 
 ## Dependencies
 
@@ -54,30 +47,23 @@ OpenCore/Features/SidePanel/
 
 ## State Management (Flow Controller)
 
-The SidePanel feature uses a host flow controller that composes two sub-controllers:
+The SidePanel feature uses a host flow controller for the session scope:
 
 ```swift
 @MainActor
 @Observable
 final class SidePanelFlowController {
     let session: SidePanelSessionFlowController
-    private(set) var setting: SidePanelSettingFlowController?
 
-    // Delegate outputs (surfaced to parent)
     var onOpenConversation: ((SidePanelConversation) -> Void)?
     var onActiveConversationRenamed: ((UUID, String) -> Void)?
     var onActiveConversationDeleted: ((UUID) -> Void)?
-    var onCredentialsChanged: (() -> Void)?
-    var onReasoningModelChanged: (() -> Void)?
-    var onProviderChanged: ((String) -> Void)?
 }
 ```
 
-The host does not own its own flow state — it composes the sub-controllers' states. The session controller manages the conversation list and sidebar visibility. The setting controller is presented (`nil` when dismissed) and manages credentials, provider selection, and reasoning effort.
+The session controller manages the conversation list and sidebar visibility.
 
-Each sub-controller dispatches commands against its own `*FlowState` struct:
-- `SidePanelSessionFlowController` dispatches `SidePanelSessionCommand` values (sidebar toggle, search, pin/rename/delete/group changes).
-- `SidePanelSettingFlowController` dispatches `SidePanelSettingCommand` values (draft API key changes) and calls store-backed methods for persistence operations (save, clear, selectReasoningModel, selectProvider).
+`SidePanelSessionFlowController` dispatches `SidePanelSessionCommand` values (sidebar toggle, search, pin/rename/delete/group changes).
 
 ## External Integrations
 

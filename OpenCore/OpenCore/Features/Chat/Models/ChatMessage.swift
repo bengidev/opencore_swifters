@@ -22,7 +22,7 @@ nonisolated enum ChatMessage: Equatable, Identifiable, Sendable {
 }
 
 extension ChatMessage {
-    static func text(
+    nonisolated static func text(
         id: UUID = UUID(),
         role: ChatMessageRole,
         content: String,
@@ -40,7 +40,7 @@ extension ChatMessage {
         )
     }
 
-    static func thinking(
+    nonisolated static func thinking(
         id: UUID = UUID(),
         role: ChatMessageRole = .assistant,
         content: String,
@@ -58,7 +58,7 @@ extension ChatMessage {
         )
     }
 
-    static func system(
+    nonisolated static func system(
         id: UUID = UUID(),
         content: String,
         timestamp: Date = Date()

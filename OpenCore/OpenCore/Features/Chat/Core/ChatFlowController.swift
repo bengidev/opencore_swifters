@@ -10,6 +10,8 @@ final class ChatFlowController {
     private let streaming: ChatStreamingClient
     private let history: ChatHistoryClient
     private let providerPreference: any SidePanelProviderPreferenceStore
+    private let contextCompaction: SettingsContextCompactionClient
+    private let contextLengthResolver: () -> Int
     private let invoker = ChatCommandInvoker()
     private var streamTask: Task<Void, Never>?
     private var lastProviderSortBy: String?
@@ -25,6 +27,8 @@ final class ChatFlowController {
         streaming: ChatStreamingClient = .preview,
         history: ChatHistoryClient = .preview,
         providerPreference: any SidePanelProviderPreferenceStore = SidePanelInMemoryProviderPreferenceStore(),
+        contextCompaction: SettingsContextCompactionClient = .disabled,
+        contextLengthResolver: @escaping () -> Int = { 0 },
         makeID: @escaping () -> UUID = UUID.init,
         now: @escaping () -> Date = Date.init
     ) {
@@ -32,6 +36,8 @@ final class ChatFlowController {
         self.streaming = streaming
         self.history = history
         self.providerPreference = providerPreference
+        self.contextCompaction = contextCompaction
+        self.contextLengthResolver = contextLengthResolver
         self.makeID = makeID
         self.now = now
     }
@@ -108,6 +114,8 @@ final class ChatFlowController {
             }
         }
 
+        await applyContextCompactionIfNeeded()
+
         startStream(
             modelID: modelID,
             preference: preference,
@@ -126,6 +134,7 @@ final class ChatFlowController {
         }
 
         beginTurn(draft: nil)
+        await applyContextCompactionIfNeeded()
         startStream(
             modelID: modelID,
             preference: preference,
@@ -358,6 +367,24 @@ final class ChatFlowController {
         cancelStreamingFlush()
         streamTask?.cancel()
         streamTask = nil
+    }
+
+    private func applyContextCompactionIfNeeded() async {
+        let contextLength = contextLengthResolver()
+        guard contextLength > 0 else { return }
+
+        do {
+            let compacted = try await contextCompaction.compactIfNeeded(state.messages, contextLength)
+            guard compacted != state.messages else { return }
+            state.messages = compacted
+            if let conversationID = state.conversation?.id {
+                let history = history
+                let messages = compacted
+                try? await history.replaceMessages(conversationID, messages)
+            }
+        } catch {
+            state.streamErrorMessage = "Could not compact conversation context."
+        }
     }
 
     private static func conversationTitle(for content: String) -> String {

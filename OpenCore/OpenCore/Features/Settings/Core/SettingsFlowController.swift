@@ -1,57 +1,47 @@
 import Foundation
 import Observation
 
-/// Drives the Settings page: entering, updating, and clearing the provider API
-/// key. The key is persisted to `CredentialStoring`; this controller
-/// never holds the secret beyond the in-flight draft the user is typing, and
-/// surfaces only whether a key is stored — never the value itself.
-///
-/// Persistence (save/clear/providerID) is dispatched through controller
-/// methods rather than commands because each touches the stores.
-/// The draft text-field binding uses a command for the pure state mutation.
+/// Drives the Settings page: provider credentials, context compaction prefs.
 @MainActor
 @Observable
-final class SidePanelSettingFlowController {
-    private(set) var state: SidePanelSettingFlowState
+final class SettingsFlowController {
+    private(set) var state: SettingsFlowState
     private let credentialStore: any CredentialStoring
     private let providerPreference: any SidePanelProviderPreferenceStore
-    private let invoker = SidePanelSettingCommandInvoker()
+    private let contextCompactionPreference: any SettingsContextCompactionPreferenceStore
+    private let invoker = SettingsCommandInvoker()
 
-    /// Fired after a successful save or clear so the parent can refresh its
-    /// credential gating without a full state sync.
     var onCredentialsChanged: (() -> Void)?
-    /// Fired when the selected provider changes so the parent can swap the
-    /// provider context (model list, credential gate, etc).
     var onProviderChanged: ((String) -> Void)?
+    var onContextCompactionChanged: (() -> Void)?
 
     init(
-        state: SidePanelSettingFlowState = SidePanelSettingFlowState(),
+        state: SettingsFlowState = SettingsFlowState(),
         credentialStore: any CredentialStoring,
-        providerPreference: any SidePanelProviderPreferenceStore
+        providerPreference: any SidePanelProviderPreferenceStore,
+        contextCompactionPreference: any SettingsContextCompactionPreferenceStore = SettingsUserDefaultsContextCompactionPreferenceStore()
     ) {
         self.state = state
         self.credentialStore = credentialStore
         self.providerPreference = providerPreference
+        self.contextCompactionPreference = contextCompactionPreference
     }
 
-    // MARK: - Commands (pure state mutations)
-
-    func dispatch(_ command: any SidePanelSettingCommand) {
+    func dispatch(_ command: any SettingsCommand) {
         invoker.invoke(command, on: &state)
+        if command is SettingsContextCompactionEnabledChangedCommand
+            || command is SettingsContextCompactionThresholdChangedCommand {
+            persistContextCompaction()
+        }
     }
 
-    // MARK: - Actions (touch stores)
-
-    /// Mirrors the persisted preference and stored-key presence into state.
-    /// Call once when the page appears.
     func onAppear() {
         let preference = providerPreference.preference()
         state.selectedProviderID = preference.providerID ?? ProviderDescriptor.openRouter.id
         state.hasStoredKey = credentialStore.secret(for: state.selectedProviderID) != nil
+        state.contextCompaction = contextCompactionPreference.preference()
     }
 
-    /// Trims the current draft, persists it, and clears the draft field on
-    /// success. A blank (whitespace-only) draft is silently ignored.
     func save() {
         let key = state.draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
@@ -66,7 +56,6 @@ final class SidePanelSettingFlowController {
         }
     }
 
-    /// Removes any stored key for the current provider and resets draft state.
     func clear() {
         do {
             try credentialStore.clear(for: state.selectedProviderID)
@@ -79,12 +68,25 @@ final class SidePanelSettingFlowController {
         }
     }
 
-    /// Switches to a different provider, persists the selection, and refreshes
-    /// the stored-key indicator for the new provider.
     func selectProvider(_ id: String) {
         providerPreference.setProviderID(id)
         state.selectedProviderID = id
         state.hasStoredKey = credentialStore.secret(for: id) != nil
         onProviderChanged?(id)
+    }
+
+    func setContextCompactionEnabled(_ isEnabled: Bool) {
+        dispatch(SettingsContextCompactionEnabledChangedCommand(isEnabled: isEnabled))
+    }
+
+    func setContextCompactionThresholdPercent(_ percent: Int) {
+        guard !state.contextCompaction.isEnabled else { return }
+        let clamped = min(95, max(50, percent))
+        dispatch(SettingsContextCompactionThresholdChangedCommand(percent: clamped))
+    }
+
+    private func persistContextCompaction() {
+        contextCompactionPreference.setPreference(state.contextCompaction)
+        onContextCompactionChanged?()
     }
 }
