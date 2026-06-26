@@ -79,6 +79,7 @@ struct HomeView: View {
         ChatView(
             chat: chat,
             dismissKeyboard: dismissComposerKeyboard,
+            isComposerFocused: isComposerFocused,
             composer: { composer }
         )
     }

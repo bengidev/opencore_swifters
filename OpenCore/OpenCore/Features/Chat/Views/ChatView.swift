@@ -5,6 +5,7 @@ import SwiftUI
 struct ChatView<Composer: View>: View {
     @Bindable var chat: ChatFlowController
     let dismissKeyboard: () -> Void
+    var isComposerFocused = false
     @ViewBuilder let composer: () -> Composer
 
     @Environment(\.sharedPalette) private var palette
@@ -22,7 +23,7 @@ struct ChatView<Composer: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            ChatThreadView(flow: chat) {
+            ChatThreadView(flow: chat, isComposerFocused: isComposerFocused) {
                 VStack(spacing: 0) {
                     ChatErrorBannerView(flow: chat)
                         .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
