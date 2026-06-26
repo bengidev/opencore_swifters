@@ -10,9 +10,11 @@ Onboarding flow state is owned by `OnboardingFlowController` and mutated through
 App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
-├── SidePanel     # Conversation browser + settings (self-contained internal module)
-├── Chat          # Live message stream, send/receive, active conversation (ChatView — thread + error banner)
-└── Home          # Welcome hero + composer chatbox (wires Chat + SidePanel)
+├── SidePanel     # Conversation history browser (session scope)
+├── Chat          # Live message stream, send/receive, active conversation
+├── Settings      # Provider credentials, context compaction prefs
+├── About         # App info tab
+└── Home          # Welcome + composer + TabView shell
 ```
 
 ## Current layout
@@ -23,29 +25,33 @@ OpenCore/
 ├── App/                      # App shell
 │   └── AppRootView.swift
 ├── Features/
-│   ├── Onboarding/           # Role-based
+│   ├── Onboarding/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Views/
 │   │   └── Utilities/
 │   ├── Home/
 │   │   ├── Core/
-│   │   ├── Models/           # HomeModelOption, ContextWindowUsage, HomeComposerSpeedMode
-│   │   ├── Utilities/        # HomeModelCatalogClient, ContextWindowEstimator
-│   │   └── Views/
+│   │   ├── Models/
+│   │   ├── Utilities/
+│   │   └── Views/            # HomeView, HomeTabShellView
 │   ├── Chat/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Views/
 │   │   └── Utilities/
+│   ├── Settings/
+│   │   ├── Core/
+│   │   ├── Models/
+│   │   ├── Utilities/
+│   │   └── Views/
+│   ├── About/
+│   │   └── Views/
 │   └── SidePanel/
 │       ├── Core/
 │       ├── Models/
 │       ├── Utilities/
 │       ├── Session/
-│       │   ├── Core/
-│       │   └── Views/
-│       ├── Setting/
 │       │   ├── Core/
 │       │   └── Views/
 │       └── Views/
@@ -54,9 +60,9 @@ OpenCore/
     └── UI/
 ```
 
-SidePanel is a self-contained internal module combining two scopes (session + setting) with feature-owned infrastructure in `Utilities/`. Its role folders nest `Session/` and `Setting/` sub-folders, each with their own `Core/` and `Views/`.
+SidePanel is a self-contained internal module with a nested `Session/` scope for the history drawer. Settings and About are sibling top-level modules with flat role folders.
 
-Home uses flat role folders only (`Core/`, `Models/`, `Utilities/`, `Views/`). Context window and speed mode types live alongside other Home models and utilities.
+Home uses flat role folders only (`Core/`, `Models/`, `Utilities/`, `Views/`). Context window estimation lives in Home; compaction prefs and engine live in Settings.
 
 ## Role-based folders
 

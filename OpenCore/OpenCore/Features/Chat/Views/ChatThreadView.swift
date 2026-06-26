@@ -1,10 +1,16 @@
 import SwiftUI
 
+private enum ChatThreadLayout {
+    static let keyboardScrollDelayNanoseconds: UInt64 = 180_000_000
+}
+
 /// Scrollable message list for an active chat conversation. Auto-scrolls as
 /// messages stream in and shows a typing indicator before the first assistant
 /// token arrives.
-struct ChatThreadView: View {
+struct ChatThreadView<BottomChrome: View>: View {
     @Bindable var flow: ChatFlowController
+    var isComposerFocused = false
+    @ViewBuilder var bottomChrome: () -> BottomChrome
 
     @Environment(\.sharedPalette) private var palette
     @State private var scrollTask: Task<Void, Never>?
@@ -30,6 +36,10 @@ struct ChatThreadView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomChrome()
+            }
             .background(palette.surfaceBase)
             .onChange(of: flow.state.messages.count) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: true)
@@ -47,7 +57,25 @@ struct ChatThreadView: View {
                     }
                 }
             }
+            .onChange(of: isComposerFocused) { _, isFocused in
+                scheduleScrollToLast(
+                    proxy: proxy,
+                    animate: true,
+                    delayNanoseconds: isFocused
+                        ? ChatThreadLayout.keyboardScrollDelayNanoseconds
+                        : 0
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { _ in
+                guard isComposerFocused else { return }
+                scheduleScrollToLast(
+                    proxy: proxy,
+                    animate: true,
+                    delayNanoseconds: ChatThreadLayout.keyboardScrollDelayNanoseconds
+                )
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var showLoadingIndicator: Bool {
@@ -62,10 +90,14 @@ struct ChatThreadView: View {
         return flow.state.messages[lastAssistantIndex].id == message.id
     }
 
-    private func scheduleScrollToLast(proxy: ScrollViewProxy, animate: Bool) {
+    private func scheduleScrollToLast(
+        proxy: ScrollViewProxy,
+        animate: Bool,
+        delayNanoseconds: UInt64? = nil
+    ) {
         scrollTask?.cancel()
         scrollTask = Task { @MainActor in
-            let delay = scrollCoalesceDelayNanoseconds()
+            let delay = delayNanoseconds ?? scrollCoalesceDelayNanoseconds()
             if delay > 0 {
                 try? await Task.sleep(nanoseconds: delay)
             } else {

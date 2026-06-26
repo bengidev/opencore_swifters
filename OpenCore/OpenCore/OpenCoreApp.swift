@@ -8,6 +8,7 @@ struct OpenCoreApp: App {
     @State private var sidePanel: SidePanelFlowController
     @State private var home: HomeFlowController
     @State private var chat: ChatFlowController
+    @State private var settings: SettingsFlowController
 
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -23,20 +24,40 @@ struct OpenCoreApp: App {
         )
         let credentialStore = CredentialKeychainStore(service: CredentialKeychainStore.openCoreService)
         let providerPreference = SidePanelUserDefaultsProviderPreferenceStore()
+        let contextCompactionPreference = SettingsUserDefaultsContextCompactionPreferenceStore()
         let session = SidePanelSessionFlowController(history: .live(modelContainer: modelContainer))
-        _sidePanel = State(initialValue: SidePanelFlowController(
-            session: session,
+        _sidePanel = State(initialValue: SidePanelFlowController(session: session))
+
+        let homeController = HomeFlowController(
             credentialStore: credentialStore,
             providerPreference: providerPreference
-        ))
-        _home = State(initialValue: HomeFlowController(
-            credentialStore: credentialStore,
+        )
+        _home = State(initialValue: homeController)
+
+        let summarizer = SettingsContextCompactionStreamSummarizer(
+            streaming: .live(credentialStore: credentialStore),
             providerPreference: providerPreference
-        ))
+        )
+        let compactionEngine = SettingsContextCompactionEngine(summarizer: summarizer)
+        let contextCompaction = SettingsContextCompactionClient.live(
+            engine: compactionEngine,
+            preferenceStore: contextCompactionPreference
+        )
+
         _chat = State(initialValue: ChatFlowController(
             streaming: .live(credentialStore: credentialStore),
             history: .live(modelContainer: modelContainer),
-            providerPreference: providerPreference
+            providerPreference: providerPreference,
+            contextCompaction: contextCompaction,
+            contextLengthResolver: {
+                homeController.state.selectedModelOption?.contextLength ?? 0
+            }
+        ))
+
+        _settings = State(initialValue: SettingsFlowController(
+            credentialStore: credentialStore,
+            providerPreference: providerPreference,
+            contextCompactionPreference: contextCompactionPreference
         ))
     }
 
@@ -78,6 +99,7 @@ struct OpenCoreApp: App {
                 sidePanel: sidePanel,
                 home: home,
                 chat: chat,
+                settings: settings,
                 onThemeToggle: toggleTheme
             )
             .environment(\.sharedPalette, resolvedPalette)

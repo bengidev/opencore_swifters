@@ -6,13 +6,19 @@ struct AppRootView: View {
     @Bindable var sidePanel: SidePanelFlowController
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
+    @Bindable var settings: SettingsFlowController
 
     let onThemeToggle: () -> Void
 
     var body: some View {
         Group {
             if onboardingFlow.state.isFinished {
-                HomeView(sidePanel: sidePanel, home: home, chat: chat)
+                HomeTabShellView(
+                    sidePanel: sidePanel,
+                    home: home,
+                    chat: chat,
+                    settings: settings
+                )
             } else {
                 OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)
             }

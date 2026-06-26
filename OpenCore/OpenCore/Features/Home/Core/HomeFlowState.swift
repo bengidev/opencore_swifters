@@ -1,6 +1,7 @@
 import Foundation
 
 nonisolated struct HomeFlowState: Equatable, Sendable {
+    var selectedTab: HomeTab = .home
     var selectedProviderID: String = ProviderDescriptor.openRouter.id
     var selectedModelID: String?
     var reasoningEffortWireValue: String? = "high"

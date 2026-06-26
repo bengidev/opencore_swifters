@@ -6,46 +6,11 @@ import Testing
 @MainActor
 @Suite("Side Panel Host Flow Controller")
 struct SidePanelFlowControllerTests {
-    /// Builds a host controller over in-memory test doubles so tests are
-    /// hermetic and the backing stores can be asserted against directly.
     private func makeController(
-        session: SidePanelSessionFlowController? = nil,
-        credentialStore: CredentialInMemoryStore = .init(),
-        preferenceStore: SidePanelInMemoryProviderPreferenceStore = .init()
+        session: SidePanelSessionFlowController? = nil
     ) -> SidePanelFlowController {
-        let resolvedSession = session ?? SidePanelSessionFlowController()
-        return SidePanelFlowController(
-            session: resolvedSession,
-            credentialStore: credentialStore,
-            providerPreference: preferenceStore
-        )
+        SidePanelFlowController(session: session ?? SidePanelSessionFlowController())
     }
-
-    // MARK: - Settings presentation
-
-    @Test("settingsButtonTapped presents setting controller with stored key status")
-    func settingsButtonTappedPresentsWithStoredKey() async throws {
-        let credentialStore = CredentialInMemoryStore()
-        try credentialStore.save("sk-test-key", for: ProviderDescriptor.openRouter.id)
-
-        let controller = makeController(credentialStore: credentialStore)
-        controller.settingsButtonTapped()
-
-        #expect(controller.setting != nil)
-        #expect(controller.setting?.state.hasStoredKey == true)
-    }
-
-    @Test("session settingsButtonTapped presents setting controller on the host")
-    func sessionSettingsButtonTappedPresentsSetting() {
-        let session = SidePanelSessionFlowController()
-        let controller = makeController(session: session)
-
-        session.settingsButtonTapped()
-
-        #expect(controller.setting != nil)
-    }
-
-    // MARK: - Session delegate forwarding
 
     @Test("session openConversation delegate forwards to host")
     func sessionOpenConversationForwardsToHost() {
@@ -110,49 +75,10 @@ struct SidePanelFlowControllerTests {
         #expect(deletedID == conversationID)
     }
 
-    // MARK: - Setting delegate forwarding
-
-    @Test("setting credentialsChanged delegate forwards to host")
-    func settingCredentialsChangedForwardsToHost() async throws {
-        let credentialStore = CredentialInMemoryStore()
-        try credentialStore.save("sk-test-key", for: ProviderDescriptor.openRouter.id)
-
-        let controller = makeController(credentialStore: credentialStore)
-
-        var credentialsChanged = false
-        controller.onCredentialsChanged = { credentialsChanged = true }
-
-        controller.settingsButtonTapped()
-        controller.setting?.dispatch(SidePanelSettingDraftChangedCommand("sk-new"))
-        controller.setting?.save()
-
-        #expect(credentialsChanged)
-    }
-
-    @Test("setting providerChanged updates host selectedProviderID")
-    func settingProviderChangedUpdatesHostProviderID() {
+    @Test("syncSelectedProviderID updates mirrored provider id")
+    func syncSelectedProviderIDUpdatesMirror() {
         let controller = makeController()
-
-        var changedTo: String?
-        controller.onProviderChanged = { changedTo = $0 }
-
-        controller.settingsButtonTapped()
-        controller.setting?.selectProvider("opencode")
-
+        controller.syncSelectedProviderID("opencode")
         #expect(controller.selectedProviderID == "opencode")
-        #expect(changedTo == "opencode")
-    }
-
-    @Test("dismissSettings fires credentialsChanged")
-    func dismissSettingsFiresCredentialsChanged() {
-        let controller = makeController()
-
-        var credentialsChanged = false
-        controller.onCredentialsChanged = { credentialsChanged = true }
-
-        controller.dismissSettings()
-
-        #expect(credentialsChanged)
-        #expect(controller.setting == nil)
     }
 }

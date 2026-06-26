@@ -7,6 +7,7 @@ nonisolated protocol PersistenceConversationHistoryStoring: Sendable {
     func loadChatMessages(conversationID: UUID) async throws -> [ChatMessage]
     func saveConversation(_ conversation: SidePanelConversation) async throws
     func appendChatMessage(conversationID: UUID, message: ChatMessage) async throws
+    func replaceChatMessages(conversationID: UUID, messages: [ChatMessage]) async throws
     func deleteConversation(conversationID: UUID) async throws
     func setPinned(conversationID: UUID, isPinned: Bool) async throws
     func renameConversation(conversationID: UUID, title: String) async throws
@@ -20,6 +21,7 @@ nonisolated struct PersistenceConversationHistoryStore: PersistenceConversationH
     private let _loadChatMessages: @Sendable (UUID) async throws -> [ChatMessage]
     private let _saveConversation: @Sendable (SidePanelConversation) async throws -> Void
     private let _appendChatMessage: @Sendable (UUID, ChatMessage) async throws -> Void
+    private let _replaceChatMessages: @Sendable (UUID, [ChatMessage]) async throws -> Void
     private let _deleteConversation: @Sendable (UUID) async throws -> Void
     private let _setPinned: @Sendable (UUID, Bool) async throws -> Void
     private let _renameConversation: @Sendable (UUID, String) async throws -> Void
@@ -31,6 +33,7 @@ nonisolated struct PersistenceConversationHistoryStore: PersistenceConversationH
         loadChatMessages: @escaping @Sendable (UUID) async throws -> [ChatMessage],
         saveConversation: @escaping @Sendable (SidePanelConversation) async throws -> Void,
         appendChatMessage: @escaping @Sendable (UUID, ChatMessage) async throws -> Void,
+        replaceChatMessages: @escaping @Sendable (UUID, [ChatMessage]) async throws -> Void,
         deleteConversation: @escaping @Sendable (UUID) async throws -> Void,
         setPinned: @escaping @Sendable (UUID, Bool) async throws -> Void,
         renameConversation: @escaping @Sendable (UUID, String) async throws -> Void,
@@ -41,6 +44,7 @@ nonisolated struct PersistenceConversationHistoryStore: PersistenceConversationH
         _loadChatMessages = loadChatMessages
         _saveConversation = saveConversation
         _appendChatMessage = appendChatMessage
+        _replaceChatMessages = replaceChatMessages
         _deleteConversation = deleteConversation
         _setPinned = setPinned
         _renameConversation = renameConversation
@@ -62,6 +66,10 @@ nonisolated struct PersistenceConversationHistoryStore: PersistenceConversationH
 
     func appendChatMessage(conversationID: UUID, message: ChatMessage) async throws {
         try await _appendChatMessage(conversationID, message)
+    }
+
+    func replaceChatMessages(conversationID: UUID, messages: [ChatMessage]) async throws {
+        try await _replaceChatMessages(conversationID, messages)
     }
 
     func deleteConversation(conversationID: UUID) async throws {
@@ -89,6 +97,7 @@ nonisolated struct PersistenceConversationHistoryStore: PersistenceConversationH
         loadChatMessages: { _ in [] },
         saveConversation: { _ in },
         appendChatMessage: { _, _ in },
+        replaceChatMessages: { _, _ in },
         deleteConversation: { _ in },
         setPinned: { _, _ in },
         renameConversation: { _, _ in },

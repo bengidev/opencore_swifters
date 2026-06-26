@@ -14,7 +14,14 @@ final class HomeFlowController {
     private var contextDraft = ""
 
     var onModelSelectionChanged: (() -> Void)?
-    var onOpenSettings: (() -> Void)?
+
+    func selectTab(_ tab: HomeTab) {
+        state.selectedTab = tab
+    }
+
+    func openSettingsTab() {
+        state.selectedTab = .settings
+    }
 
     init(
         state: HomeFlowState = HomeFlowState(),

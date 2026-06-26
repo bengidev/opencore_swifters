@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+enum PersistenceConversationHistoryError: Error, Equatable {
+    case conversationNotFound(UUID)
+}
+
 /// SwiftData repository adapter for `PersistenceConversationHistoryStoring`.
 extension PersistenceConversationHistoryStore {
     @MainActor
@@ -67,6 +71,29 @@ extension PersistenceConversationHistoryStore {
                     context.insert(entity)
                 }
                 conversation.updatedAt = message.timestamp
+                try context.save()
+            },
+            replaceChatMessages: { @MainActor conversationID, messages in
+                let context = ModelContext(modelContainer)
+                guard let conversation = try Self.fetchConversation(conversationID, in: context) else {
+                    throw PersistenceConversationHistoryError.conversationNotFound(conversationID)
+                }
+
+                for entity in conversation.messages {
+                    context.delete(entity)
+                }
+                conversation.messages.removeAll()
+
+                for (order, message) in messages.enumerated() {
+                    let entity = Self.entity(from: message, order: order)
+                    entity.conversation = conversation
+                    conversation.messages.append(entity)
+                    context.insert(entity)
+                }
+
+                if let last = messages.last {
+                    conversation.updatedAt = last.timestamp
+                }
                 try context.save()
             },
             deleteConversation: { @MainActor conversationID in
