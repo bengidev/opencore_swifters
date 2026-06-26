@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 
+enum PersistenceConversationHistoryError: Error, Equatable {
+    case conversationNotFound(UUID)
+}
+
 /// SwiftData repository adapter for `PersistenceConversationHistoryStoring`.
 extension PersistenceConversationHistoryStore {
     @MainActor
@@ -72,7 +76,7 @@ extension PersistenceConversationHistoryStore {
             replaceChatMessages: { @MainActor conversationID, messages in
                 let context = ModelContext(modelContainer)
                 guard let conversation = try Self.fetchConversation(conversationID, in: context) else {
-                    return
+                    throw PersistenceConversationHistoryError.conversationNotFound(conversationID)
                 }
 
                 for entity in conversation.messages {

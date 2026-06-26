@@ -57,4 +57,65 @@ struct ChatContextCompactionIntegrationTests {
         #expect(chat.state.messages.count < existingMessages.count + 1)
         #expect(replacedMessages != nil)
     }
+
+    @Test("compaction failure aborts send and restores draft")
+    func compactionFailureAbortsSend() async {
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(modelID: "test-model")
+        )
+
+        let compaction = SettingsContextCompactionClient { _, _ in
+            throw SettingsContextCompactionError.missingModel
+        }
+
+        let chat = ChatFlowController(
+            state: ChatFlowState(
+                messages: [],
+                draftMessage: "hello"
+            ),
+            streaming: ChatStreamingClient(stream: { _ in AsyncStream { $0.finish() } }),
+            providerPreference: preference,
+            contextCompaction: compaction,
+            contextLengthResolver: { 100 }
+        )
+
+        await chat.sendMessage()
+
+        #expect(chat.state.streamingStatus == .failed)
+        #expect(chat.state.streamErrorMessage == "Could not prepare conversation for sending.")
+        #expect(chat.state.messages.isEmpty)
+        #expect(chat.state.draftMessage == "hello")
+        #expect(chat.state.isSending == false)
+    }
+
+    @Test("persistence failure aborts send and restores draft")
+    func persistenceFailureAbortsSend() async {
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(modelID: "test-model")
+        )
+
+        let history = ChatHistoryClient(
+            loadMessages: { _ in [] },
+            saveConversation: { _ in throw NSError(domain: "test", code: 1) },
+            appendMessage: { _, _ in },
+            replaceMessages: { _, _ in }
+        )
+
+        let chat = ChatFlowController(
+            state: ChatFlowState(
+                messages: [],
+                draftMessage: "hello"
+            ),
+            streaming: ChatStreamingClient(stream: { _ in AsyncStream { $0.finish() } }),
+            history: history,
+            providerPreference: preference,
+            contextLengthResolver: { 0 }
+        )
+
+        await chat.sendMessage()
+
+        #expect(chat.state.streamingStatus == .failed)
+        #expect(chat.state.messages.isEmpty)
+        #expect(chat.state.draftMessage == "hello")
+    }
 }

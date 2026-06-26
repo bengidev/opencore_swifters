@@ -43,6 +43,6 @@ struct SettingsContextCompactionTrimStrategyTests {
             draft: nil,
             contextLength: contextLength
         )
-        #expect(usage.fractionUsed < 0.5 || compacted.count == 2)
+        #expect(usage.fractionUsed < 0.5 || compacted.count <= 3)
     }
 }

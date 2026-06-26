@@ -28,7 +28,7 @@ nonisolated struct SettingsContextCompactionTrimStrategy: SettingsContextCompact
         var working = messages
         let targetFraction = Double(thresholdPercent) / 100.0 * 0.85
 
-        while working.count > minRecentMessages,
+        while working.count > minRecentMessages + 1,
               usageFraction(messages: working, contextLength: contextLength) >= targetFraction {
             guard let dropIndex = indexOfOldestDroppableMessage(in: working, minRecentMessages: minRecentMessages) else {
                 break
@@ -152,7 +152,7 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
         }
 
         return try await summarizeStrategy.compact(
-            messages: messages,
+            messages: trimmed,
             contextLength: contextLength,
             thresholdPercent: preference.triggerThresholdPercent,
             minRecentMessages: preference.minRecentMessages

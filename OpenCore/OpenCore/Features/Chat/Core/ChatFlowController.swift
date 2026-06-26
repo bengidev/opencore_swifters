@@ -75,6 +75,12 @@ final class ChatFlowController {
 
     // MARK: - Send / Retry
 
+    private struct SendTurnSnapshot {
+        let messages: [ChatMessage]
+        let conversation: SidePanelConversation?
+        let draftMessage: String
+    }
+
     func sendMessage(providerSortBy: String? = nil, reasoningEffort: String? = nil) async {
         let content = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         let preference = providerPreference.preference()
@@ -84,7 +90,12 @@ final class ChatFlowController {
             return
         }
 
-        beginTurn(draft: "")
+        let snapshot = SendTurnSnapshot(
+            messages: state.messages,
+            conversation: state.conversation,
+            draftMessage: state.draftMessage
+        )
+
         let timestamp = now()
         let userMessage = ChatMessage.text(
             id: makeID(),
@@ -92,6 +103,7 @@ final class ChatFlowController {
             content: content,
             timestamp: timestamp
         )
+        state.draftMessage = ""
         state.messages.append(userMessage)
 
         if state.conversation == nil {
@@ -106,16 +118,14 @@ final class ChatFlowController {
             state.conversation?.updatedAt = timestamp
         }
 
-        if let conversation = state.conversation {
-            let history = history
-            Task {
-                try? await history.saveConversation(conversation)
-                try? await history.appendMessage(conversation.id, userMessage)
-            }
+        guard await prepareTurnForStreaming(
+            errorMessage: "Could not prepare conversation for sending."
+        ) else {
+            restoreSendTurn(snapshot)
+            return
         }
 
-        await applyContextCompactionIfNeeded()
-
+        beginTurn(draft: nil)
         startStream(
             modelID: modelID,
             preference: preference,
@@ -133,8 +143,15 @@ final class ChatFlowController {
             return
         }
 
+        guard await prepareTurnForStreaming(
+            errorMessage: "Could not compact conversation context."
+        ) else {
+            state.streamingStatus = .failed
+            state.isSending = false
+            return
+        }
+
         beginTurn(draft: nil)
-        await applyContextCompactionIfNeeded()
         startStream(
             modelID: modelID,
             preference: preference,
@@ -369,21 +386,40 @@ final class ChatFlowController {
         streamTask = nil
     }
 
-    private func applyContextCompactionIfNeeded() async {
+    private func restoreSendTurn(_ snapshot: SendTurnSnapshot) {
+        state.messages = snapshot.messages
+        state.conversation = snapshot.conversation
+        state.draftMessage = snapshot.draftMessage
+        state.streamingStatus = .failed
+        state.isSending = false
+    }
+
+    private func prepareTurnForStreaming(errorMessage: String) async -> Bool {
+        let messagesBeforeCompaction = state.messages
+        do {
+            try await applyContextCompactionIfNeeded()
+            try await persistConversationMessages()
+            return true
+        } catch {
+            state.messages = messagesBeforeCompaction
+            state.streamErrorMessage = errorMessage
+            return false
+        }
+    }
+
+    private func persistConversationMessages() async throws {
+        guard let conversation = state.conversation else { return }
+        try await history.saveConversation(conversation)
+        try await history.replaceMessages(conversation.id, state.messages)
+    }
+
+    private func applyContextCompactionIfNeeded() async throws {
         let contextLength = contextLengthResolver()
         guard contextLength > 0 else { return }
 
-        do {
-            let compacted = try await contextCompaction.compactIfNeeded(state.messages, contextLength)
-            guard compacted != state.messages else { return }
+        let compacted = try await contextCompaction.compactIfNeeded(state.messages, contextLength)
+        if compacted != state.messages {
             state.messages = compacted
-            if let conversationID = state.conversation?.id {
-                let history = history
-                let messages = compacted
-                try? await history.replaceMessages(conversationID, messages)
-            }
-        } catch {
-            state.streamErrorMessage = "Could not compact conversation context."
         }
     }
 

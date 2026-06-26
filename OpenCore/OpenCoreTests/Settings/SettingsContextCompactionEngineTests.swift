@@ -11,6 +11,43 @@ private struct SettingsFixedSummarizer: SettingsContextCompactionSummarizing {
     }
 }
 
+private struct DropFirstTrimStrategy: SettingsContextCompactionStrategizing {
+    func compact(
+        messages: [ChatMessage],
+        contextLength: Int,
+        thresholdPercent: Int,
+        minRecentMessages: Int
+    ) async throws -> [ChatMessage] {
+        guard messages.count > minRecentMessages + 1 else { return messages }
+        return Array(messages.dropFirst())
+    }
+}
+
+private struct RecordingCompactInputStrategy: SettingsContextCompactionStrategizing {
+    let recorder: SettingsCompactionSummarizeRecorder
+    private let inner: SettingsContextCompactionSummarizeStrategy
+
+    init(recorder: SettingsCompactionSummarizeRecorder) {
+        self.recorder = recorder
+        self.inner = SettingsContextCompactionSummarizeStrategy(summarizer: recorder)
+    }
+
+    func compact(
+        messages: [ChatMessage],
+        contextLength: Int,
+        thresholdPercent: Int,
+        minRecentMessages: Int
+    ) async throws -> [ChatMessage] {
+        recorder.recordCompactInput(messages)
+        return try await inner.compact(
+            messages: messages,
+            contextLength: contextLength,
+            thresholdPercent: thresholdPercent,
+            minRecentMessages: minRecentMessages
+        )
+    }
+}
+
 @Suite("Settings Context Compaction Engine")
 struct SettingsContextCompactionEngineTests {
     @Test("shouldCompact gates on threshold and enabled flag")
@@ -34,7 +71,11 @@ struct SettingsContextCompactionEngineTests {
         let messages = (0..<8).map { index in
             ChatMessage.text(role: index.isMultiple(of: 2) ? .user : .assistant, content: String(repeating: "x", count: 200))
         }
-        let preference = SettingsContextCompactionPreference(isEnabled: true, triggerThresholdPercent: 50, minRecentMessages: 2)
+        let preference = SettingsContextCompactionPreference(
+            isEnabled: true,
+            triggerThresholdPercent: 50,
+            minRecentMessages: 2
+        )
 
         let compacted = try await engine.compactIfNeeded(
             messages: messages,
@@ -50,5 +91,57 @@ struct SettingsContextCompactionEngineTests {
             return false
         }
         #expect(hasSummary)
+    }
+
+    @Test("summarize receives trim output, not the original message list")
+    func summarizeUsesTrimmedMessages() async throws {
+        let recorder = SettingsCompactionSummarizeRecorder()
+        let engine = SettingsContextCompactionEngine(
+            trimStrategy: DropFirstTrimStrategy(),
+            summarizeStrategy: RecordingCompactInputStrategy(recorder: recorder)
+        )
+        let messages = [
+            ChatMessage.text(role: .user, content: "MARKER_DROP_ME"),
+        ] + (0..<7).map { _ in
+            ChatMessage.text(role: .user, content: String(repeating: "z", count: 400))
+        }
+        let preference = SettingsContextCompactionPreference(
+            isEnabled: true,
+            triggerThresholdPercent: 50,
+            minRecentMessages: 2
+        )
+
+        _ = try await engine.compactIfNeeded(
+            messages: messages,
+            contextLength: 100,
+            preference: preference
+        )
+
+        #expect(!recorder.compactInput.isEmpty)
+        #expect(!recorder.compactInput.contains { message in
+            if case let .text(text) = message { return text.content == "MARKER_DROP_ME" }
+            return false
+        })
+    }
+}
+
+private final class SettingsCompactionSummarizeRecorder: SettingsContextCompactionSummarizing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _compactInput: [ChatMessage] = []
+
+    var compactInput: [ChatMessage] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _compactInput
+    }
+
+    func recordCompactInput(_ messages: [ChatMessage]) {
+        lock.lock()
+        _compactInput = messages
+        lock.unlock()
+    }
+
+    func summarize(messages: [ChatMessage]) async throws -> String {
+        "short summary"
     }
 }
