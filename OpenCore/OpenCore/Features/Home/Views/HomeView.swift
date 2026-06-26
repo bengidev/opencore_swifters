@@ -56,6 +56,7 @@ struct HomeView: View {
                 draftMessage: chat.state.draftMessage
             )
         }
+        .toolbar(isComposerFocused ? .hidden : .visible, for: .tabBar)
         .sheet(isPresented: Binding(
             get: { home.state.isModelPopupPresented },
             set: { home.setModelPopupPresented($0) }
