@@ -76,10 +76,11 @@ struct HomeView: View {
     }
 
     private var chatContent: some View {
-        ChatView(chat: chat, dismissKeyboard: dismissComposerKeyboard)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                composer
-            }
+        ChatView(
+            chat: chat,
+            dismissKeyboard: dismissComposerKeyboard,
+            composer: { composer }
+        )
     }
 
     private var composer: some View {

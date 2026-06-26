@@ -3,8 +3,9 @@ import SwiftUI
 /// Scrollable message list for an active chat conversation. Auto-scrolls as
 /// messages stream in and shows a typing indicator before the first assistant
 /// token arrives.
-struct ChatThreadView: View {
+struct ChatThreadView<BottomChrome: View>: View {
     @Bindable var flow: ChatFlowController
+    @ViewBuilder var bottomChrome: () -> BottomChrome
 
     @Environment(\.sharedPalette) private var palette
     @State private var scrollTask: Task<Void, Never>?
@@ -30,6 +31,10 @@ struct ChatThreadView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomChrome()
+            }
             .background(palette.surfaceBase)
             .onChange(of: flow.state.messages.count) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: true)
@@ -48,6 +53,7 @@ struct ChatThreadView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var showLoadingIndicator: Bool {

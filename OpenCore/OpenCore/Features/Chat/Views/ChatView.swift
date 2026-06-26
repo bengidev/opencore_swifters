@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// Active conversation screen — title, error banner, and message thread.
-/// Composer stays in `HomeView`.
-struct ChatView: View {
+/// Composer is inset on the thread scroll view so its viewport tracks the keyboard.
+struct ChatView<Composer: View>: View {
     @Bindable var chat: ChatFlowController
     let dismissKeyboard: () -> Void
+    @ViewBuilder let composer: () -> Composer
 
     @Environment(\.sharedPalette) private var palette
 
@@ -21,22 +22,24 @@ struct ChatView: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            ChatThreadView(flow: chat)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: dismissKeyboard)
+            ChatThreadView(flow: chat) {
+                VStack(spacing: 0) {
+                    ChatErrorBannerView(flow: chat)
+                        .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+                    composer()
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: dismissKeyboard)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ChatErrorBannerView(flow: chat)
-                .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
-        }
     }
 }
 
 #Preview {
     ZStack {
         SharedOpenCorePalette.resolve(.light).surfaceBase.ignoresSafeArea()
-        ChatView(chat: ChatFlowController(), dismissKeyboard: {})
+        ChatView(chat: ChatFlowController(), dismissKeyboard: {}, composer: { EmptyView() })
     }
     .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }
