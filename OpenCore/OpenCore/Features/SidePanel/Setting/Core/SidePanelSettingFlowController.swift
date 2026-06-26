@@ -1,13 +1,13 @@
 import Foundation
 import Observation
 
-/// Drives the Settings sheet: entering, updating, and clearing the provider API
+/// Drives the Settings page: entering, updating, and clearing the provider API
 /// key. The key is persisted to `CredentialStoring`; this controller
 /// never holds the secret beyond the in-flight draft the user is typing, and
 /// surfaces only whether a key is stored — never the value itself.
 ///
-/// Persistence (save/clear/reasoningModel/providerID) is dispatched through
-/// controller methods rather than commands because each touches the stores.
+/// Persistence (save/clear/providerID) is dispatched through controller
+/// methods rather than commands because each touches the stores.
 /// The draft text-field binding uses a command for the pure state mutation.
 @MainActor
 @Observable
@@ -20,9 +20,6 @@ final class SidePanelSettingFlowController {
     /// Fired after a successful save or clear so the parent can refresh its
     /// credential gating without a full state sync.
     var onCredentialsChanged: (() -> Void)?
-    /// Fired when the reasoning model is changed so the parent can reload the
-    /// model list or update the composer chip.
-    var onReasoningModelChanged: (() -> Void)?
     /// Fired when the selected provider changes so the parent can swap the
     /// provider context (model list, credential gate, etc).
     var onProviderChanged: ((String) -> Void)?
@@ -46,12 +43,11 @@ final class SidePanelSettingFlowController {
     // MARK: - Actions (touch stores)
 
     /// Mirrors the persisted preference and stored-key presence into state.
-    /// Call once when the sheet appears.
+    /// Call once when the page appears.
     func onAppear() {
         let preference = providerPreference.preference()
         state.selectedProviderID = preference.providerID ?? ProviderDescriptor.openRouter.id
         state.hasStoredKey = credentialStore.secret(for: state.selectedProviderID) != nil
-        state.reasoningEffortWireValue = preference.reasoningEffortWireValue
     }
 
     /// Trims the current draft, persists it, and clears the draft field on
@@ -81,15 +77,6 @@ final class SidePanelSettingFlowController {
         } catch {
             state.errorMessage = "Could not remove the key from the Keychain."
         }
-    }
-
-    /// Persists the reasoning effort tier to the preference store and mirrors
-    /// it into local state so the control reflects the change immediately.
-      func selectReasoningEffort(_ effort: ModelReasoningEffort) {
-        guard state.availableReasoningEfforts.contains(effort) else { return }
-        providerPreference.setReasoningEffort(effort)
-        state.reasoningEffortWireValue = effort.wireValue
-        onReasoningModelChanged?()
     }
 
     /// Switches to a different provider, persists the selection, and refreshes
