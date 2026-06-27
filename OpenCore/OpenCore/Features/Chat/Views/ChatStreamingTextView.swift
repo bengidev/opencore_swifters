@@ -5,9 +5,8 @@ import UIKit
 /// `textStorage` instead of rebuilding SwiftUI `Text` layout on every flush.
 struct ChatStreamingTextView: UIViewRepresentable {
     let text: String
-    var font: UIFont = .systemFont(ofSize: 16, weight: .regular)
-    var textColor: UIColor = .label
-    var markdownPalette: SharedOpenCorePalette?
+    let font: UIFont
+    let textColor: UIColor
     var isSelectable = true
     var showsCursor = false
     var cursorColor: UIColor = .label
@@ -40,7 +39,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
             to: uiView,
             font: font,
             textColor: textColor,
-            markdownPalette: markdownPalette,
             showsCursor: showsCursor,
             cursorColor: cursorColor,
             cursorOpacity: cursorOpacity
@@ -64,7 +62,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
             to textView: ChatStreamingSizingTextView,
             font: UIFont,
             textColor: UIColor,
-            markdownPalette: SharedOpenCorePalette?,
             showsCursor: Bool,
             cursorColor: UIColor,
             cursorOpacity: CGFloat
@@ -73,7 +70,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
             pendingShowsCursor = showsCursor
             pendingCursorColor = cursorColor
             pendingCursorOpacity = cursorOpacity
-            pendingMarkdownPalette = markdownPalette
             guard updateTask == nil else { return }
             updateTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 33_000_000)
@@ -82,8 +78,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
                 updateTask = nil
             }
         }
-
-        private var pendingMarkdownPalette: SharedOpenCorePalette?
 
         private func flushPending(
             to textView: ChatStreamingSizingTextView,
@@ -117,19 +111,7 @@ struct ChatStreamingTextView: UIViewRepresentable {
                 || showsCursor != appliedShowsCursor
                 || cursorOpacity != appliedCursorOpacity else { return }
 
-            if let markdownPalette = pendingMarkdownPalette {
-                let rendered = NSMutableAttributedString(
-                    attributedString: ChatAssistantMarkdownRenderer.nsAttributedString(
-                        from: text,
-                        palette: markdownPalette,
-                        cacheResult: false
-                    )
-                )
-                if showsCursor {
-                    rendered.append(NSAttributedString(string: ChatStreamingTextView.cursorGlyph, attributes: cursorAttributes))
-                }
-                textView.attributedText = rendered
-            } else if text.count > appliedText.count,
+            if text.count > appliedText.count,
                text.hasPrefix(appliedText),
                showsCursor == appliedShowsCursor {
                 let storage = textView.textStorage

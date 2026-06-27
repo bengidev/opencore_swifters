@@ -69,18 +69,19 @@ struct ChatMessageRowView: View, Equatable {
 
     @ViewBuilder
     private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
-        if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
-            ChatStreamingTextView(
-                text: textMessage.content,
-                markdownPalette: palette
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .layoutPriority(0)
-        } else {
-            ChatAssistantMarkdownTextView(text: textMessage.content)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        Group {
+            if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
+                ChatAssistantStreamingTextView(
+                    text: textMessage.content,
+                    palette: palette
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(0)
+            } else {
+                ChatAssistantMarkdownTextView(text: textMessage.content)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

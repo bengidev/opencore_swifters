@@ -8,7 +8,6 @@ struct ChatAssistantMarkdownTextView: View {
 
     var body: some View {
         Text(ChatAssistantMarkdownRenderer.attributedString(from: text, palette: palette))
-            .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }
