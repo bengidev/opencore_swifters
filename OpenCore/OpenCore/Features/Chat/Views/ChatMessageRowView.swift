@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct ChatMessageRowView: View, Equatable {
     let message: ChatMessage
@@ -10,8 +9,6 @@ struct ChatMessageRowView: View, Equatable {
     @Environment(\.sharedPalette) private var palette
     private static let oppositeSpacerMinWidth: CGFloat = 60
     private static let userBubbleCornerRadius: CGFloat = 20
-    private static let assistantUIFont = UIFont.systemFont(ofSize: 16, weight: .regular)
-
     nonisolated static func == (lhs: ChatMessageRowView, rhs: ChatMessageRowView) -> Bool {
         lhs.message == rhs.message
             && lhs.isLastAssistantMessage == rhs.isLastAssistantMessage
@@ -75,18 +72,14 @@ struct ChatMessageRowView: View, Equatable {
         if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
             ChatStreamingTextView(
                 text: textMessage.content,
-                font: Self.assistantUIFont,
-                textColor: UIColor(palette.textPrimary)
+                markdownPalette: palette
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .layoutPriority(0)
         } else {
-            Text(textMessage.content)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(palette.textPrimary)
+            ChatAssistantMarkdownTextView(text: textMessage.content)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
         }
     }
 
