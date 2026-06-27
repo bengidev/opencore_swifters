@@ -4,7 +4,7 @@ import Testing
 @testable import OpenCore
 
 @MainActor
-@Suite("Chat Streaming Status Capsule")
+@Suite("Chat Streaming Status Capsule State")
 struct ChatStreamingStatusCapsuleTests {
     private func makeController(events: [ChatStreamingEvent]) -> ChatFlowController {
         let preference = SidePanelInMemoryProviderPreferenceStore(
@@ -19,16 +19,19 @@ struct ChatStreamingStatusCapsuleTests {
         )
     }
 
-    @Test("Capsule visible while sending and streaming")
-    func visibleWhileStreaming() {
-        var state = ChatFlowState(isSending: true, streamingStatus: .running)
-        #expect(state.showsStreamingStatusCapsule)
-    }
-
-    @Test("Capsule hidden when idle")
-    func hiddenWhenIdle() {
-        var state = ChatFlowState()
-        #expect(!state.showsStreamingStatusCapsule)
+    @Test("Capsule visibility tracks sending and streaming status", arguments: [
+        (true, ChatStreamingStatus.running, true),
+        (false, ChatStreamingStatus.running, false),
+        (true, ChatStreamingStatus.idle, false),
+        (false, ChatStreamingStatus.idle, false)
+    ])
+    func capsuleVisibility(
+        isSending: Bool,
+        streamingStatus: ChatStreamingStatus,
+        expected: Bool
+    ) {
+        let state = ChatFlowState(isSending: isSending, streamingStatus: streamingStatus)
+        #expect(state.showsStreamingStatusCapsule == expected)
     }
 
     @Test("Capsule hidden after stream completes")

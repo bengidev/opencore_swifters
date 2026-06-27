@@ -9,6 +9,7 @@ struct HomeTabShellView: View {
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sharedAppTheme) private var appTheme
 
     var body: some View {
         TabView(selection: Binding(
@@ -32,9 +33,12 @@ struct HomeTabShellView: View {
             .tag(HomeTab.about)
         }
         .tint(palette.textPrimary)
-        .onAppear { SharedTabBarAppearance.apply(palette: palette) }
+        .onAppear { SharedTabBarAppearance.applyIfNeeded(palette: palette) }
         .onChange(of: colorScheme) { _, _ in
-            SharedTabBarAppearance.apply(palette: palette)
+            SharedTabBarAppearance.applyIfNeeded(palette: palette)
+        }
+        .onChange(of: appTheme) { _, _ in
+            SharedTabBarAppearance.applyIfNeeded(palette: palette)
         }
         .task {
             wireDelegates()

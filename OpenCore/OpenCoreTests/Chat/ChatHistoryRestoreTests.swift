@@ -6,8 +6,8 @@ import Testing
 @MainActor
 @Suite("Chat History Restore")
 struct ChatHistoryRestoreTests {
-    @Test("Restored messages bump thread presentation revision")
-    func restoredMessagesBumpPresentationRevision() {
+    @Test("Restored messages replace thread content")
+    func restoredMessagesReplaceContent() {
         var state = ChatFlowState()
         ChatMessagesRestoredCommand(messages: [
             .text(role: .user, content: "Hi"),
@@ -15,11 +15,19 @@ struct ChatHistoryRestoreTests {
         ]).execute(on: &state)
 
         #expect(state.messages.count == 2)
-        #expect(state.threadPresentationRevision == 1)
     }
 
-    @Test("Reopen clears presentation revision before restore")
-    func reopenResetsPresentationRevision() async {
+    @Test("Clear active conversation resets streaming revision")
+    func clearResetsStreamingRevision() {
+        var state = ChatFlowState(streamingRevision: 3)
+        ChatClearActiveConversationCommand().execute(on: &state)
+
+        #expect(state.messages.isEmpty)
+        #expect(state.streamingRevision == 0)
+    }
+
+    @Test("Reopen loads history messages")
+    func reopenLoadsHistoryMessages() async {
         let conversation = SidePanelConversation(
             id: UUID(),
             title: "Test",
@@ -43,6 +51,6 @@ struct ChatHistoryRestoreTests {
         await controller.reopenConversation(conversation)
 
         #expect(controller.state.messages.count == 2)
-        #expect(controller.state.threadPresentationRevision == 1)
+        #expect(controller.state.streamingRevision == 0)
     }
 }

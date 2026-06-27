@@ -2,19 +2,21 @@ import SwiftUI
 
 private enum ChatThreadLayout {
     static let keyboardScrollDelayNanoseconds: UInt64 = 180_000_000
-    /// LazyVStack may not lay out tail rows on first pass after history restore.
-    static let restoredThreadScrollStepDelaysNanoseconds: [UInt64] = [0, 50_000_000, 100_000_000, 150_000_000]
+    /// One layout pass after bulk history restore before scrolling to the tail.
+    static let historyRestoreScrollDelayNanoseconds: UInt64 = 50_000_000
 }
 
 /// Scrollable message list for an active chat conversation. Auto-scrolls as
-/// messages stream in and shows a typing indicator before the first assistant
-/// token arrives.
+/// messages stream in; streaming status appears in a capsule above the composer.
 struct ChatThreadView<BottomChrome: View>: View {
     @Bindable var flow: ChatFlowController
     var isComposerFocused = false
+    var showsContextUsageDismissScrim = false
+    var onDismissContextUsage: (() -> Void)?
     @ViewBuilder var bottomChrome: () -> BottomChrome
 
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scrollTask: Task<Void, Never>?
 
     var body: some View {
@@ -34,27 +36,39 @@ struct ChatThreadView<BottomChrome: View>: View {
                 }
             }
             .defaultScrollAnchor(.bottom)
+            .overlay {
+                if showsContextUsageDismissScrim, let onDismissContextUsage {
+                    HomeContextUsageDismissScrim(
+                        reduceMotion: reduceMotion,
+                        onDismiss: onDismissContextUsage
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(
+                HomeContextUsagePopoverMotion.presentationAnimation(reduceMotion: reduceMotion),
+                value: showsContextUsageDismissScrim
+            )
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomChrome()
             }
             .background(palette.surfaceBase)
-            .onChange(of: flow.state.messages.count) { _, _ in
-                scheduleScrollToLast(proxy: proxy, animate: true)
+            .onChange(of: flow.state.messages.count) { oldCount, newCount in
+                let isBulkRestore = oldCount == 0 && newCount > 0
+                scheduleScrollToLast(
+                    proxy: proxy,
+                    animate: !isBulkRestore,
+                    delayNanoseconds: isBulkRestore
+                        ? ChatThreadLayout.historyRestoreScrollDelayNanoseconds
+                        : nil
+                )
             }
             .onChange(of: flow.state.streamingRevision) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: false)
             }
             .onChange(of: flow.state.streamingStatus) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: true)
-            }
-            .onChange(of: flow.state.threadPresentationRevision) { _, revision in
-                guard revision > 0 else { return }
-                scheduleRestoreScrollToLast(proxy: proxy)
-            }
-            .onAppear {
-                guard !flow.state.messages.isEmpty else { return }
-                scheduleRestoreScrollToLast(proxy: proxy)
             }
             .onChange(of: isComposerFocused) { _, isFocused in
                 scheduleScrollToLast(
@@ -99,22 +113,6 @@ struct ChatThreadView<BottomChrome: View>: View {
             }
             guard !Task.isCancelled else { return }
             scrollToLast(proxy: proxy, animate: animate)
-            scrollTask = nil
-        }
-    }
-
-    private func scheduleRestoreScrollToLast(proxy: ScrollViewProxy) {
-        scrollTask?.cancel()
-        scrollTask = Task { @MainActor in
-            for delay in ChatThreadLayout.restoredThreadScrollStepDelaysNanoseconds {
-                if delay > 0 {
-                    try? await Task.sleep(nanoseconds: delay)
-                } else {
-                    await Task.yield()
-                }
-                guard !Task.isCancelled else { return }
-                scrollToLast(proxy: proxy, animate: false)
-            }
             scrollTask = nil
         }
     }

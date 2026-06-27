@@ -26,6 +26,7 @@ struct ChatStreamingStatusCapsuleView: View {
         .fixedSize()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Processing, streaming")
+        .accessibilityAddTraits(.updatesFrequently)
         .onAppear { startDotAnimation() }
     }
 

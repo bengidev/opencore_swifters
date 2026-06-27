@@ -200,7 +200,9 @@ private struct HomeComposerContextRail: View {
 
                     HomeComposerContextUsageButton(
                         usage: home.state.contextUsage,
-                        home: home,
+                        togglePresented: {
+                            home.setContextUsagePresented(!home.state.isContextUsagePresented)
+                        },
                         dismissKeyboard: dismissKeyboard
                     )
                 }
@@ -212,22 +214,17 @@ private struct HomeComposerContextRail: View {
             if home.state.isContextUsagePresented {
                 HomeComposerContextUsagePopover(usage: home.state.contextUsage)
                     .offset(x: -2, y: -46)
-                    .transition(contextUsagePopoverTransition)
-                    .zIndex(2)
+                    .transition(HomeContextUsagePopoverMotion.popoverTransition(reduceMotion: reduceMotion))
+                    .zIndex(1)
             }
         }
-        .animation(contextUsagePopoverAnimation, value: home.state.isContextUsagePresented)
+        .animation(
+            HomeContextUsagePopoverMotion.presentationAnimation(reduceMotion: reduceMotion),
+            value: home.state.isContextUsagePresented
+        )
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var contextUsagePopoverTransition: AnyTransition {
-        reduceMotion ? .opacity : HomeContextUsagePopoverMotion.transition
-    }
-
-    private var contextUsagePopoverAnimation: Animation {
-        reduceMotion ? .easeInOut(duration: 0.16) : HomeContextUsagePopoverMotion.animation
-    }
 }
 
 private struct CatalogUnavailableHint: View {
@@ -375,13 +372,13 @@ private struct HomeComposerMenuChip<MenuItems: View>: View {
 
 private struct HomeComposerContextUsageButton: View {
     let usage: ContextWindowUsage
-    @Bindable var home: HomeFlowController
+    let togglePresented: () -> Void
     let dismissKeyboard: () -> Void
 
     var body: some View {
         Button {
             dismissKeyboard()
-            home.setContextUsagePresented(!home.state.isContextUsagePresented)
+            togglePresented()
         } label: {
             HomeComposerContextUsageIndicator(usage: usage)
         }
@@ -432,6 +429,7 @@ private struct HomeComposerContextUsagePopover: View {
     let usage: ContextWindowUsage
 
     @Environment(\.sharedPalette) private var palette
+    @ScaledMetric(relativeTo: .body) private var popoverWidth: CGFloat = 260
 
     private let cornerRadius: CGFloat = 28
 
@@ -490,7 +488,7 @@ private struct HomeComposerContextUsagePopover: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
-        .frame(width: 260, alignment: .leading)
+        .frame(width: popoverWidth, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.isDark ? palette.surfacePaper.opacity(0.78) : palette.surfaceRaised.opacity(0.82))
@@ -667,18 +665,4 @@ private struct HomeComposerModelButton: View {
     }
 
     return PreviewHost()
-}
-
-@MainActor
-enum HomeContextUsagePopoverMotion {
-    static let animation = Animation.spring(response: 0.34, dampingFraction: 0.86)
-
-    static let transition = AnyTransition.asymmetric(
-        insertion: .opacity
-            .combined(with: .scale(scale: 0.92, anchor: .bottomTrailing))
-            .combined(with: .offset(y: 10)),
-        removal: .opacity
-            .combined(with: .scale(scale: 0.97, anchor: .bottomTrailing))
-            .combined(with: .offset(y: 6))
-    )
 }

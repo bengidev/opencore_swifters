@@ -2,8 +2,18 @@ import SwiftUI
 import UIKit
 
 /// Applies OpenCore's monochrome palette to the system tab bar.
+///
+/// Mutates `UITabBar.appearance()` process-wide; `applyIfNeeded` deduplicates repeated calls.
 @MainActor
 enum SharedTabBarAppearance {
+    private static var appliedIsDark: Bool?
+
+    static func applyIfNeeded(palette: SharedOpenCorePalette) {
+        guard appliedIsDark != palette.isDark else { return }
+        appliedIsDark = palette.isDark
+        apply(palette: palette)
+    }
+
     static func apply(palette: SharedOpenCorePalette) {
         let appearance = UITabBarAppearance()
         appearance.configureWithDefaultBackground()
