@@ -27,8 +27,21 @@ struct ChatView<Composer: View>: View {
                 VStack(spacing: 0) {
                     ChatErrorBannerView(flow: chat)
                         .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+
+                    if chat.state.showsStreamingStatusCapsule {
+                        HStack {
+                            ChatStreamingStatusCapsuleView()
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                    }
+
                     composer()
                 }
+                .background(palette.surfaceBase)
+                .animation(.easeInOut(duration: 0.2), value: chat.state.showsStreamingStatusCapsule)
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: dismissKeyboard)

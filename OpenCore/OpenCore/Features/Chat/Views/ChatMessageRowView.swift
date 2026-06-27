@@ -63,10 +63,6 @@ struct ChatMessageRowView: View, Equatable {
                     Text(streamErrorMessage)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
-                } else if isLastAssistantMessage, streamingStatus == .running, !textMessage.isComplete {
-                    Text("Streaming…")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(palette.textTertiary)
                 }
             }
             .padding(.horizontal, 20)
@@ -83,6 +79,8 @@ struct ChatMessageRowView: View, Equatable {
                 textColor: UIColor(palette.textPrimary)
             )
             .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(0)
         } else {
             Text(textMessage.content)
                 .font(.system(size: 16, weight: .regular))
