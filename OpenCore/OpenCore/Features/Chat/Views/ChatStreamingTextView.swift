@@ -26,6 +26,7 @@ struct ChatStreamingTextView: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.textContainer.widthTracksTextView = true
+        textView.clipsToBounds = true
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.setContentHuggingPriority(.defaultLow, for: .vertical)
         return textView
@@ -54,7 +55,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
         private var pendingCursorColor: UIColor = .label
         private var pendingCursorOpacity: CGFloat = 1
         private var updateTask: Task<Void, Never>?
-        private var lastLayoutInvalidation = Date.distantPast
 
         func apply(
             text: String,
@@ -135,15 +135,6 @@ struct ChatStreamingTextView: UIViewRepresentable {
             appliedText = text
             appliedShowsCursor = showsCursor
             appliedCursorOpacity = cursorOpacity
-            invalidateLayoutIfNeeded(for: textView)
-        }
-
-        private func invalidateLayoutIfNeeded(for textView: ChatStreamingSizingTextView) {
-            let now = Date()
-            let byteCount = appliedText.utf8.count
-            let minInterval: TimeInterval = byteCount >= 32_000 ? 0.25 : (byteCount >= 8_000 ? 0.15 : 0.05)
-            guard now.timeIntervalSince(lastLayoutInvalidation) >= minInterval else { return }
-            lastLayoutInvalidation = now
             textView.invalidateMeasuredHeight()
         }
     }
