@@ -6,6 +6,8 @@ struct ChatView<Composer: View>: View {
     @Bindable var chat: ChatFlowController
     let dismissKeyboard: () -> Void
     var isComposerFocused = false
+    var showsContextUsageDismissScrim = false
+    var onDismissContextUsage: (() -> Void)?
     @ViewBuilder let composer: () -> Composer
 
     @Environment(\.sharedPalette) private var palette
@@ -23,12 +25,30 @@ struct ChatView<Composer: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
 
-            ChatThreadView(flow: chat, isComposerFocused: isComposerFocused) {
+            ChatThreadView(
+                flow: chat,
+                isComposerFocused: isComposerFocused,
+                showsContextUsageDismissScrim: showsContextUsageDismissScrim,
+                onDismissContextUsage: onDismissContextUsage
+            ) {
                 VStack(spacing: 0) {
                     ChatErrorBannerView(flow: chat)
                         .animation(.easeInOut(duration: 0.2), value: chat.state.streamingStatus)
+
+                    if chat.state.showsStreamingStatusCapsule {
+                        HStack {
+                            ChatStreamingStatusCapsuleView()
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                    }
+
                     composer()
                 }
+                .background(palette.surfaceBase)
+                .animation(.easeInOut(duration: 0.2), value: chat.state.showsStreamingStatusCapsule)
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: dismissKeyboard)

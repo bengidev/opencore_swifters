@@ -68,6 +68,8 @@ struct HomeView: View {
     private var welcomeContent: some View {
         WelcomeScrollContainer(
             isComposerFocused: isComposerFocused,
+            showsContextUsageDismissScrim: home.state.isContextUsagePresented,
+            onDismissContextUsage: { home.setContextUsagePresented(false) },
             dismissKeyboard: dismissComposerKeyboard
         ) { viewportHeight in
             HomeWelcomeView(viewportHeight: viewportHeight)
@@ -81,6 +83,8 @@ struct HomeView: View {
             chat: chat,
             dismissKeyboard: dismissComposerKeyboard,
             isComposerFocused: isComposerFocused,
+            showsContextUsageDismissScrim: home.state.isContextUsagePresented,
+            onDismissContextUsage: { home.setContextUsagePresented(false) },
             composer: { composer }
         )
     }
@@ -141,10 +145,13 @@ private enum HomeScrollAnchor: Hashable {
 
 private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
     let isComposerFocused: Bool
+    let showsContextUsageDismissScrim: Bool
+    let onDismissContextUsage: () -> Void
     let dismissKeyboard: () -> Void
     @ViewBuilder let content: (_ viewportHeight: CGFloat) -> Content
     @ViewBuilder let composer: () -> Composer
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewportHeight: CGFloat = 0
     @State private var pendingScrollWork: DispatchWorkItem?
 
@@ -167,6 +174,19 @@ private struct WelcomeScrollContainer<Content: View, Composer: View>: View {
                     .frame(height: 1)
                     .id(HomeScrollAnchor.welcomeBottom)
             }
+            .overlay {
+                if showsContextUsageDismissScrim {
+                    HomeContextUsageDismissScrim(
+                        reduceMotion: reduceMotion,
+                        onDismiss: onDismissContextUsage
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(
+                HomeContextUsagePopoverMotion.presentationAnimation(reduceMotion: reduceMotion),
+                value: showsContextUsageDismissScrim
+            )
             .scrollDismissesKeyboard(.interactively)
             .background {
                 GeometryReader { geometry in

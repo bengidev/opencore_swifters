@@ -7,6 +7,10 @@ struct HomeTabShellView: View {
     @Bindable var chat: ChatFlowController
     @Bindable var settings: SettingsFlowController
 
+    @Environment(\.sharedPalette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sharedAppTheme) private var appTheme
+
     var body: some View {
         TabView(selection: Binding(
             get: { home.state.selectedTab },
@@ -27,6 +31,14 @@ struct HomeTabShellView: View {
             }
             .tabItem { Label("About", systemImage: "info.circle.fill") }
             .tag(HomeTab.about)
+        }
+        .tint(palette.textPrimary)
+        .onAppear { SharedTabBarAppearance.applyIfNeeded(palette: palette) }
+        .onChange(of: colorScheme) { _, _ in
+            SharedTabBarAppearance.applyIfNeeded(palette: palette)
+        }
+        .onChange(of: appTheme) { _, _ in
+            SharedTabBarAppearance.applyIfNeeded(palette: palette)
         }
         .task {
             wireDelegates()

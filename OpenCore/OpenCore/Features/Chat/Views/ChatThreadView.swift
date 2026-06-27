@@ -2,17 +2,21 @@ import SwiftUI
 
 private enum ChatThreadLayout {
     static let keyboardScrollDelayNanoseconds: UInt64 = 180_000_000
+    /// One layout pass after bulk history restore before scrolling to the tail.
+    static let historyRestoreScrollDelayNanoseconds: UInt64 = 50_000_000
 }
 
 /// Scrollable message list for an active chat conversation. Auto-scrolls as
-/// messages stream in and shows a typing indicator before the first assistant
-/// token arrives.
+/// messages stream in; streaming status appears in a capsule above the composer.
 struct ChatThreadView<BottomChrome: View>: View {
     @Bindable var flow: ChatFlowController
     var isComposerFocused = false
+    var showsContextUsageDismissScrim = false
+    var onDismissContextUsage: (() -> Void)?
     @ViewBuilder var bottomChrome: () -> BottomChrome
 
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scrollTask: Task<Void, Never>?
 
     var body: some View {
@@ -29,33 +33,42 @@ struct ChatThreadView<BottomChrome: View>: View {
                         .equatable()
                         .id(message.id)
                     }
-
-                    if showLoadingIndicator {
-                        ChatLoadingIndicatorView()
-                            .id("loading-indicator")
-                    }
                 }
             }
+            .defaultScrollAnchor(.bottom)
+            .overlay {
+                if showsContextUsageDismissScrim, let onDismissContextUsage {
+                    HomeContextUsageDismissScrim(
+                        reduceMotion: reduceMotion,
+                        onDismiss: onDismissContextUsage
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(
+                HomeContextUsagePopoverMotion.presentationAnimation(reduceMotion: reduceMotion),
+                value: showsContextUsageDismissScrim
+            )
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomChrome()
             }
             .background(palette.surfaceBase)
-            .onChange(of: flow.state.messages.count) { _, _ in
-                scheduleScrollToLast(proxy: proxy, animate: true)
+            .onChange(of: flow.state.messages.count) { oldCount, newCount in
+                let isBulkRestore = oldCount == 0 && newCount > 0
+                scheduleScrollToLast(
+                    proxy: proxy,
+                    animate: !isBulkRestore,
+                    delayNanoseconds: isBulkRestore
+                        ? ChatThreadLayout.historyRestoreScrollDelayNanoseconds
+                        : nil
+                )
             }
             .onChange(of: flow.state.streamingRevision) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: false)
             }
             .onChange(of: flow.state.streamingStatus) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: true)
-            }
-            .onChange(of: showLoadingIndicator) { _, showing in
-                if showing {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("loading-indicator", anchor: .bottom)
-                    }
-                }
             }
             .onChange(of: isComposerFocused) { _, isFocused in
                 scheduleScrollToLast(
@@ -76,11 +89,6 @@ struct ChatThreadView<BottomChrome: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var showLoadingIndicator: Bool {
-        guard flow.state.streamingStatus == .running else { return false }
-        return flow.state.messages.last?.role == .user
     }
 
     private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {

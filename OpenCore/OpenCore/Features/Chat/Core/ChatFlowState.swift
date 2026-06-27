@@ -17,6 +17,11 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
 
     var hasMessages: Bool { !messages.isEmpty }
 
+    /// True while a turn is actively streaming; drives the status capsule above the composer.
+    var showsStreamingStatusCapsule: Bool {
+        isSending && streamingStatus == .running
+    }
+
     init(
         conversation: SidePanelConversation? = nil,
         messages: [ChatMessage] = [],
