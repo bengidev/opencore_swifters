@@ -669,6 +669,7 @@ private struct HomeComposerModelButton: View {
     return PreviewHost()
 }
 
+@MainActor
 enum HomeContextUsagePopoverMotion {
     static let animation = Animation.spring(response: 0.34, dampingFraction: 0.86)
 
