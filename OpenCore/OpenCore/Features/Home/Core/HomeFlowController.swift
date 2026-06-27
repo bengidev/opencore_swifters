@@ -120,6 +120,14 @@ final class HomeFlowController {
             state.modelSearchQuery = ""
             state.appliedSearchQuery = ""
             state.modelFilterFreeOnly = false
+            state.isContextUsagePresented = false
+        }
+    }
+
+    func setContextUsagePresented(_ isPresented: Bool) {
+        state.isContextUsagePresented = isPresented
+        if isPresented {
+            state.isModelPopupPresented = false
         }
     }
 

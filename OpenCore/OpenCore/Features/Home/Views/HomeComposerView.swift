@@ -116,8 +116,6 @@ private struct HomeComposerContextRail: View {
     @Bindable var home: HomeFlowController
     let dismissKeyboard: () -> Void
 
-    @State private var isContextUsagePresented = false
-
     var body: some View {
         VStack(spacing: 8) {
             if home.state.hasAPIKey,
@@ -202,7 +200,7 @@ private struct HomeComposerContextRail: View {
 
                     HomeComposerContextUsageButton(
                         usage: home.state.contextUsage,
-                        isPresented: $isContextUsagePresented,
+                        home: home,
                         dismissKeyboard: dismissKeyboard
                     )
                 }
@@ -211,15 +209,24 @@ private struct HomeComposerContextRail: View {
         .padding(.horizontal, 2)
         .padding(.bottom, 4)
         .overlay(alignment: .bottomTrailing) {
-            if isContextUsagePresented {
+            if home.state.isContextUsagePresented {
                 HomeComposerContextUsagePopover(usage: home.state.contextUsage)
                     .offset(x: -2, y: -46)
-                    .transition(.opacity)
+                    .transition(contextUsagePopoverTransition)
                     .zIndex(2)
-                    .fixedSize(horizontal: true, vertical: false)
             }
         }
-        .animation(.easeInOut(duration: 0.16), value: isContextUsagePresented)
+        .animation(contextUsagePopoverAnimation, value: home.state.isContextUsagePresented)
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var contextUsagePopoverTransition: AnyTransition {
+        reduceMotion ? .opacity : HomeContextUsagePopoverMotion.transition
+    }
+
+    private var contextUsagePopoverAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.16) : HomeContextUsagePopoverMotion.animation
     }
 }
 
@@ -368,13 +375,13 @@ private struct HomeComposerMenuChip<MenuItems: View>: View {
 
 private struct HomeComposerContextUsageButton: View {
     let usage: ContextWindowUsage
-    @Binding var isPresented: Bool
+    @Bindable var home: HomeFlowController
     let dismissKeyboard: () -> Void
 
     var body: some View {
         Button {
             dismissKeyboard()
-            isPresented.toggle()
+            home.setContextUsagePresented(!home.state.isContextUsagePresented)
         } label: {
             HomeComposerContextUsageIndicator(usage: usage)
         }
@@ -483,8 +490,7 @@ private struct HomeComposerContextUsagePopover: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
-        .fixedSize(horizontal: true, vertical: false)
-        .frame(minWidth: 240, maxWidth: 300)
+        .frame(width: 260, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(palette.isDark ? palette.surfacePaper.opacity(0.78) : palette.surfaceRaised.opacity(0.82))
@@ -661,4 +667,17 @@ private struct HomeComposerModelButton: View {
     }
 
     return PreviewHost()
+}
+
+enum HomeContextUsagePopoverMotion {
+    static let animation = Animation.spring(response: 0.34, dampingFraction: 0.86)
+
+    static let transition = AnyTransition.asymmetric(
+        insertion: .opacity
+            .combined(with: .scale(scale: 0.92, anchor: .bottomTrailing))
+            .combined(with: .offset(y: 10)),
+        removal: .opacity
+            .combined(with: .scale(scale: 0.97, anchor: .bottomTrailing))
+            .combined(with: .offset(y: 6))
+    )
 }

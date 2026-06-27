@@ -11,6 +11,7 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     var catalogModels: [ChatModel] = []
     var catalogError: String?
     var isModelPopupPresented = false
+    var isContextUsagePresented = false
     var modelSearchQuery = ""
     var appliedSearchQuery = ""
     var modelFilterFreeOnly = false

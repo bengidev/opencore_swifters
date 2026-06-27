@@ -9,6 +9,7 @@ struct HomeView: View {
     @FocusState private var isComposerFocused: Bool
 
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var showsWelcome: Bool {
         !chat.state.hasMessages
@@ -33,6 +34,21 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                if home.state.isContextUsagePresented {
+                    Color.black.opacity(reduceMotion ? 0.001 : 0.06)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            home.setContextUsagePresented(false)
+                        }
+                        .transition(.opacity)
+                }
+            }
+            .animation(
+                reduceMotion ? .easeInOut(duration: 0.16) : HomeContextUsagePopoverMotion.animation,
+                value: home.state.isContextUsagePresented
+            )
             .accessibilityHidden(sidePanel.isSidebarVisible)
 
             SidePanelView(flow: sidePanel)
