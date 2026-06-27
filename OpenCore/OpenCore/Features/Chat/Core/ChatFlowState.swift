@@ -14,8 +14,15 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
     var streamingAnswerID: UUID?
     /// Bumped when batched streaming content is applied to `messages` (scroll anchor).
     var streamingRevision = 0
+    /// Bumped when history messages are restored so the thread can scroll to the end.
+    var threadPresentationRevision = 0
 
     var hasMessages: Bool { !messages.isEmpty }
+
+    /// True while a turn is actively streaming; drives the status capsule above the composer.
+    var showsStreamingStatusCapsule: Bool {
+        isSending && streamingStatus == .running
+    }
 
     init(
         conversation: SidePanelConversation? = nil,
@@ -28,7 +35,8 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         streamErrorMessage: String? = nil,
         streamingThinkingID: UUID? = nil,
         streamingAnswerID: UUID? = nil,
-        streamingRevision: Int = 0
+        streamingRevision: Int = 0,
+        threadPresentationRevision: Int = 0
     ) {
         self.conversation = conversation
         self.messages = messages
@@ -41,5 +49,6 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         self.streamingThinkingID = streamingThinkingID
         self.streamingAnswerID = streamingAnswerID
         self.streamingRevision = streamingRevision
+        self.threadPresentationRevision = threadPresentationRevision
     }
 }

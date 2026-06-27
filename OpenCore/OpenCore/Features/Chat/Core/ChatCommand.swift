@@ -27,6 +27,7 @@ struct ChatMessagesRestoredCommand: ChatCommand {
 
     func execute(on state: inout ChatFlowState) {
         state.messages = messages
+        state.threadPresentationRevision &+= 1
     }
 }
 
@@ -43,6 +44,7 @@ struct ChatClearActiveConversationCommand: ChatCommand {
         state.streamingThinkingID = nil
         state.streamingAnswerID = nil
         state.streamingRevision = 0
+        state.threadPresentationRevision = 0
     }
 }
 
@@ -61,6 +63,7 @@ struct ChatReopenConversationCommand: ChatCommand {
         state.streamingThinkingID = nil
         state.streamingAnswerID = nil
         state.streamingRevision = 0
+        state.threadPresentationRevision = 0
     }
 }
 

@@ -2,6 +2,8 @@ import SwiftUI
 
 private enum ChatThreadLayout {
     static let keyboardScrollDelayNanoseconds: UInt64 = 180_000_000
+    /// LazyVStack may not lay out tail rows on first pass after history restore.
+    static let restoredThreadScrollStepDelaysNanoseconds: [UInt64] = [0, 50_000_000, 100_000_000, 150_000_000]
 }
 
 /// Scrollable message list for an active chat conversation. Auto-scrolls as
@@ -29,13 +31,9 @@ struct ChatThreadView<BottomChrome: View>: View {
                         .equatable()
                         .id(message.id)
                     }
-
-                    if showLoadingIndicator {
-                        ChatLoadingIndicatorView()
-                            .id("loading-indicator")
-                    }
                 }
             }
+            .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomChrome()
@@ -50,12 +48,13 @@ struct ChatThreadView<BottomChrome: View>: View {
             .onChange(of: flow.state.streamingStatus) { _, _ in
                 scheduleScrollToLast(proxy: proxy, animate: true)
             }
-            .onChange(of: showLoadingIndicator) { _, showing in
-                if showing {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo("loading-indicator", anchor: .bottom)
-                    }
-                }
+            .onChange(of: flow.state.threadPresentationRevision) { _, revision in
+                guard revision > 0 else { return }
+                scheduleRestoreScrollToLast(proxy: proxy)
+            }
+            .onAppear {
+                guard !flow.state.messages.isEmpty else { return }
+                scheduleRestoreScrollToLast(proxy: proxy)
             }
             .onChange(of: isComposerFocused) { _, isFocused in
                 scheduleScrollToLast(
@@ -76,11 +75,6 @@ struct ChatThreadView<BottomChrome: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var showLoadingIndicator: Bool {
-        guard flow.state.streamingStatus == .running else { return false }
-        return flow.state.messages.last?.role == .user
     }
 
     private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {
@@ -105,6 +99,22 @@ struct ChatThreadView<BottomChrome: View>: View {
             }
             guard !Task.isCancelled else { return }
             scrollToLast(proxy: proxy, animate: animate)
+            scrollTask = nil
+        }
+    }
+
+    private func scheduleRestoreScrollToLast(proxy: ScrollViewProxy) {
+        scrollTask?.cancel()
+        scrollTask = Task { @MainActor in
+            for delay in ChatThreadLayout.restoredThreadScrollStepDelaysNanoseconds {
+                if delay > 0 {
+                    try? await Task.sleep(nanoseconds: delay)
+                } else {
+                    await Task.yield()
+                }
+                guard !Task.isCancelled else { return }
+                scrollToLast(proxy: proxy, animate: false)
+            }
             scrollTask = nil
         }
     }
