@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Applies OpenCore's monochrome palette to the system tab bar.
+@MainActor
 enum SharedTabBarAppearance {
     static func apply(palette: SharedOpenCorePalette) {
         let appearance = UITabBarAppearance()
