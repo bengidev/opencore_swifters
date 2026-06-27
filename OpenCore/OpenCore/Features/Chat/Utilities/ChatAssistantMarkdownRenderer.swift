@@ -5,23 +5,21 @@ import UIKit
 /// Native markdown styling for assistant answer prose (inline code, emphasis, blocks).
 @MainActor
 enum ChatAssistantMarkdownRenderer {
-    private static let bodyPointSize: CGFloat = 16
-    private static let inlineCodePointSize: CGFloat = 15
-    private static let codeBlockPointSize: CGFloat = 13
     private static let codeBlockHorizontalPadding: CGFloat = 8
+    private static let allowedLinkSchemes: Set<String> = ["https", "http", "mailto"]
     private static let cache = BoundedCache()
 
     static func attributedString(
         from markdown: String,
-        palette: SharedOpenCorePalette,
-        cacheResult: Bool = true
+        palette: SharedOpenCorePalette
     ) -> AttributedString {
-        if cacheResult, let cached = cache.value(for: markdown, isDark: palette.isDark) {
+        let canCache = !shouldUsePlainFallback(for: markdown)
+        if canCache, let cached = cache.value(for: markdown, isDark: palette.isDark) {
             return cached
         }
 
         let rendered = render(markdown: markdown, palette: palette)
-        if cacheResult, !shouldUsePlainFallback(for: markdown) {
+        if canCache {
             cache.store(rendered, for: markdown, isDark: palette.isDark)
         }
         return rendered
@@ -29,10 +27,9 @@ enum ChatAssistantMarkdownRenderer {
 
     static func nsAttributedString(
         from markdown: String,
-        palette: SharedOpenCorePalette,
-        cacheResult: Bool = true
+        palette: SharedOpenCorePalette
     ) -> NSAttributedString {
-        NSAttributedString(attributedString(from: markdown, palette: palette, cacheResult: cacheResult))
+        NSAttributedString(attributedString(from: markdown, palette: palette))
     }
 
     private static func render(markdown: String, palette: SharedOpenCorePalette) -> AttributedString {
@@ -54,7 +51,7 @@ enum ChatAssistantMarkdownRenderer {
 
     private static func plainBody(_ text: String, palette: SharedOpenCorePalette) -> AttributedString {
         var attributed = AttributedString(text)
-        let bodyFont = UIFont.systemFont(ofSize: bodyPointSize, weight: .regular)
+        let bodyFont = SharedOpenCoreTypography.bodyMDUIFont
         let textColor = UIColor(palette.textPrimary)
         for run in attributed.runs {
             attributed[run.range].uiKit.font = bodyFont
@@ -76,10 +73,14 @@ enum ChatAssistantMarkdownRenderer {
         return false
     }
 
+    private static func isAllowedLink(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return allowedLinkSchemes.contains(scheme)
+    }
+
     private static func applyStyles(to attributed: inout AttributedString, palette: SharedOpenCorePalette) {
-        let bodyFont = UIFont.systemFont(ofSize: bodyPointSize, weight: .regular)
-        let inlineCodeFont = UIFont.monospacedSystemFont(ofSize: inlineCodePointSize, weight: .regular)
-        let codeBlockFont = UIFont.monospacedSystemFont(ofSize: codeBlockPointSize, weight: .regular)
+        let bodyFont = SharedOpenCoreTypography.bodyMDUIFont
+        let codeBlockFont = SharedOpenCoreTypography.monoSMUIFont
         let textPrimary = UIColor(palette.textPrimary)
         let textSecondary = UIColor(palette.textSecondary)
         let accentPrimary = UIColor(palette.accentPrimary)
@@ -127,15 +128,24 @@ enum ChatAssistantMarkdownRenderer {
             }
 
             if let inlineIntent = run.inlinePresentationIntent {
-                if inlineIntent.contains(.code) {
-                    attributed[range].uiKit.font = inlineCodeFont
+                let hasCode = inlineIntent.contains(.code)
+                let hasStrong = inlineIntent.contains(.stronglyEmphasized)
+                let hasEmphasis = inlineIntent.contains(.emphasized)
+
+                if hasCode {
+                    let weight: UIFont.Weight = hasStrong ? .semibold : .regular
+                    let codeSize = SharedOpenCoreTypography.monoBodyUIFont.pointSize
+                    attributed[range].uiKit.font = UIFont.monospacedSystemFont(ofSize: codeSize, weight: weight)
                     attributed[range].uiKit.foregroundColor = textSecondary
-                }
-                if inlineIntent.contains(.stronglyEmphasized) {
-                    attributed[range].uiKit.font = UIFont.systemFont(ofSize: bodyPointSize, weight: .semibold)
+                } else if hasStrong {
+                    attributed[range].uiKit.font = UIFont.systemFont(
+                        ofSize: SharedOpenCoreTypography.bodyMDUIFont.pointSize,
+                        weight: .semibold
+                    )
                     attributed[range].uiKit.foregroundColor = textPrimary
                 }
-                if inlineIntent.contains(.emphasized) {
+
+                if hasEmphasis {
                     let currentFont = attributed[range].uiKit.font ?? bodyFont
                     let descriptor = currentFont.fontDescriptor.withSymbolicTraits(.traitItalic)
                         ?? currentFont.fontDescriptor
@@ -143,10 +153,14 @@ enum ChatAssistantMarkdownRenderer {
                 }
             }
 
-            if run.link != nil {
-                attributed[range].uiKit.foregroundColor = accentPrimary
-                attributed[range].uiKit.underlineStyle = .patternDot
-                attributed[range].uiKit.underlineColor = accentPrimary
+            if let link = run.link {
+                if isAllowedLink(link) {
+                    attributed[range].uiKit.foregroundColor = accentPrimary
+                    attributed[range].uiKit.underlineStyle = .patternDot
+                    attributed[range].uiKit.underlineColor = accentPrimary
+                } else {
+                    attributed[range].link = nil
+                }
             }
         }
     }
@@ -165,7 +179,7 @@ enum ChatAssistantMarkdownRenderer {
 
 private final class BoundedCache {
     private struct Key: Hashable {
-        let contentHash: Int
+        let content: String
         let isDark: Bool
     }
 
@@ -174,11 +188,11 @@ private final class BoundedCache {
     private var order: [Key] = []
 
     func value(for content: String, isDark: Bool) -> AttributedString? {
-        storage[Key(contentHash: content.hashValue, isDark: isDark)]
+        storage[Key(content: content, isDark: isDark)]
     }
 
     func store(_ value: AttributedString, for content: String, isDark: Bool) {
-        let key = Key(contentHash: content.hashValue, isDark: isDark)
+        let key = Key(content: content, isDark: isDark)
         if storage[key] != nil {
             order.removeAll { $0 == key }
         }

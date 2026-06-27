@@ -22,7 +22,7 @@ struct ChatAssistantMarkdownRendererTests {
         let font = rendered.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
         #expect(font != nil)
         #expect(font?.fontDescriptor.symbolicTraits.contains(.traitMonoSpace) == true)
-        #expect(font?.pointSize == 15)
+        #expect(font?.pointSize == 16)
 
         let color = rendered.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? UIColor
         #expect(colorsMatch(color, UIColor(palette.textSecondary)))
@@ -86,13 +86,43 @@ struct ChatAssistantMarkdownRendererTests {
 
         let font = rendered.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
         #expect(font?.fontDescriptor.symbolicTraits.contains(.traitMonoSpace) == true)
-        #expect(font?.pointSize == 13)
+        #expect(font?.pointSize == 12)
 
         let color = rendered.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? UIColor
         #expect(colorsMatch(color, UIColor(palette.textSecondary)))
 
         let background = rendered.attribute(.backgroundColor, at: range.location, effectiveRange: nil) as? UIColor
         #expect(colorsMatch(background, UIColor(palette.surfaceSubtle)))
+    }
+
+    @Test("Strong inline code keeps monospaced semibold styling")
+    func strongInlineCode() {
+        let rendered = ChatAssistantMarkdownRenderer.nsAttributedString(
+            from: "**`token`**",
+            palette: palette
+        )
+        let range = (rendered.string as NSString).range(of: "token")
+        #expect(range.location != NSNotFound)
+
+        let font = rendered.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
+        #expect(font != nil)
+        #expect(font?.fontDescriptor.symbolicTraits.contains(.traitMonoSpace) == true)
+        #expect(font?.fontDescriptor.symbolicTraits.contains(.traitBold) == true)
+    }
+
+    @Test("Disallowed link schemes are not linked")
+    func blockedLinkSchemes() {
+        let rendered = ChatAssistantMarkdownRenderer.nsAttributedString(
+            from: "[bad](javascript:alert(1)) and [ok](https://example.com)",
+            palette: palette
+        )
+        let badRange = (rendered.string as NSString).range(of: "bad")
+        let okRange = (rendered.string as NSString).range(of: "ok")
+        #expect(badRange.location != NSNotFound)
+        #expect(okRange.location != NSNotFound)
+
+        #expect(rendered.attribute(.link, at: badRange.location, effectiveRange: nil) == nil)
+        #expect(rendered.attribute(.link, at: okRange.location, effectiveRange: nil) != nil)
     }
 
     private func colorsMatch(_ lhs: UIColor?, _ rhs: UIColor) -> Bool {

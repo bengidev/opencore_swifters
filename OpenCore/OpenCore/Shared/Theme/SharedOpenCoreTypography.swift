@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Typography system for OpenCore — modern, strict, readable.
 /// Sans for human-facing text, monospace for technical state.
@@ -31,6 +32,15 @@ enum SharedOpenCoreTypography {
     static let monoSM: Font = .system(size: 12, weight: .medium, design: .monospaced)
     /// Dense metadata only — 10pt
     static let monoXS: Font = .system(size: 10, weight: .medium, design: .monospaced)
+
+    // MARK: - UIKit (assistant markdown and other UIKit text)
+
+    /// Standard body copy — matches `bodyMD`
+    static let bodyMDUIFont = UIFont.systemFont(ofSize: 16, weight: .regular)
+    /// Inline code in assistant prose — monospaced at body scale
+    static let monoBodyUIFont = UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)
+    /// Fenced code blocks — matches `monoSM` metrics
+    static let monoSMUIFont = UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
 }
 
 // MARK: - Tracking (letter spacing)
