@@ -4,6 +4,7 @@ nonisolated enum ChatMessage: Equatable, Identifiable, Sendable {
     case text(ChatTextMessage)
     case thinking(ChatThinkingMessage)
     case system(ChatSystemMessage)
+    case outputStream(ChatOutputStreamMessage)
 
     private var payload: any ChatMessagePayload {
         switch self {
@@ -12,6 +13,8 @@ nonisolated enum ChatMessage: Equatable, Identifiable, Sendable {
         case let .thinking(message):
             return message
         case let .system(message):
+            return message
+        case let .outputStream(message):
             return message
         }
     }
@@ -68,6 +71,24 @@ extension ChatMessage {
                 id: id,
                 role: .system,
                 content: content,
+                timestamp: timestamp
+            )
+        )
+    }
+
+    nonisolated static func outputStream(
+        id: UUID = UUID(),
+        command: String,
+        detail: ChatOutputStreamDetail = ChatOutputStreamDetail(),
+        isComplete: Bool = false,
+        timestamp: Date = Date()
+    ) -> ChatMessage {
+        .outputStream(
+            ChatOutputStreamMessage(
+                id: id,
+                command: command,
+                detail: detail,
+                isComplete: isComplete,
                 timestamp: timestamp
             )
         )

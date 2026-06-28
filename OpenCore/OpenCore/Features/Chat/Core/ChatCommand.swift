@@ -42,6 +42,7 @@ struct ChatClearActiveConversationCommand: ChatCommand {
         state.streamErrorMessage = nil
         state.streamingThinkingID = nil
         state.streamingAnswerID = nil
+        state.streamingOutputStreamID = nil
         state.streamingRevision = 0
     }
 }
@@ -60,6 +61,7 @@ struct ChatReopenConversationCommand: ChatCommand {
         state.streamErrorMessage = nil
         state.streamingThinkingID = nil
         state.streamingAnswerID = nil
+        state.streamingOutputStreamID = nil
         state.streamingRevision = 0
     }
 }

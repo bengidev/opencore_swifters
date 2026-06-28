@@ -31,6 +31,10 @@ struct ChatMessageRowView: View, Equatable {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
+        case let .outputStream(outputStreamMessage):
+            assistantSurround {
+                ChatOutputStreamCardView(message: outputStreamMessage)
+            }
         }
     }
 

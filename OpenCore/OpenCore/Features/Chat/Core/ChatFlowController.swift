@@ -18,6 +18,7 @@ final class ChatFlowController {
     private var lastReasoningEffort: String?
     private var accumulatedPartialText = ""
     private var accumulatedPartialThinking = ""
+    private var accumulatedOutputStreamDelta = ""
     private var streamingFlushTask: Task<Void, Never>?
     private let makeID: () -> UUID
     private let now: () -> Date
@@ -172,7 +173,11 @@ final class ChatFlowController {
     }
 
     private func streamingFlushDelayNanoseconds() -> UInt64 {
-        let byteCount = max(accumulatedPartialText.utf8.count, accumulatedPartialThinking.utf8.count)
+        let byteCount = max(
+            accumulatedPartialText.utf8.count,
+            accumulatedPartialThinking.utf8.count,
+            accumulatedOutputStreamDelta.utf8.count
+        )
         if byteCount >= StreamingCoalescingPolicy.largeTextByteCount {
             return StreamingCoalescingPolicy.largeFlushDelayNanoseconds
         }
@@ -190,6 +195,7 @@ final class ChatFlowController {
         state.streamErrorMessage = nil
         state.streamingThinkingID = nil
         state.streamingAnswerID = nil
+        state.streamingOutputStreamID = nil
         state.streamingRevision = 0
     }
 
@@ -197,6 +203,7 @@ final class ChatFlowController {
         cancelStreamingFlush()
         accumulatedPartialText = ""
         accumulatedPartialThinking = ""
+        accumulatedOutputStreamDelta = ""
         state.currentPartialText = ""
         state.currentPartialThinking = ""
     }
@@ -272,6 +279,18 @@ final class ChatFlowController {
             didChange = true
         }
 
+        if !accumulatedOutputStreamDelta.isEmpty {
+            if let outputStreamID = state.streamingOutputStreamID,
+               let index = state.messages.firstIndex(where: { $0.id == outputStreamID }),
+               case .outputStream(var outputStreamMessage) = state.messages[index] {
+                outputStreamMessage.detail.appendOutput(accumulatedOutputStreamDelta)
+                outputStreamMessage.isComplete = false
+                state.messages[index] = .outputStream(outputStreamMessage)
+            }
+            accumulatedOutputStreamDelta = ""
+            didChange = true
+        }
+
         guard didChange else { return }
         state.currentPartialText = accumulatedPartialText
         state.currentPartialThinking = accumulatedPartialThinking
@@ -319,6 +338,23 @@ final class ChatFlowController {
             state.streamingStatus = .running
             scheduleStreamingFlush()
 
+        case let .outputStreamBegan(command, cwd):
+            flushStreamingNow()
+            beginOutputStream(command: command, cwd: cwd)
+
+        case let .outputStreamDelta(delta):
+            accumulatedOutputStreamDelta += delta
+            state.streamingStatus = .running
+            scheduleStreamingFlush()
+
+        case let .outputStreamEnded(status, exitCode, durationMs):
+            flushStreamingNow()
+            finalizeActiveOutputStream(
+                status: status,
+                exitCode: exitCode,
+                durationMs: durationMs
+            )
+
         case .done:
             flushStreamingNow()
             if let thinkingID = state.streamingThinkingID,
@@ -333,6 +369,9 @@ final class ChatFlowController {
                 textMessage.content = ChatAssistantContentNormalizer.displayText(from: textMessage.content)
                 textMessage.isComplete = true
                 state.messages[index] = .text(textMessage)
+            }
+            if state.streamingOutputStreamID != nil {
+                finalizeActiveOutputStream(status: .completed, exitCode: nil, durationMs: nil)
             }
 
             let conversationID = state.conversation?.id
@@ -350,8 +389,10 @@ final class ChatFlowController {
             state.currentPartialThinking = ""
             accumulatedPartialText = ""
             accumulatedPartialThinking = ""
+            accumulatedOutputStreamDelta = ""
             state.streamingThinkingID = nil
             state.streamingAnswerID = nil
+            state.streamingOutputStreamID = nil
             state.streamingStatus = .done
             state.isSending = false
             state.streamingRevision &+= 1
@@ -370,17 +411,76 @@ final class ChatFlowController {
 
         case let .error(streamError):
             flushStreamingNow()
+            if state.streamingOutputStreamID != nil {
+                finalizeActiveOutputStream(status: .failed, exitCode: nil, durationMs: nil)
+            }
             state.streamingStatus = .failed
             state.streamErrorMessage = streamError.message
             state.isSending = false
             resetStreamingBuffers()
             state.streamingThinkingID = nil
             state.streamingAnswerID = nil
+            state.streamingOutputStreamID = nil
             state.streamingRevision &+= 1
         }
     }
 
+    private func beginOutputStream(command: String, cwd: String?) {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if state.streamingOutputStreamID != nil {
+            finalizeActiveOutputStream(status: .completed, exitCode: nil, durationMs: nil)
+        }
+
+        let newID = makeID()
+        state.streamingOutputStreamID = newID
+        state.messages.append(
+            .outputStream(
+                id: newID,
+                command: trimmed,
+                detail: ChatOutputStreamDetail(status: .running, cwd: cwd),
+                isComplete: false,
+                timestamp: now()
+            )
+        )
+        state.streamingRevision &+= 1
+    }
+
+    private func finalizeActiveOutputStream(
+        status: ChatOutputStreamStatus,
+        exitCode: Int?,
+        durationMs: Int?
+    ) {
+        guard let outputStreamID = state.streamingOutputStreamID,
+              let index = state.messages.firstIndex(where: { $0.id == outputStreamID }),
+              case .outputStream(var outputStreamMessage) = state.messages[index] else {
+            state.streamingOutputStreamID = nil
+            return
+        }
+
+        outputStreamMessage.detail.status = status
+        outputStreamMessage.detail.exitCode = exitCode ?? outputStreamMessage.detail.exitCode
+        outputStreamMessage.detail.durationMs = durationMs ?? outputStreamMessage.detail.durationMs
+        outputStreamMessage.isComplete = true
+        state.messages[index] = .outputStream(outputStreamMessage)
+        state.streamingOutputStreamID = nil
+        state.streamingRevision &+= 1
+
+        if let conversationID = state.conversation?.id {
+            let message = state.messages[index]
+            let history = history
+            Task {
+                try? await history.appendMessage(conversationID, message)
+            }
+        }
+    }
+
     private func cancelStream() {
+        flushStreamingNow()
+        if state.streamingOutputStreamID != nil {
+            finalizeActiveOutputStream(status: .failed, exitCode: nil, durationMs: nil)
+        }
         cancelStreamingFlush()
         streamTask?.cancel()
         streamTask = nil
