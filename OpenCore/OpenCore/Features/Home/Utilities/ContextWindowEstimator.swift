@@ -31,6 +31,9 @@ nonisolated enum ContextWindowEstimator {
             return thinkingMessage.content
         case let .system(systemMessage):
             return systemMessage.content
+        case let .outputStream(outputStreamMessage):
+            guard outputStreamMessage.isComplete else { return "" }
+            return outputStreamMessage.command + "\n" + outputStreamMessage.detail.outputTail
         }
     }
 

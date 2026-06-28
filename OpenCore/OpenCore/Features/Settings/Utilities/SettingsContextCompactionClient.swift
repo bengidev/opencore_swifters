@@ -26,7 +26,7 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
             switch event {
             case let .textDelta(delta):
                 summary += delta
-            case .thinkingDelta:
+            case .thinkingDelta, .outputStreamBegan, .outputStreamDelta, .outputStreamEnded:
                 continue
             case .done:
                 return summary.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -55,6 +55,8 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
         case let .text(text): return text.content
         case let .thinking(thinking): return thinking.content
         case let .system(system): return system.content
+        case let .outputStream(outputStream):
+            return outputStream.command + "\n" + outputStream.detail.outputTail
         }
     }
 }
