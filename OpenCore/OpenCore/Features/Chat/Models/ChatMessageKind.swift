@@ -7,4 +7,5 @@ nonisolated enum ChatMessageKind: String, Codable, Sendable {
     case text
     case thinking
     case system
+    case outputStream
 }
