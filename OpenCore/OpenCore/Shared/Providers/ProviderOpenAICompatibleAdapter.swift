@@ -104,12 +104,18 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
                 )
             case .thinking:
                 return nil
+            case .outputStream:
+                return nil
             }
         }
     }
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
         guard let data = payload.data(using: .utf8) else { return nil }
+
+        if let sideband = ProviderStreamOutputEventMapper.mapSidebandPayload(data) {
+            return sideband
+        }
 
         let chunk = try? JSONDecoder().decode(ProviderChatCompletionsStreamChunk.self, from: data)
         guard let chunk else { return nil }
@@ -123,6 +129,9 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
             if let reasoning = choice.delta?.reasoningText,
                !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 events.append(.thinkingDelta(reasoning))
+            }
+            if let contentParts = choice.delta?.contentParts {
+                events.append(contentsOf: ProviderStreamOutputEventMapper.mapContentParts(contentParts))
             }
             if let content = choice.delta?.contentText, !content.isEmpty {
                 events.append(.textDelta(content))
