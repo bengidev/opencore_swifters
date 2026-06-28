@@ -196,6 +196,15 @@ extension PersistenceConversationHistoryStore {
             )
         case .system:
             return .system(id: entity.id, content: entity.content, timestamp: entity.timestamp)
+        case .outputStream:
+            let detail = Self.decodeOutputStreamDetail(from: entity.detailJSON)
+            return .outputStream(
+                id: entity.id,
+                command: entity.content,
+                detail: detail,
+                isComplete: entity.isComplete,
+                timestamp: entity.timestamp
+            )
         }
     }
 
@@ -232,6 +241,17 @@ extension PersistenceConversationHistoryStore {
                 timestamp: system.timestamp,
                 order: order
             )
+        case let .outputStream(outputStream):
+            return SidePanelMessageEntity(
+                id: outputStream.id,
+                kindRaw: ChatMessageKind.outputStream.rawValue,
+                role: outputStream.role.rawValue,
+                content: outputStream.command,
+                isComplete: outputStream.isComplete,
+                timestamp: outputStream.timestamp,
+                order: order,
+                detailJSON: Self.encodeOutputStreamDetail(outputStream.detail)
+            )
         }
     }
 
@@ -256,6 +276,30 @@ extension PersistenceConversationHistoryStore {
             entity.content = system.content
             entity.isComplete = true
             entity.timestamp = system.timestamp
+            entity.detailJSON = nil
+        case let .outputStream(outputStream):
+            entity.kindRaw = ChatMessageKind.outputStream.rawValue
+            entity.role = outputStream.role.rawValue
+            entity.content = outputStream.command
+            entity.isComplete = outputStream.isComplete
+            entity.timestamp = outputStream.timestamp
+            entity.detailJSON = Self.encodeOutputStreamDetail(outputStream.detail)
         }
+    }
+
+    @MainActor
+    private static func encodeOutputStreamDetail(_ detail: ChatOutputStreamDetail) -> String? {
+        guard let data = try? JSONEncoder().encode(detail) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @MainActor
+    private static func decodeOutputStreamDetail(from json: String?) -> ChatOutputStreamDetail {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let detail = try? JSONDecoder().decode(ChatOutputStreamDetail.self, from: data) else {
+            return ChatOutputStreamDetail()
+        }
+        return detail
     }
 }

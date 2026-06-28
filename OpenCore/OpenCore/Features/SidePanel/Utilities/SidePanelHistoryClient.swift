@@ -104,6 +104,13 @@ extension SidePanelHistoryClient {
             )
         case .thinking:
             return nil
+        case let .outputStream(outputStream):
+            return SidePanelMessage(
+                id: outputStream.id,
+                role: outputStream.role.rawValue,
+                content: outputStream.command,
+                createdAt: outputStream.timestamp
+            )
         }
     }
 

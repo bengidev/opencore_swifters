@@ -60,6 +60,9 @@ final class SidePanelMessageEntity {
     /// Monotonic insertion index within the conversation. Sorting by this
     /// (not timestamp) keeps user/assistant turns in the exact emitted order.
     var order: Int
+    /// JSON-encoded detail for rich message kinds such as output streams.
+    /// Additive field — defaults to nil so existing stores migrate cleanly.
+    var detailJSON: String?
 
     var conversation: SidePanelConversationEntity?
 
@@ -71,6 +74,7 @@ final class SidePanelMessageEntity {
         isComplete: Bool = true,
         timestamp: Date,
         order: Int,
+        detailJSON: String? = nil,
         conversation: SidePanelConversationEntity? = nil
     ) {
         self.id = id
@@ -80,6 +84,7 @@ final class SidePanelMessageEntity {
         self.isComplete = isComplete
         self.timestamp = timestamp
         self.order = order
+        self.detailJSON = detailJSON
         self.conversation = conversation
     }
 }
