@@ -66,6 +66,93 @@ struct ChatAssistantContentNormalizerTests {
   }
 }
 
+@Suite("Chat Stream Output Mapping")
+struct ChatStreamOutputMappingTests {
+    @Test("Maps sideband exec_command events")
+    func sidebandExecCommandEvents() {
+        let began = #"{"type":"exec_command_begin","command":"npm test","cwd":"/tmp/project"}"#
+        #expect(
+            ProviderOpenAICompatibleAdapter.mapStreamPayload(began) == [
+                .outputStreamBegan(command: "npm test", cwd: "/tmp/project")
+            ]
+        )
+
+        let delta = #"{"type":"exec_command_output_delta","chunk":"PASS suite\n"}"#
+        #expect(
+            ProviderOpenAICompatibleAdapter.mapStreamPayload(delta) == [
+                .outputStreamDelta("PASS suite\n")
+            ]
+        )
+
+        let ended = #"{"type":"exec_command_end","status":"completed","exit_code":0,"duration_ms":1200}"#
+        #expect(
+            ProviderOpenAICompatibleAdapter.mapStreamPayload(ended) == [
+                .outputStreamEnded(status: .completed, exitCode: 0, durationMs: 1200)
+            ]
+        )
+    }
+
+    @Test("Maps argv command arrays and nested msg envelopes")
+    func argvAndNestedEnvelope() {
+        let began = #"{"type":"exec_command_begin","msg":{"command":["echo","ok"],"cwd":"/tmp"}}"#
+        #expect(
+            ProviderOpenAICompatibleAdapter.mapStreamPayload(began) == [
+                .outputStreamBegan(command: "echo ok", cwd: "/tmp")
+            ]
+        )
+    }
+
+    @Test("Maps command output content parts in delta")
+    func commandOutputContentParts() {
+        let payload = """
+        {"choices":[{"delta":{"content":[{"type":"exec_command_begin","command":"git status","cwd":"/repo"},{"type":"exec_command_output_delta","chunk":"clean\\n"}]}}]}
+        """
+        let events = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload)
+        #expect(events == [
+            .outputStreamBegan(command: "git status", cwd: "/repo"),
+            .outputStreamDelta("clean\n")
+        ])
+    }
+
+    @Test("End-to-end sideband output stream renders in chat flow")
+    @MainActor
+    func sidebandOutputStreamInFlow() async {
+        let payloads = [
+            #"{"type":"exec_command_begin","command":"npm test","cwd":"/tmp/project"}"#,
+            #"{"type":"exec_command_output_delta","chunk":"PASS suite\n"}"#,
+            #"{"type":"exec_command_end","status":"completed","exit_code":0,"duration_ms":1200}"#,
+            #"{"choices":[{"delta":{"content":"All checks passed."}}]}"#,
+        ]
+        let events: [ChatStreamingEvent] = payloads.compactMap {
+            ProviderOpenAICompatibleAdapter.mapStreamPayload($0)
+        }.flatMap { $0 } + [.done]
+
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(
+                providerID: ProviderDescriptor.openRouter.id,
+                modelID: "openrouter/free"
+            )
+        )
+        let controller = ChatFlowController(
+            streaming: ChatCannedEventClient(events: events).asStreamingClient,
+            providerPreference: preference
+        )
+
+        controller.setDraftMessage("Run tests")
+        await controller.sendMessage()
+
+        let rows = controller.state.messages.compactMap { message -> ChatOutputStreamMessage? in
+            if case let .outputStream(outputStream) = message { return outputStream }
+            return nil
+        }
+
+        #expect(rows.count == 1)
+        #expect(rows.first?.command == "npm test")
+        #expect(rows.first?.detail.outputTail == "PASS suite\n")
+        #expect(rows.first?.detail.status == .completed)
+    }
+}
+
 @Suite("Chat Stream Content Mapping")
 struct ChatStreamContentMappingTests {
   @Test("Maps string content deltas")
