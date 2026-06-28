@@ -92,6 +92,16 @@ struct ChatStreamOutputMappingTests {
         )
     }
 
+    @Test("Maps failed status from non-zero exit code without explicit status")
+    func nonZeroExitWithoutExplicitStatus() {
+        let ended = #"{"type":"exec_command_end","exit_code":1}"#
+        #expect(
+            ProviderOpenAICompatibleAdapter.mapStreamPayload(ended) == [
+                .outputStreamEnded(status: .failed, exitCode: 1, durationMs: nil)
+            ]
+        )
+    }
+
     @Test("Maps argv command arrays and nested msg envelopes")
     func argvAndNestedEnvelope() {
         let began = #"{"type":"exec_command_begin","msg":{"command":["echo","ok"],"cwd":"/tmp"}}"#

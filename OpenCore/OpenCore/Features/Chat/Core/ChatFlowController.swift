@@ -411,6 +411,9 @@ final class ChatFlowController {
 
         case let .error(streamError):
             flushStreamingNow()
+            if state.streamingOutputStreamID != nil {
+                finalizeActiveOutputStream(status: .failed, exitCode: nil, durationMs: nil)
+            }
             state.streamingStatus = .failed
             state.streamErrorMessage = streamError.message
             state.isSending = false
@@ -474,6 +477,10 @@ final class ChatFlowController {
     }
 
     private func cancelStream() {
+        flushStreamingNow()
+        if state.streamingOutputStreamID != nil {
+            finalizeActiveOutputStream(status: .failed, exitCode: nil, durationMs: nil)
+        }
         cancelStreamingFlush()
         streamTask?.cancel()
         streamTask = nil

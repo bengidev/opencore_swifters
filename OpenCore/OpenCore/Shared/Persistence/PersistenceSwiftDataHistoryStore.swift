@@ -197,7 +197,10 @@ extension PersistenceConversationHistoryStore {
         case .system:
             return .system(id: entity.id, content: entity.content, timestamp: entity.timestamp)
         case .outputStream:
-            let detail = Self.decodeOutputStreamDetail(from: entity.detailJSON)
+            let detail = Self.decodeOutputStreamDetail(
+                from: entity.detailJSON,
+                isComplete: entity.isComplete
+            )
             return .outputStream(
                 id: entity.id,
                 command: entity.content,
@@ -294,11 +297,14 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func decodeOutputStreamDetail(from json: String?) -> ChatOutputStreamDetail {
+    private static func decodeOutputStreamDetail(
+        from json: String?,
+        isComplete: Bool
+    ) -> ChatOutputStreamDetail {
         guard let json,
               let data = json.data(using: .utf8),
               let detail = try? JSONDecoder().decode(ChatOutputStreamDetail.self, from: data) else {
-            return ChatOutputStreamDetail()
+            return ChatOutputStreamDetail(status: isComplete ? .completed : .running)
         }
         return detail
     }

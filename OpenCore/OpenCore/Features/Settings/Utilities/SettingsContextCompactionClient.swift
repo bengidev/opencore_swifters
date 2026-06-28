@@ -56,6 +56,7 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
         case let .thinking(thinking): return thinking.content
         case let .system(system): return system.content
         case let .outputStream(outputStream):
+            guard outputStream.isComplete else { return "" }
             return outputStream.command + "\n" + outputStream.detail.outputTail
         }
     }

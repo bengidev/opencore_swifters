@@ -144,4 +144,91 @@ struct ChatOutputStreamStreamingTests {
         #expect(rows[1].command == "npm run lint")
         #expect(rows[1].detail.outputTail == "ok\n")
     }
+
+    @Test("Error mid-stream finalizes output stream as failed")
+    func errorMidStreamFinalizes() async {
+        let controller = makeController(events: [
+            .outputStreamBegan(command: "npm test", cwd: "/tmp/project"),
+            .outputStreamDelta("partial\n"),
+            .error("Connection lost."),
+        ])
+
+        controller.setDraftMessage("Run tests")
+        await controller.sendMessage()
+
+        let rows = outputStreamMessages(controller.state)
+        #expect(rows.count == 1)
+        #expect(rows.first?.command == "npm test")
+        #expect(rows.first?.detail.outputTail == "partial\n")
+        #expect(rows.first?.detail.status == .failed)
+        #expect(rows.first?.isComplete == true)
+        #expect(controller.state.streamingStatus == .failed)
+        #expect(controller.state.streamErrorMessage == "Connection lost.")
+    }
+
+    @Test("Cancel mid-stream finalizes output stream as failed")
+    func cancelMidStreamFinalizes() async {
+        final class AppendedMessages: @unchecked Sendable {
+            private let lock = NSLock()
+            private var messages: [ChatMessage] = []
+
+            func append(_ message: ChatMessage) {
+                lock.lock()
+                messages.append(message)
+                lock.unlock()
+            }
+
+            func snapshot() -> [ChatMessage] {
+                lock.lock()
+                defer { lock.unlock() }
+                return messages
+            }
+        }
+
+        let appended = AppendedMessages()
+        let preference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(
+                providerID: ProviderDescriptor.openRouter.id,
+                modelID: "meta-llama/llama-3.3-70b-instruct:free"
+            )
+        )
+        let streaming = ChatStreamingClient(stream: { _ in
+            AsyncStream { continuation in
+                continuation.yield(.outputStreamBegan(command: "npm test", cwd: nil))
+                continuation.yield(.outputStreamDelta("partial\n"))
+                Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    continuation.yield(.done)
+                    continuation.finish()
+                }
+            }
+        })
+        let controller = ChatFlowController(
+            streaming: streaming,
+            history: ChatHistoryClient(
+                loadMessages: { _ in [] },
+                saveConversation: { _ in },
+                appendMessage: { _, message in appended.append(message) },
+                replaceMessages: { _, _ in }
+            ),
+            providerPreference: preference,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        controller.setDraftMessage("Run tests")
+        let sendTask = Task { await controller.sendMessage() }
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        controller.clearActiveConversation()
+        await sendTask.value
+
+        let persisted = appended.snapshot().compactMap { message -> ChatOutputStreamMessage? in
+            if case let .outputStream(outputStream) = message { return outputStream }
+            return nil
+        }
+        #expect(persisted.count == 1)
+        #expect(persisted.first?.command == "npm test")
+        #expect(persisted.first?.detail.outputTail == "partial\n")
+        #expect(persisted.first?.detail.status == .failed)
+        #expect(persisted.first?.isComplete == true)
+    }
 }
