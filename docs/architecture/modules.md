@@ -13,6 +13,7 @@ App
 ├── SidePanel     # Conversation history browser (session scope)
 ├── Chat          # Live message stream, send/receive, active conversation
 ├── Settings      # Provider credentials, context compaction prefs
+├── Speech        # On-device speech-to-text for composer input
 ├── About         # App info tab
 └── Home          # Welcome + composer + TabView shell
 ```
@@ -45,6 +46,11 @@ OpenCore/
 │   │   ├── Models/
 │   │   ├── Utilities/
 │   │   └── Views/
+│   ├── Speech/
+│   │   ├── Core/
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Utilities/
 │   ├── About/
 │   │   └── Views/
 │   └── SidePanel/
