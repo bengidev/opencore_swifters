@@ -22,7 +22,7 @@ nonisolated struct ChatCannedEventClient: Sendable {
         }
     }
 
-    /// Yields `events` then keeps the stream open until the consumer task is cancelled.
+    /// Yields `events` then leaves the stream open without finishing.
     func streamHangingAfterEvents(request: ChatRequest) -> AsyncStream<ChatStreamingEvent> {
         let events = self.events
         return AsyncStream { continuation in
