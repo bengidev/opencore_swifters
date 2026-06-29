@@ -95,12 +95,12 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
             case let .text(text):
                 return ProviderChatCompletionsRequestBody.Message(
                     role: text.role.rawValue,
-                    content: text.content
+                    content: wireMessageContent(for: text)
                 )
             case let .system(system):
                 return ProviderChatCompletionsRequestBody.Message(
                     role: system.role.rawValue,
-                    content: system.content
+                    content: .text(system.content)
                 )
             case .thinking:
                 return nil
@@ -108,6 +108,16 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
                 return nil
             }
         }
+    }
+
+    static func wireMessageContent(for text: ChatTextMessage) -> ProviderChatMessageContent {
+        if let parts = ChatMultimodalWireLogic.makeContentParts(
+            visibleText: text.content,
+            attachments: text.attachments
+        ) {
+            return .parts(parts)
+        }
+        return .text(text.providerContent)
     }
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
