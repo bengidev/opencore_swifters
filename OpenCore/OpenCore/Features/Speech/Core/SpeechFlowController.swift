@@ -18,38 +18,24 @@ final class SpeechFlowController {
         state.errorMessage = nil
     }
 
+    /// Merges the live partial transcript into a composer draft for display while listening.
+    func displayedDraft(base: String) -> String {
+        guard state.isListening, !state.partialTranscript.isEmpty else { return base }
+        return Self.mergedDraft(existing: base, transcript: state.partialTranscript)
+    }
+
     func toggleListening(applyTranscript: @escaping (String) -> Void) async {
         if state.isListening {
-            await stopListening(applyTranscript: applyTranscript)
+            let transcript = await finishListening()
+            guard !transcript.isEmpty else { return }
+            applyTranscript(transcript)
         } else {
             await startListening()
         }
     }
 
-    func stopListening(applyTranscript: @escaping (String) -> Void) async {
-        await finishListening(applyTranscript: applyTranscript)
-    }
-
-    func cancelListening() async {
-        await finishListening(applyTranscript: nil)
-    }
-
-    private func finishListening(applyTranscript: ((String) -> Void)?) async {
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        stopDurationTimer()
-
-        let final = await recognition.stop()
-        let transcript = (final ?? state.partialTranscript)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        resetListeningPresentation()
-
-        guard let applyTranscript, !transcript.isEmpty else { return }
-        applyTranscript(transcript)
-    }
-
-    private func startListening() async {
+    func startListening() async {
+        guard recognitionTask == nil else { return }
         clearError()
 
         var status = recognition.authorizationStatus()
@@ -71,10 +57,8 @@ final class SpeechFlowController {
         recognitionTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
+                recognitionTask = nil
                 stopDurationTimer()
-                if state.isListening {
-                    resetListeningPresentation()
-                }
             }
             for await event in stream {
                 guard !Task.isCancelled else { return }
@@ -82,30 +66,53 @@ final class SpeechFlowController {
                 case .ready:
                     state.isListening = true
                     startDurationTimer()
-                case let .partial(text):
-                    state.partialTranscript = text
-                case let .final(text):
+                case let .partial(text), let .final(text):
                     state.partialTranscript = text
                 case let .failed(message):
                     state.errorMessage = message
+                    _ = await recognition.stop()
                     resetListeningPresentation()
+                    return
                 case let .audioLevel(level):
                     applyAudioLevel(level)
                 }
             }
+            if !Task.isCancelled {
+                _ = await recognition.stop()
+                resetListeningPresentation()
+            }
         }
+    }
+
+    func stopListening(mergingInto base: String) async -> String {
+        let transcript = await finishListening()
+        return Self.mergedDraft(existing: base, transcript: transcript)
+    }
+
+    func cancelListening() async {
+        _ = await finishListening()
+    }
+
+    private func finishListening() async -> String {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        stopDurationTimer()
+
+        let final = await recognition.stop()
+        let transcript = (final ?? state.partialTranscript)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        resetListeningPresentation()
+        return transcript
     }
 
     private func applyAudioLevel(_ level: Float) {
         state.isVoiceActive = SpeechRecordingDisplayLogic.isVoiceActive(level: level)
-
-        var levels = state.audioLevels
-        levels.append(level)
-        let capacity = SpeechRecordingDisplayLogic.waveformSampleCapacity
-        if levels.count > capacity {
-            levels.removeFirst(levels.count - capacity)
-        }
-        state.audioLevels = levels
+        state.audioLevels = SpeechRecordingDisplayLogic.appendWaveformSample(
+            level,
+            to: state.audioLevels,
+            capacity: SpeechRecordingDisplayLogic.waveformSampleCapacity
+        )
     }
 
     private func resetListeningPresentation() {
