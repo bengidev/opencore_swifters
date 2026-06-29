@@ -1,0 +1,195 @@
+import Foundation
+import Testing
+
+@testable import OpenCore
+
+private final class SpeechRecognitionTestHarness: @unchecked Sendable {
+    var authorizationStatus: SpeechAuthorizationStatus = .authorized
+    var requestAuthorizationResult: SpeechAuthorizationStatus?
+    var events: [SpeechRecognitionEvent] = []
+    var stopResult: String?
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+
+    func makeClient() -> SpeechRecognitionClient {
+        SpeechRecognitionClient(
+            authorizationStatus: { [self] in authorizationStatus },
+            requestAuthorization: { [self] in
+                requestAuthorizationResult ?? authorizationStatus
+            },
+            start: { [self] in
+                startCallCount += 1
+                let events = events
+                return AsyncStream { continuation in
+                    for event in events {
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                }
+            },
+            stop: { [self] in
+                stopCallCount += 1
+                return stopResult
+            }
+        )
+    }
+}
+
+@Suite("Speech Flow Controller")
+@MainActor
+struct SpeechFlowControllerTests {
+    @Test("starts idle without listening or transcript")
+    func startsIdle() {
+        let controller = SpeechFlowController(recognition: .preview)
+
+        #expect(controller.state.isListening == false)
+        #expect(controller.state.partialTranscript.isEmpty)
+        #expect(controller.state.errorMessage == nil)
+    }
+
+    @Test("toggle starts listening when authorized")
+    func startsListeningWhenAuthorized() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.events = [.ready]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.state.isListening == true)
+        #expect(harness.startCallCount == 1)
+    }
+
+    @Test("partial recognition updates visible transcript")
+    func updatesPartialTranscript() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.events = [.ready, .partial("hello")]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.state.partialTranscript == "hello")
+    }
+
+    @Test("background recognition events update state on main actor")
+    func backgroundRecognitionEventsUpdateState() async {
+        let controller = SpeechFlowController(
+            recognition: SpeechRecognitionClient(
+                authorizationStatus: { .authorized },
+                requestAuthorization: { .authorized },
+                start: {
+                    AsyncStream { continuation in
+                        Task.detached {
+                            continuation.yield(.ready)
+                            continuation.yield(.partial("from background"))
+                            continuation.finish()
+                        }
+                    }
+                },
+                stop: { nil }
+            )
+        )
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.state.partialTranscript == "from background")
+    }
+
+    @Test("stopping listening applies final transcript to draft")
+    func appliesFinalTranscript() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.stopResult = "send this"
+        harness.events = [.ready]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        var applied = ""
+        await controller.toggleListening { applied = $0 }
+
+        #expect(applied == "send this")
+        #expect(controller.state.isListening == false)
+        #expect(harness.stopCallCount == 1)
+    }
+
+    @Test("denied authorization surfaces an error instead of listening")
+    func deniedAuthorizationShowsError() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.authorizationStatus = .denied
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.toggleListening { _ in }
+
+        #expect(controller.state.isListening == false)
+        #expect(controller.state.errorMessage != nil)
+        #expect(harness.startCallCount == 0)
+    }
+
+    @Test("cancel listening discards transcript without applying")
+    func cancelListeningDiscardsTranscript() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.events = [.ready, .partial("discard me")]
+        harness.stopResult = "discard me"
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(controller.state.partialTranscript == "discard me")
+
+        await controller.cancelListening()
+
+        #expect(controller.state.isListening == false)
+        #expect(controller.state.partialTranscript.isEmpty)
+        #expect(controller.state.audioLevels.isEmpty)
+        #expect(controller.state.isVoiceActive == false)
+    }
+
+    @Test("audio level events update voice activity and waveform samples")
+    func audioLevelEventsUpdatePresentation() async {
+        let controller = SpeechFlowController(
+            recognition: SpeechRecognitionClient(
+                authorizationStatus: { .authorized },
+                requestAuthorization: { .authorized },
+                start: {
+                    AsyncStream { continuation in
+                        continuation.yield(.ready)
+                        continuation.yield(.audioLevel(0.001))
+                        continuation.yield(.audioLevel(0.05))
+                        continuation.finish()
+                    }
+                },
+                stop: { nil }
+            )
+        )
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.state.isVoiceActive == true)
+        #expect(controller.state.audioLevels.count == 2)
+        #expect(controller.state.audioLevels.last == 0.05)
+    }
+
+    @Test("recognition failure before ready keeps indicator hidden")
+    func failureBeforeReadyHidesIndicator() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.events = [.failed("Failed to initialize recognizer")]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.toggleListening { _ in }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.state.isListening == false)
+        #expect(controller.state.errorMessage != nil)
+        #expect(controller.state.audioLevels.isEmpty)
+    }
+
+    @Test("mergedDraft inserts spacing between existing text and transcript")
+    func mergedDraftSpacing() {
+        #expect(SpeechFlowController.mergedDraft(existing: "Hi", transcript: "there") == "Hi there")
+        #expect(SpeechFlowController.mergedDraft(existing: "Hi ", transcript: "there") == "Hi there")
+        #expect(SpeechFlowController.mergedDraft(existing: "", transcript: "there") == "there")
+    }
+}
