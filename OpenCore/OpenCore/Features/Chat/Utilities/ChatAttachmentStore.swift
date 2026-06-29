@@ -3,6 +3,7 @@ import Foundation
 /// Copies composer attachments into durable app storage.
 nonisolated enum ChatAttachmentStore: Sendable {
     static func save(data: Data, suggestedFilename: String) throws -> URL {
+        try ChatAttachmentSizeLimits.validateImportSize(byteCount: data.count)
         let directory = try attachmentsDirectory()
         let filename = uniqueFilename(basedOn: suggestedFilename)
         let destination = directory.appendingPathComponent(filename)
@@ -17,6 +18,23 @@ nonisolated enum ChatAttachmentStore: Sendable {
 
     static func remove(at localPath: String) {
         try? FileManager.default.removeItem(atPath: localPath)
+    }
+
+    static func removeAll(at localPaths: [String]) {
+        for path in localPaths {
+            remove(at: path)
+        }
+    }
+
+    static func localPaths(in messages: [ChatMessage]) -> [String] {
+        messages.flatMap { message in
+            switch message {
+            case let .text(text):
+                return text.attachments.map(\.localPath)
+            case .thinking, .system, .outputStream:
+                return []
+            }
+        }
     }
 
     private static func attachmentsDirectory() throws -> URL {

@@ -16,7 +16,7 @@ nonisolated enum ChatMultimodalVideoPayloadLogic: Sendable {
     static func mimeType(forFilename filename: String) -> String {
         switch (filename as NSString).pathExtension.lowercased() {
         case "mov":
-            return "video/mov"
+            return "video/quicktime"
         case "mpeg", "mpg":
             return "video/mpeg"
         case "webm":

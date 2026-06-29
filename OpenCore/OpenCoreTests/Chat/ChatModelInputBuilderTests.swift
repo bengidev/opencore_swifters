@@ -5,12 +5,13 @@ import Testing
 
 @Suite("Chat Model Input Builder")
 struct ChatModelInputBuilderTests {
-    @Test("includes file paths and visible text for the provider")
+    @Test("includes file content and visible text for the provider")
     func buildsModelContent() {
         let attachment = ChatMessageAttachment(
-            kind: .image,
-            filename: "scan.png",
-            localPath: "/tmp/scan.png"
+            kind: .file,
+            filename: "note.txt",
+            localPath: "/tmp/note.txt",
+            fileTextContent: "file body"
         )
 
         let modelContent = ChatModelInputBuilder.modelContent(
@@ -18,8 +19,9 @@ struct ChatModelInputBuilderTests {
             attachments: [attachment]
         )
 
-        #expect(!modelContent.contains("[Attached files]"))
-        #expect(!modelContent.contains("/tmp/scan.png"))
+        #expect(modelContent.contains("[Attached file: note.txt]"))
+        #expect(modelContent.contains("file body"))
+        #expect(!modelContent.contains("/tmp/note.txt"))
         #expect(modelContent.contains("What is this?"))
     }
 

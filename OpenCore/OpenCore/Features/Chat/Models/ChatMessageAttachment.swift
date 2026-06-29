@@ -19,6 +19,11 @@ nonisolated struct ChatMessageAttachment: Identifiable, Equatable, Sendable, Cod
     let audioDuration: TimeInterval
     /// Speech transcript used only for model input; never shown in the bubble.
     let speechTranscript: String?
+    /// UTF-8 text extracted from plain-text file attachments for model input.
+    let fileTextContent: String?
+    /// Base64 data URL persisted at send time so history requests do not re-encode from disk.
+    let wireImageDataURL: String?
+    let wireVideoDataURL: String?
 
     init(
         id: UUID = UUID(),
@@ -28,7 +33,10 @@ nonisolated struct ChatMessageAttachment: Identifiable, Equatable, Sendable, Cod
         thumbnailJPEGData: Data? = nil,
         waveformSamples: [Float] = [],
         audioDuration: TimeInterval = 0,
-        speechTranscript: String? = nil
+        speechTranscript: String? = nil,
+        fileTextContent: String? = nil,
+        wireImageDataURL: String? = nil,
+        wireVideoDataURL: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -38,6 +46,9 @@ nonisolated struct ChatMessageAttachment: Identifiable, Equatable, Sendable, Cod
         self.waveformSamples = waveformSamples
         self.audioDuration = audioDuration
         self.speechTranscript = speechTranscript
+        self.fileTextContent = fileTextContent
+        self.wireImageDataURL = wireImageDataURL
+        self.wireVideoDataURL = wireVideoDataURL
     }
 }
 
@@ -49,5 +60,21 @@ struct ChatTextMessageDetail: Codable, Equatable, Sendable {
 extension ChatMessageAttachment {
     var fileURL: URL {
         URL(fileURLWithPath: localPath)
+    }
+
+    nonisolated func withWirePayloads(imageDataURL: String? = nil, videoDataURL: String? = nil) -> ChatMessageAttachment {
+        ChatMessageAttachment(
+            id: id,
+            kind: kind,
+            filename: filename,
+            localPath: localPath,
+            thumbnailJPEGData: thumbnailJPEGData,
+            waveformSamples: waveformSamples,
+            audioDuration: audioDuration,
+            speechTranscript: speechTranscript,
+            fileTextContent: fileTextContent,
+            wireImageDataURL: imageDataURL ?? wireImageDataURL,
+            wireVideoDataURL: videoDataURL ?? wireVideoDataURL
+        )
     }
 }

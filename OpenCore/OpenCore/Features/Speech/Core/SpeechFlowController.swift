@@ -77,11 +77,18 @@ final class SpeechFlowController {
         let waveformSamples = state.audioLevels
         let duration = state.elapsedDuration
         let result = await finishListening()
-        return Self.makeVoiceAttachment(
+        if let attachment = Self.makeVoiceAttachment(
             from: result,
             waveformSamples: waveformSamples,
             duration: duration
-        )
+        ) {
+            return attachment
+        }
+        if result?.audioFileURL != nil,
+           result?.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            state.errorMessage = "Voice note could not be transcribed. Try again or type your message."
+        }
+        return nil
     }
 
     func cancelListening() async {
@@ -139,27 +146,23 @@ final class SpeechFlowController {
     ) -> ChatMessageAttachment? {
         guard let result else { return nil }
         let transcript = result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !transcript.isEmpty || result.audioFileURL != nil else { return nil }
-
-        let storedPath: String
-        if let audioFileURL = result.audioFileURL,
-           let storedURL = try? ChatAttachmentStore.save(
-               copyingFrom: audioFileURL,
-               suggestedFilename: "voice-note.caf"
-           ) {
-            storedPath = storedURL.path
-            try? FileManager.default.removeItem(at: audioFileURL)
-        } else {
+        guard !transcript.isEmpty else { return nil }
+        guard let audioFileURL = result.audioFileURL,
+              let storedURL = try? ChatAttachmentStore.save(
+                  copyingFrom: audioFileURL,
+                  suggestedFilename: "voice-note.caf"
+              ) else {
             return nil
         }
+        try? FileManager.default.removeItem(at: audioFileURL)
 
         return ChatMessageAttachment(
             kind: .audio,
             filename: "Voice note",
-            localPath: storedPath,
+            localPath: storedURL.path,
             waveformSamples: waveformSamples,
             audioDuration: max(duration, result.duration),
-            speechTranscript: transcript.isEmpty ? nil : transcript
+            speechTranscript: transcript
         )
     }
 

@@ -252,6 +252,30 @@ struct SpeechFlowControllerTests {
         await controller.cancelListening()
     }
 
+    @Test("empty transcript with audio surfaces an error")
+    func emptyTranscriptShowsError() async throws {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: tempAudio.path, contents: Data([0x00, 0x01]))
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "   ",
+            audioFileURL: tempAudio,
+            duration: 1
+        )
+        harness.events = [.ready]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let attachment = await controller.stopListening()
+
+        #expect(attachment == nil)
+        #expect(controller.state.errorMessage != nil)
+    }
+
     @Test("makeVoiceAttachment stores transcript behind the bubble attachment")
     func makeVoiceAttachmentUsesTranscript() throws {
         let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")

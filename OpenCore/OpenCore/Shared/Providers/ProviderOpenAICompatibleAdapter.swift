@@ -111,8 +111,8 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
     }
 
     static func wireMessageContent(for text: ChatTextMessage) -> ProviderChatMessageContent {
-        if let parts = ChatMultimodalWireLogic.makeContentParts(
-            visibleText: text.content,
+        if let parts = try? ChatMultimodalWireLogic.makeContentParts(
+            modelText: text.providerContent,
             attachments: text.attachments
         ) {
             return .parts(parts)

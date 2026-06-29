@@ -26,9 +26,9 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 
 ## Vision
 
-- **Flow controller**: `VisionFlowController` copies attachments into durable storage for send
+- **Flow controller**: `VisionFlowController` copies attachments into durable storage and extracts plain-text file content for model input
 - **Composer wiring**: `HomeComposerView` plus-button attachment menu; indicators via `ChatComposerAttachmentsStripView`
-- **Model input**: file paths are sent in `ChatModelInputBuilder` behind the scenes; bubbles show the media
+- **Model input**: `ChatModelInputBuilder` sends file content, voice transcripts, and multimodal wire payloads
 
 ## Speech
 

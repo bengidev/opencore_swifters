@@ -123,13 +123,26 @@ final class ChatFlowController {
             visibleText: visibleText,
             attachments: attachments
         )
+
+        let preparedAttachments: [ChatMessageAttachment]
+        do {
+            preparedAttachments = try ChatMultimodalWireLogic.prepareAttachmentsForSend(
+                attachments: attachments,
+                modelText: modelContent
+            )
+        } catch {
+            state.streamErrorMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
+            return
+        }
+
         let userMessage = ChatMessage.text(
             id: makeID(),
             role: .user,
             content: visibleText,
             timestamp: timestamp,
-            attachments: attachments,
-            modelContent: modelContent
+            attachments: preparedAttachments,
+            modelContent: modelContent.isEmpty ? nil : modelContent
         )
         state.draftMessage = ""
         state.draftAttachments = []

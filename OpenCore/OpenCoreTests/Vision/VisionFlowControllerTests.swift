@@ -37,6 +37,24 @@ struct VisionFlowControllerTests {
         }
     }
 
+    @Test("attachImportedData stores file text content for plain text files")
+    func attachesPlainTextFile() async throws {
+        let data = Data("console.log('hi')".utf8)
+        let controller = VisionFlowController()
+
+        let attachment = await controller.attachImportedData(
+            data,
+            filename: "script.js",
+            contentType: .plainText
+        )
+
+        #expect(attachment?.kind == .file)
+        #expect(attachment?.fileTextContent == "console.log('hi')")
+        if let localPath = attachment?.localPath {
+            ChatAttachmentStore.remove(at: localPath)
+        }
+    }
+
     private func makeSolidPNGData() throws -> Data {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
         defer { try? FileManager.default.removeItem(at: url) }

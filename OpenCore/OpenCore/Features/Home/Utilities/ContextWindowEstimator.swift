@@ -25,7 +25,14 @@ nonisolated enum ContextWindowEstimator {
         switch message {
         case let .text(textMessage):
             guard textMessage.isComplete else { return "" }
-            return textMessage.content
+            var text = textMessage.providerContent
+            let wireOverhead = ChatMultimodalWireLogic.estimatedWireTokenOverhead(
+                for: textMessage.attachments
+            )
+            if wireOverhead > 0 {
+                text += String(repeating: " ", count: wireOverhead * 4)
+            }
+            return text
         case let .thinking(thinkingMessage):
             guard thinkingMessage.isComplete else { return "" }
             return thinkingMessage.content

@@ -61,44 +61,23 @@ struct ChatUserMessageBubbleView: View {
             }
         }
     }
-
 }
 
 private struct ChatUserImageAttachmentBubbleView: View {
     let attachment: ChatMessageAttachment
 
-    @Environment(\.sharedPalette) private var palette
     @State private var isPreviewPresented = false
 
     var body: some View {
         Button {
             isPreviewPresented = true
         } label: {
-            Group {
-                if let thumbnailJPEGData = attachment.thumbnailJPEGData,
-                   let image = UIImage(data: thumbnailJPEGData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else if let image = UIImage(contentsOfFile: attachment.localPath) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(palette.surfaceSubtle)
-                        .overlay {
-                            Image(systemName: "photo")
-                                .foregroundStyle(palette.textTertiary)
-                        }
-                }
-            }
-            .frame(width: 148, height: 148)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(palette.lineSoft.opacity(0.8), lineWidth: 1)
-            }
+            ChatAttachmentThumbnailView(
+                thumbnailJPEGData: attachment.thumbnailJPEGData,
+                localPath: attachment.localPath,
+                side: 148,
+                cornerRadius: 16
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Image attachment \(attachment.filename)")
@@ -199,15 +178,13 @@ private struct ChatUserAudioAttachmentBubbleView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(palette.controlStrong)
             )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isPlaying ? "Pause voice note" : "Play voice note")
     }
-
-    private let cornerRadius: CGFloat = 20
 }
 
 private struct ChatUserFileAttachmentBubbleView: View {
@@ -234,40 +211,5 @@ private struct ChatUserFileAttachmentBubbleView: View {
                 .fill(palette.controlStrong)
         )
         .accessibilityLabel("File attachment \(attachment.filename)")
-    }
-}
-
-private struct ChatWaveformBarsView: View {
-    let heights: [Float]
-    var progress: Double = 0
-    var showsPlaybackProgress = false
-    let activeColor: Color
-    let idleColor: Color
-    var unplayedColor: Color?
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(Array(heights.enumerated()), id: \.offset) { index, height in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(barColor(for: index, height: height))
-                    .frame(width: 3, height: max(4, CGFloat(height) * 24))
-                    .animation(.easeOut(duration: 0.08), value: progress)
-            }
-        }
-    }
-
-    private func barColor(for index: Int, height: Float) -> Color {
-        let baseColor = height > 0.12 ? activeColor : idleColor
-        guard showsPlaybackProgress else { return baseColor }
-
-        let played = ChatVoiceNotePlaybackDisplayLogic.isBarPlayed(
-            barIndex: index,
-            barCount: heights.count,
-            progress: progress
-        )
-        if played {
-            return baseColor
-        }
-        return unplayedColor ?? idleColor
     }
 }

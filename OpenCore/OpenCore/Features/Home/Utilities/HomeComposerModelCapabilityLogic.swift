@@ -2,6 +2,11 @@ import Foundation
 
 /// Composer warnings for model capability mismatches.
 nonisolated enum HomeComposerModelCapabilityLogic: Sendable {
+    enum VisualAttachmentDecision: Equatable, Sendable {
+        case allowed
+        case blocked(message: String)
+    }
+
     static func supportsImageInput(for model: ChatModel?) -> Bool {
         model?.supportsImageInput == true
     }
@@ -31,6 +36,34 @@ nonisolated enum HomeComposerModelCapabilityLogic: Sendable {
         return false
     }
 
+    static func validateDraft(
+        attachments: [ChatMessageAttachment],
+        model: ChatModel?,
+        modelName: String
+    ) -> VisualAttachmentDecision {
+        guard hasUnsupportedVisualAttachments(attachments: attachments, model: model) else {
+            return .allowed
+        }
+        return .blocked(message: visualInputWarningMessage(modelName: modelName, attachments: attachments))
+    }
+
+    static func validateNewAttachment(
+        _ attachment: ChatMessageAttachment,
+        model: ChatModel?,
+        modelName: String
+    ) -> VisualAttachmentDecision {
+        switch attachment.kind {
+        case .image where !supportsImageInput(for: model):
+            return .blocked(message: imageInputWarningMessage(modelName: modelName))
+        case .video where !supportsVideoInput(for: model):
+            return .blocked(
+                message: "\(modelName) does not support video input. Choose a video-capable model to attach videos."
+            )
+        case .image, .video, .file, .audio:
+            return .allowed
+        }
+    }
+
     static func visualInputWarningMessage(
         modelName: String,
         attachments: [ChatMessageAttachment]
@@ -40,17 +73,17 @@ nonisolated enum HomeComposerModelCapabilityLogic: Sendable {
 
         switch (hasImages, hasVideos) {
         case (true, true):
-            return "\(modelName) does not support the attached photos and videos. They will not be understood by the model."
+            return "\(modelName) does not support the attached photos and videos. Choose a vision-capable model before sending."
         case (true, false):
             return imageInputWarningMessage(modelName: modelName)
         case (false, true):
-            return "\(modelName) does not support video input. Attached videos will not be understood by the model."
+            return "\(modelName) does not support video input. Choose a video-capable model before sending."
         case (false, false):
             return "\(modelName) does not support this attachment type."
         }
     }
 
     static func imageInputWarningMessage(modelName: String) -> String {
-        "\(modelName) does not support image input. Attached photos will not be understood by the model."
+        "\(modelName) does not support image input. Choose a vision-capable model before sending."
     }
 }

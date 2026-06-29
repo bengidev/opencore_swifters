@@ -101,6 +101,8 @@ extension PersistenceConversationHistoryStore {
                 guard let entity = try Self.fetchConversation(conversationID, in: context) else {
                     return
                 }
+                let messages = entity.messages.compactMap(Self.chatMessage(from:))
+                ChatAttachmentStore.removeAll(at: ChatAttachmentStore.localPaths(in: messages))
                 context.delete(entity)
                 try context.save()
             },

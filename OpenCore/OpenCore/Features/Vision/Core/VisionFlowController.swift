@@ -78,16 +78,30 @@ final class VisionFlowController {
 
         do {
             let data = try dataLoader()
+            try ChatAttachmentSizeLimits.validateImportSize(byteCount: data.count)
+            if kind == .video {
+                try ChatAttachmentSizeLimits.validateVideoWireSize(byteCount: data.count)
+            }
+
+            let fileTextContent: String?
+            if kind == .file {
+                fileTextContent = try ChatPlainTextFileReader.read(from: data)
+            } else {
+                fileTextContent = nil
+            }
+
             let storedURL = try ChatAttachmentStore.save(data: data, suggestedFilename: filename)
             let thumbnail = kind == .image ? thumbnailBuilder(data) : nil
             return ChatMessageAttachment(
                 kind: kind,
                 filename: filename,
                 localPath: storedURL.path,
-                thumbnailJPEGData: thumbnail
+                thumbnailJPEGData: thumbnail,
+                fileTextContent: fileTextContent
             )
         } catch {
-            state.errorMessage = error.localizedDescription
+            state.errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
             return nil
         }
     }

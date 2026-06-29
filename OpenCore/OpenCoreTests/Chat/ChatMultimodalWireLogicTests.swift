@@ -17,8 +17,8 @@ struct ChatMultimodalWireLogicTests {
             localPath: imagePath
         )
 
-        let parts = ChatMultimodalWireLogic.makeContentParts(
-            visibleText: "What is this?",
+        let parts = try ChatMultimodalWireLogic.makeContentParts(
+            modelText: "What is this?",
             attachments: [attachment]
         )
 
@@ -40,8 +40,8 @@ struct ChatMultimodalWireLogicTests {
             localPath: videoPath
         )
 
-        let parts = ChatMultimodalWireLogic.makeContentParts(
-            visibleText: "Describe this clip",
+        let parts = try ChatMultimodalWireLogic.makeContentParts(
+            modelText: "Describe this clip",
             attachments: [attachment]
         )
 
@@ -52,19 +52,61 @@ struct ChatMultimodalWireLogicTests {
     }
 
     @Test("returns nil when there is no visual media")
-    func skipsPlainTextAttachments() {
+    func skipsPlainTextAttachments() throws {
         let attachment = ChatMessageAttachment(
             kind: .file,
             filename: "note.txt",
-            localPath: "/tmp/note.txt"
+            localPath: "/tmp/note.txt",
+            fileTextContent: "hello"
         )
 
-        let parts = ChatMultimodalWireLogic.makeContentParts(
-            visibleText: "Read this",
+        let parts = try ChatMultimodalWireLogic.makeContentParts(
+            modelText: "Read this",
             attachments: [attachment]
         )
 
         #expect(parts == nil)
+    }
+
+    @Test("persists wire payloads at send time")
+    func persistsWirePayloads() throws {
+        let imagePath = try writeTemporaryJPEG()
+        defer { try? FileManager.default.removeItem(atPath: imagePath) }
+
+        let attachment = ChatMessageAttachment(
+            kind: .image,
+            filename: "photo.jpg",
+            localPath: imagePath
+        )
+
+        let prepared = try ChatMultimodalWireLogic.prepareAttachmentsForSend(
+            attachments: [attachment],
+            modelText: "Look"
+        )
+
+        #expect(prepared.first?.wireImageDataURL?.hasPrefix("data:image/jpeg;base64,") == true)
+
+        let parts = try ChatMultimodalWireLogic.makeContentParts(
+            modelText: "Look",
+            attachments: prepared
+        )
+        #expect(parts?.count == 2)
+    }
+
+    @Test("throws when image encoding fails")
+    func throwsOnMissingImageFile() {
+        let attachment = ChatMessageAttachment(
+            kind: .image,
+            filename: "missing.jpg",
+            localPath: "/tmp/does-not-exist-\(UUID().uuidString).jpg"
+        )
+
+        #expect(throws: ChatAttachmentError.self) {
+            try ChatMultimodalWireLogic.makeContentParts(
+                modelText: "",
+                attachments: [attachment]
+            )
+        }
     }
 
     private func writeTemporaryJPEG() throws -> String {

@@ -41,35 +41,12 @@ private struct ChatImageAttachmentIndicatorView: View {
     let attachment: ChatMessageAttachment
     let onRemove: (UUID) -> Void
 
-    @Environment(\.sharedPalette) private var palette
-
-    private let side: CGFloat = 72
-    private let cornerRadius: CGFloat = 12
-
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Group {
-                if let thumbnailJPEGData = attachment.thumbnailJPEGData,
-                   let image = UIImage(data: thumbnailJPEGData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.55 : 0.85))
-                        .overlay {
-                            Image(systemName: "photo")
-                                .foregroundStyle(palette.textTertiary)
-                        }
-                }
-            }
-            .frame(width: side, height: side)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(palette.lineSoft.opacity(0.8), lineWidth: 1)
-            }
-
+            ChatAttachmentThumbnailView(
+                thumbnailJPEGData: attachment.thumbnailJPEGData,
+                localPath: attachment.localPath
+            )
             removeButton
         }
         .accessibilityLabel("Attached image \(attachment.filename)")
@@ -214,21 +191,5 @@ private struct ChatFileAttachmentPillView: View {
                 .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.55 : 0.85))
         }
         .accessibilityLabel("Attached file \(attachment.filename)")
-    }
-}
-
-private struct ChatWaveformBarsView: View {
-    let heights: [Float]
-    let activeColor: Color
-    let idleColor: Color
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 2) {
-            ForEach(Array(heights.enumerated()), id: \.offset) { _, height in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(height > 0.12 ? activeColor : idleColor)
-                    .frame(width: 3, height: max(4, CGFloat(height) * 22))
-            }
-        }
     }
 }
