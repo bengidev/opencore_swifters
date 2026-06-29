@@ -5,6 +5,28 @@ protocol ChatCommand: Sendable {
     func execute(on state: inout ChatFlowState)
 }
 
+struct ChatDraftAttachmentAddedCommand: ChatCommand {
+    let attachment: ChatMessageAttachment
+
+    func execute(on state: inout ChatFlowState) {
+        state.draftAttachments.append(attachment)
+    }
+}
+
+struct ChatDraftAttachmentRemovedCommand: ChatCommand {
+    let id: UUID
+
+    func execute(on state: inout ChatFlowState) {
+        state.draftAttachments.removeAll { $0.id == id }
+    }
+}
+
+struct ChatDraftAttachmentsClearedCommand: ChatCommand {
+    func execute(on state: inout ChatFlowState) {
+        state.draftAttachments.removeAll()
+    }
+}
+
 struct ChatDraftMessageChangedCommand: ChatCommand {
     let text: String
 
@@ -35,6 +57,7 @@ struct ChatClearActiveConversationCommand: ChatCommand {
         state.conversation = nil
         state.messages = []
         state.draftMessage = ""
+        state.draftAttachments = []
         state.isSending = false
         state.streamingStatus = .idle
         state.currentPartialText = ""
@@ -54,6 +77,7 @@ struct ChatReopenConversationCommand: ChatCommand {
         state.conversation = conversation
         state.messages = []
         state.draftMessage = ""
+        state.draftAttachments = []
         state.isSending = false
         state.streamingStatus = .idle
         state.currentPartialText = ""

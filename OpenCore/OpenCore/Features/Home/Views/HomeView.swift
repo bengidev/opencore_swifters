@@ -6,6 +6,7 @@ struct HomeView: View {
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
     @Bindable var speech: SpeechFlowController
+    @Bindable var vision: VisionFlowController
 
     @FocusState private var isComposerFocused: Bool
 
@@ -95,6 +96,7 @@ struct HomeView: View {
             home: home,
             chat: chat,
             speech: speech,
+            vision: vision,
             isComposerFocused: $isComposerFocused
         )
     }
@@ -266,7 +268,8 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
             providerPreference: providerPreference
         ),
         chat: ChatFlowController(providerPreference: providerPreference),
-        speech: SpeechFlowController()
+        speech: SpeechFlowController(),
+        vision: VisionFlowController()
     )
     .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }

@@ -24,6 +24,16 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 - **Context window (display)**: `ContextWindowEstimator`, `ContextWindowUsage`
 - **Speed mode**: `HomeComposerSpeedMode` (standard vs fast provider routing)
 
+## Vision
+
+- **Flow controller**: `VisionFlowController` copies attachments into durable storage and extracts plain-text file content for model input
+- **Composer wiring**: `HomeComposerView` plus-button attachment menu; indicators via `ChatComposerAttachmentsStripView`
+- **Model input**: `ChatModelInputBuilder` sends file content, voice transcripts, and multimodal wire payloads
+
+## Speech
+
+- **Flow controller**: `SpeechFlowController` records voice notes, keeps transcript for model input, and surfaces waveform audio attachments in the composer and chat bubble
+
 ## Settings
 
 - **Flow controller**: `SettingsFlowController` (provider + API key + compaction prefs)
@@ -38,6 +48,7 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 ## Chat
 
 - **Flow controller**: `ChatFlowController` (commands + async send/retry/stream + compaction hook)
+- **Attachments**: `ChatMessageAttachment` stores bubble media; `ChatModelInputBuilder` sends file paths and hidden speech transcripts to the model
 - **Entry view**: `ChatView` (title, thread, error banner; composer stays in Home)
 - **Streaming**: `ChatStreamingClient` + `ChatOpenAICompatibleStreamingClient`
 - **Persistence**: `ChatHistoryClient` maps `ChatMessage` ↔ `SidePanelMessageEntity` (SwiftData)

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Owns composer speech-to-text lifecycle — permissions, listening state, and transcript delivery.
+/// Owns composer speech-to-text lifecycle — permissions, listening state, and voice-note delivery.
 @MainActor
 @Observable
 final class SpeechFlowController {
@@ -18,20 +18,9 @@ final class SpeechFlowController {
         state.errorMessage = nil
     }
 
-    /// Merges the live partial transcript into a composer draft for display while listening.
+    /// Composer draft stays user-typed only; live transcript is not mirrored into the text field.
     func displayedDraft(base: String) -> String {
-        guard state.isListening, !state.partialTranscript.isEmpty else { return base }
-        return Self.mergedDraft(existing: base, transcript: state.partialTranscript)
-    }
-
-    func toggleListening(applyTranscript: @escaping (String) -> Void) async {
-        if state.isListening {
-            let transcript = await finishListening()
-            guard !transcript.isEmpty else { return }
-            applyTranscript(transcript)
-        } else {
-            await startListening()
-        }
+        base
     }
 
     func startListening() async {
@@ -84,26 +73,36 @@ final class SpeechFlowController {
         }
     }
 
-    func stopListening(mergingInto base: String) async -> String {
-        let transcript = await finishListening()
-        return Self.mergedDraft(existing: base, transcript: transcript)
+    func stopListening() async -> ChatMessageAttachment? {
+        let waveformSamples = state.audioLevels
+        let duration = state.elapsedDuration
+        let result = await finishListening()
+        if let attachment = Self.makeVoiceAttachment(
+            from: result,
+            waveformSamples: waveformSamples,
+            duration: duration
+        ) {
+            return attachment
+        }
+        if result?.audioFileURL != nil,
+           result?.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            state.errorMessage = "Voice note could not be transcribed. Try again or type your message."
+        }
+        return nil
     }
 
     func cancelListening() async {
         _ = await finishListening()
     }
 
-    private func finishListening() async -> String {
+    private func finishListening() async -> SpeechRecognitionResult? {
         recognitionTask?.cancel()
         recognitionTask = nil
         stopDurationTimer()
 
-        let final = await recognition.stop()
-        let transcript = (final ?? state.partialTranscript)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
+        let result = await recognition.stop()
         resetListeningPresentation()
-        return transcript
+        return result
     }
 
     private func applyAudioLevel(_ level: Float) {
@@ -140,13 +139,31 @@ final class SpeechFlowController {
         durationTask = nil
     }
 
-    static func mergedDraft(existing: String, transcript: String) -> String {
-        let trimmedTranscript = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTranscript.isEmpty else { return existing }
+    static func makeVoiceAttachment(
+        from result: SpeechRecognitionResult?,
+        waveformSamples: [Float],
+        duration: TimeInterval
+    ) -> ChatMessageAttachment? {
+        guard let result else { return nil }
+        let transcript = result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcript.isEmpty else { return nil }
+        guard let audioFileURL = result.audioFileURL,
+              let storedURL = try? ChatAttachmentStore.save(
+                  copyingFrom: audioFileURL,
+                  suggestedFilename: "voice-note.caf"
+              ) else {
+            return nil
+        }
+        try? FileManager.default.removeItem(at: audioFileURL)
 
-        if existing.isEmpty { return trimmedTranscript }
-        if existing.hasSuffix(" ") { return existing + trimmedTranscript }
-        return existing + " " + trimmedTranscript
+        return ChatMessageAttachment(
+            kind: .audio,
+            filename: "Voice note",
+            localPath: storedURL.path,
+            waveformSamples: waveformSamples,
+            audioDuration: max(duration, result.duration),
+            speechTranscript: transcript
+        )
     }
 
     private static let permissionDeniedMessage =

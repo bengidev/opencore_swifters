@@ -2,10 +2,83 @@ import Foundation
 
 // MARK: - Request body
 
+nonisolated struct ProviderChatContentPart: Encodable, Sendable, Equatable {
+    nonisolated struct ImageURLPayload: Encodable, Sendable, Equatable {
+        let url: String
+    }
+
+    nonisolated struct VideoURLPayload: Encodable, Sendable, Equatable {
+        let url: String
+    }
+
+    let type: String
+    let text: String?
+    let imageURL: ImageURLPayload?
+    let videoURL: VideoURLPayload?
+
+    static func text(_ value: String) -> Self {
+        Self(type: "text", text: value, imageURL: nil, videoURL: nil)
+    }
+
+    static func imageURL(_ dataURL: String) -> Self {
+        Self(
+            type: "image_url",
+            text: nil,
+            imageURL: ImageURLPayload(url: dataURL),
+            videoURL: nil
+        )
+    }
+
+    static func videoURL(_ dataURL: String) -> Self {
+        Self(
+            type: "video_url",
+            text: nil,
+            imageURL: nil,
+            videoURL: VideoURLPayload(url: dataURL)
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type, text
+        case imageURL = "image_url"
+        case videoURL = "video_url"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        switch type {
+        case "text":
+            try container.encode(text, forKey: .text)
+        case "image_url":
+            try container.encode(imageURL, forKey: .imageURL)
+        case "video_url":
+            try container.encode(videoURL, forKey: .videoURL)
+        default:
+            break
+        }
+    }
+}
+
+nonisolated enum ProviderChatMessageContent: Encodable, Sendable, Equatable {
+    case text(String)
+    case parts([ProviderChatContentPart])
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case let .text(string):
+            try container.encode(string)
+        case let .parts(parts):
+            try container.encode(parts)
+        }
+    }
+}
+
 nonisolated struct ProviderChatCompletionsRequestBody: Encodable, Sendable {
     nonisolated struct Message: Encodable, Sendable {
         let role: String
-        let content: String
+        let content: ProviderChatMessageContent
     }
 
     nonisolated struct Reasoning: Encodable, Sendable {

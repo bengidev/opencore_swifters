@@ -6,19 +6,30 @@ nonisolated struct ChatTextMessage: ChatMessagePayload, Equatable, Identifiable,
     var content: String
     var isComplete: Bool
     let timestamp: Date
+    var attachments: [ChatMessageAttachment]
+    /// Provider-facing text. When nil, `content` is sent to the model.
+    var modelContent: String?
 
     nonisolated init(
         id: UUID = UUID(),
         role: ChatMessageRole,
         content: String,
         isComplete: Bool = true,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        attachments: [ChatMessageAttachment] = [],
+        modelContent: String? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.isComplete = isComplete
         self.timestamp = timestamp
+        self.attachments = attachments
+        self.modelContent = modelContent
+    }
+
+    var providerContent: String {
+        modelContent ?? content
     }
 }
 

@@ -120,6 +120,16 @@ private nonisolated struct ProviderCatalogEntry: Decodable, Sendable {
         return supportedParameters?.contains("provider") == true
     }
 
+    var supportsImageInput: Bool {
+        guard let modality = architecture?.modality, !modality.isEmpty else { return false }
+        return modality.localizedCaseInsensitiveContains("image")
+    }
+
+    var supportsVideoInput: Bool {
+        guard let modality = architecture?.modality, !modality.isEmpty else { return false }
+        return modality.localizedCaseInsensitiveContains("video")
+    }
+
     func toChatModel() -> ChatModel {
         ChatModel(
             id: id,
@@ -128,7 +138,9 @@ private nonisolated struct ProviderCatalogEntry: Decodable, Sendable {
             contextLength: resolvedContextLength,
             supportedReasoningEfforts: resolvedReasoningEfforts,
             reasoningMandatory: reasoningMandatory,
-            supportsSpeedModes: supportsSpeedModes
+            supportsSpeedModes: supportsSpeedModes,
+            supportsImageInput: supportsImageInput,
+            supportsVideoInput: supportsVideoInput
         )
     }
 

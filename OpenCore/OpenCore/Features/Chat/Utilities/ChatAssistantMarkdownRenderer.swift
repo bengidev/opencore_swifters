@@ -13,14 +13,15 @@ enum ChatAssistantMarkdownRenderer {
         from markdown: String,
         palette: SharedOpenCorePalette
     ) -> AttributedString {
-        let canCache = !shouldUsePlainFallback(for: markdown)
-        if canCache, let cached = cache.value(for: markdown, isDark: palette.isDark) {
+        let prepared = ChatAssistantMarkdownPreprocessor.normalize(markdown)
+        let canCache = !shouldUsePlainFallback(for: prepared)
+        if canCache, let cached = cache.value(for: prepared, isDark: palette.isDark) {
             return cached
         }
 
-        let rendered = render(markdown: markdown, palette: palette)
+        let rendered = render(prepared: prepared, palette: palette)
         if canCache {
-            cache.store(rendered, for: markdown, isDark: palette.isDark)
+            cache.store(rendered, for: prepared, isDark: palette.isDark)
         }
         return rendered
     }
@@ -32,20 +33,21 @@ enum ChatAssistantMarkdownRenderer {
         NSAttributedString(attributedString(from: markdown, palette: palette))
     }
 
-    private static func render(markdown: String, palette: SharedOpenCorePalette) -> AttributedString {
-        guard !shouldUsePlainFallback(for: markdown) else {
-            return plainBody(markdown, palette: palette)
+    private static func render(prepared: String, palette: SharedOpenCorePalette) -> AttributedString {
+        guard !shouldUsePlainFallback(for: prepared) else {
+            return plainBody(prepared, palette: palette)
         }
 
         do {
             var attributed = try AttributedString(
-                markdown: markdown,
+                markdown: prepared,
                 options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
             )
             applyStyles(to: &attributed, palette: palette)
+            applyParagraphStyles(to: &attributed)
             return attributed
         } catch {
-            return plainBody(markdown, palette: palette)
+            return plainBody(prepared, palette: palette)
         }
     }
 
@@ -53,9 +55,11 @@ enum ChatAssistantMarkdownRenderer {
         var attributed = AttributedString(text)
         let bodyFont = SharedOpenCoreTypography.bodyMDUIFont
         let textColor = UIColor(palette.textPrimary)
+        let bodyStyle = paragraphStyle(lineSpacing: 4, spacingBefore: 0, spacingAfter: 10)
         for run in attributed.runs {
             attributed[run.range].uiKit.font = bodyFont
             attributed[run.range].uiKit.foregroundColor = textColor
+            attributed[run.range].uiKit.paragraphStyle = bodyStyle
         }
         return attributed
     }
@@ -163,6 +167,67 @@ enum ChatAssistantMarkdownRenderer {
                 }
             }
         }
+    }
+
+    private static func applyParagraphStyles(to attributed: inout AttributedString) {
+        let bodyStyle = paragraphStyle(lineSpacing: 4, spacingBefore: 0, spacingAfter: 10)
+        let listStyle = paragraphStyle(lineSpacing: 3, spacingBefore: 2, spacingAfter: 6, headIndent: 18, firstLineHeadIndent: 8)
+
+        for run in attributed.runs {
+            let range = run.range
+            guard let presentationIntent = run.presentationIntent else {
+                attributed[range].uiKit.paragraphStyle = bodyStyle
+                continue
+            }
+
+            var isCodeBlock = false
+            var isListItem = false
+            var headingLevel: Int?
+
+            for component in presentationIntent.components {
+                switch component.kind {
+                case .codeBlock:
+                    isCodeBlock = true
+                case .listItem:
+                    isListItem = true
+                case let .header(level):
+                    headingLevel = level
+                default:
+                    break
+                }
+            }
+
+            if isCodeBlock { continue }
+
+            if let headingLevel {
+                let style = paragraphStyle(
+                    lineSpacing: 2,
+                    spacingBefore: headingLevel <= 2 ? 16 : 12,
+                    spacingAfter: 8
+                )
+                attributed[range].uiKit.paragraphStyle = style
+            } else if isListItem {
+                attributed[range].uiKit.paragraphStyle = listStyle
+            } else {
+                attributed[range].uiKit.paragraphStyle = bodyStyle
+            }
+        }
+    }
+
+    private static func paragraphStyle(
+        lineSpacing: CGFloat,
+        spacingBefore: CGFloat,
+        spacingAfter: CGFloat,
+        headIndent: CGFloat = 0,
+        firstLineHeadIndent: CGFloat = 0
+    ) -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineSpacing = lineSpacing
+        style.paragraphSpacingBefore = spacingBefore
+        style.paragraphSpacing = spacingAfter
+        style.headIndent = headIndent
+        style.firstLineHeadIndent = firstLineHeadIndent
+        return style
     }
 
     private static func headingPointSize(for level: Int) -> CGFloat {

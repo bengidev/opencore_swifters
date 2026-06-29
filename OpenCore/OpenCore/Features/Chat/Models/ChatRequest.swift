@@ -36,7 +36,7 @@ extension ChatRequest {
             .reversed()
             .compactMap { message -> String? in
                 if case let .text(textMessage) = message, textMessage.role == .user {
-                    return textMessage.content
+                    return textMessage.providerContent
                 }
                 return nil
             }

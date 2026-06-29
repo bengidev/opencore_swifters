@@ -10,6 +10,7 @@ struct OpenCoreApp: App {
     @State private var chat: ChatFlowController
     @State private var settings: SettingsFlowController
     @State private var speech: SpeechFlowController
+    @State private var vision: VisionFlowController
 
     @Environment(\.colorScheme) private var systemColorScheme
 
@@ -62,6 +63,7 @@ struct OpenCoreApp: App {
         ))
 
         _speech = State(initialValue: SpeechFlowController(recognition: .live()))
+        _vision = State(initialValue: VisionFlowController())
     }
 
     private static func makeModelContainer() -> ModelContainer {
@@ -104,6 +106,7 @@ struct OpenCoreApp: App {
                 chat: chat,
                 settings: settings,
                 speech: speech,
+                vision: vision,
                 onThemeToggle: toggleTheme
             )
             .environment(\.sharedPalette, resolvedPalette)

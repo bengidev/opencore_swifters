@@ -10,6 +10,9 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var latestTranscript = ""
     private var isInputTapInstalled = false
+    private var audioFile: AVAudioFile?
+    private var recordingURL: URL?
+    private var recordingStartedAt: Date?
 
     init(locale: Locale = .current) {
         let resolvedLocale = Self.resolvedLocale(for: locale) ?? locale
@@ -44,14 +47,21 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         }
     }
 
-    func stop() async -> String? {
+    func stop() async -> SpeechRecognitionResult? {
         await withCheckedContinuation { continuation in
             audioQueue.async {
                 let transcript = self.latestTranscript
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let audioFileURL = self.recordingURL
+                let duration = self.recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
                 self.tearDownCapture()
                 self.latestTranscript = ""
                 continuation.resume(
-                    returning: transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                    returning: SpeechRecognitionResult(
+                        transcript: transcript,
+                        audioFileURL: audioFileURL,
+                        duration: duration
+                    )
                 )
             }
         }
@@ -60,6 +70,10 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     private func beginCapture(continuation: AsyncStream<SpeechRecognitionEvent>.Continuation) throws {
         tearDownCapture()
         latestTranscript = ""
+        recordingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("caf")
+        recordingStartedAt = Date()
 
         guard let speechRecognizer else {
             throw SpeechSystemRecognitionError.localeUnavailable
@@ -155,9 +169,18 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         removeInputTapIfNeeded(from: inputNode)
 
         let tapFormat = Self.recordingTapFormat(for: inputNode)
+        guard let tapFormat else {
+            throw SpeechSystemRecognitionError.audioFormatUnavailable
+        }
+
+        if let recordingURL {
+            audioFile = try AVAudioFile(forWriting: recordingURL, settings: tapFormat.settings)
+        }
+
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: tapFormat) { [weak self] buffer, _ in
             guard let self else { return }
             request.append(buffer)
+            try? self.audioFile?.write(from: buffer)
             let level = Self.rmsLevel(from: buffer)
             self.audioQueue.async {
                 continuation.yield(.audioLevel(level))
@@ -242,6 +265,8 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         let inputNode = audioEngine.inputNode
         removeInputTapIfNeeded(from: inputNode)
 
+        audioFile = nil
+
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -252,6 +277,7 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask = nil
+        recordingStartedAt = nil
         deactivateAudioSession()
     }
 
@@ -339,6 +365,7 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
 enum SpeechSystemRecognitionError: LocalizedError {
     case localeUnavailable
     case recognizerUnavailable
+    case audioFormatUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -346,6 +373,8 @@ enum SpeechSystemRecognitionError: LocalizedError {
             "Speech recognition is not available for your language on this device."
         case .recognizerUnavailable:
             "Speech recognition is temporarily unavailable."
+        case .audioFormatUnavailable:
+            "Could not configure microphone audio for recording."
         }
     }
 }

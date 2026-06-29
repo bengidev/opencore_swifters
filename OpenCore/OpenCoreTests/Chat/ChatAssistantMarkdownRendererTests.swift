@@ -110,6 +110,19 @@ struct ChatAssistantMarkdownRendererTests {
         #expect(font?.fontDescriptor.symbolicTraits.contains(.traitBold) == true)
     }
 
+    @Test("Section labels render as separate paragraphs")
+    func sectionLabelParagraphs() {
+        let markdown = "Review metadata.**Check Context:** Inspect app docs."
+        let rendered = ChatAssistantMarkdownRenderer.nsAttributedString(from: markdown, palette: palette)
+        let string = rendered.string as NSString
+        let contextRange = string.range(of: "Check Context:")
+        #expect(contextRange.location != NSNotFound)
+
+        let style = rendered.attribute(.paragraphStyle, at: contextRange.location, effectiveRange: nil) as? NSParagraphStyle
+        #expect(style != nil)
+        #expect((style?.paragraphSpacingBefore ?? 0) >= 0)
+    }
+
     @Test("Disallowed link schemes are not linked")
     func blockedLinkSchemes() {
         let rendered = ChatAssistantMarkdownRenderer.nsAttributedString(

@@ -101,6 +101,8 @@ extension PersistenceConversationHistoryStore {
                 guard let entity = try Self.fetchConversation(conversationID, in: context) else {
                     return
                 }
+                let messages = entity.messages.compactMap(Self.chatMessage(from:))
+                ChatAttachmentStore.removeAll(at: ChatAttachmentStore.localPaths(in: messages))
                 context.delete(entity)
                 try context.save()
             },
@@ -180,12 +182,15 @@ extension PersistenceConversationHistoryStore {
 
         switch kind {
         case .text:
+            let detail = Self.decodeTextMessageDetail(from: entity.detailJSON)
             return .text(
                 id: entity.id,
                 role: role,
                 content: entity.content,
                 isComplete: entity.isComplete,
-                timestamp: entity.timestamp
+                timestamp: entity.timestamp,
+                attachments: detail?.attachments ?? [],
+                modelContent: detail?.modelContent
             )
         case .thinking:
             return .thinking(
@@ -222,7 +227,11 @@ extension PersistenceConversationHistoryStore {
                 content: text.content,
                 isComplete: text.isComplete,
                 timestamp: text.timestamp,
-                order: order
+                order: order,
+                detailJSON: Self.encodeTextMessageDetail(
+                    attachments: text.attachments,
+                    modelContent: text.modelContent
+                )
             )
         case let .thinking(thinking):
             return SidePanelMessageEntity(
@@ -267,6 +276,10 @@ extension PersistenceConversationHistoryStore {
             entity.content = text.content
             entity.isComplete = text.isComplete
             entity.timestamp = text.timestamp
+            entity.detailJSON = Self.encodeTextMessageDetail(
+                attachments: text.attachments,
+                modelContent: text.modelContent
+            )
         case let .thinking(thinking):
             entity.kindRaw = ChatMessageKind.thinking.rawValue
             entity.role = thinking.role.rawValue
@@ -288,6 +301,27 @@ extension PersistenceConversationHistoryStore {
             entity.timestamp = outputStream.timestamp
             entity.detailJSON = Self.encodeOutputStreamDetail(outputStream.detail)
         }
+    }
+
+    @MainActor
+    private static func encodeTextMessageDetail(
+        attachments: [ChatMessageAttachment],
+        modelContent: String?
+    ) -> String? {
+        guard !attachments.isEmpty || modelContent != nil else { return nil }
+        let detail = ChatTextMessageDetail(attachments: attachments, modelContent: modelContent)
+        guard let data = try? JSONEncoder().encode(detail) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @MainActor
+    private static func decodeTextMessageDetail(from json: String?) -> ChatTextMessageDetail? {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let detail = try? JSONDecoder().decode(ChatTextMessageDetail.self, from: data) else {
+            return nil
+        }
+        return detail
     }
 
     @MainActor
