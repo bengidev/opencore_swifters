@@ -14,6 +14,7 @@ App
 ├── Chat          # Live message stream, send/receive, active conversation
 ├── Settings      # Provider credentials, context compaction prefs
 ├── Speech        # On-device speech-to-text for composer input
+├── Vision        # File/image/video to text for composer input
 ├── About         # App info tab
 └── Home          # Welcome + composer + TabView shell
 ```
@@ -47,6 +48,11 @@ OpenCore/
 │   │   ├── Utilities/
 │   │   └── Views/
 │   ├── Speech/
+│   │   ├── Core/
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Utilities/
+│   ├── Vision/
 │   │   ├── Core/
 │   │   ├── Models/
 │   │   ├── Views/
