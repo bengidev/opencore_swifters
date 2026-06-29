@@ -38,4 +38,39 @@ struct ProviderCatalogParserTests {
 
         #expect(!model.supportsSpeedModes)
     }
+
+    @Test("Catalog image modality enables image input support")
+    func catalogImageModalityEnablesImageInput() throws {
+        let json = Data("""
+        {"id":"openai/gpt-4o","name":"GPT-4o","architecture":{"modality":"text+image"}}
+        """.utf8)
+
+        let model = try ProviderCatalogParser.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsImageInput)
+    }
+
+    @Test("Catalog text-only modality disables image input support")
+    func catalogTextOnlyModalityDisablesImageInput() throws {
+        let json = Data("""
+        {"id":"meta-llama/llama-3.3-70b-instruct:free","name":"Llama 3.3 70B","architecture":{"modality":"text"}}
+        """.utf8)
+
+        let model = try ProviderCatalogParser.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(!model.supportsImageInput)
+        #expect(!model.supportsVideoInput)
+    }
+
+    @Test("Catalog video modality enables video input support")
+    func catalogVideoModalityEnablesVideoInput() throws {
+        let json = Data("""
+        {"id":"google/gemini-2.5-flash","name":"Gemini 2.5 Flash","architecture":{"modality":"text+image+video"}}
+        """.utf8)
+
+        let model = try ProviderCatalogParser.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsImageInput)
+        #expect(model.supportsVideoInput)
+    }
 }
