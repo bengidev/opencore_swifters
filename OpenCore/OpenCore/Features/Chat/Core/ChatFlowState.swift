@@ -5,6 +5,7 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
     var conversation: SidePanelConversation?
     var messages: [ChatMessage] = []
     var draftMessage = ""
+    var draftAttachments: [ChatMessageAttachment] = []
     var isSending = false
     var streamingStatus: ChatStreamingStatus = .idle
     var currentPartialText = ""
@@ -27,6 +28,7 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         conversation: SidePanelConversation? = nil,
         messages: [ChatMessage] = [],
         draftMessage: String = "",
+        draftAttachments: [ChatMessageAttachment] = [],
         isSending: Bool = false,
         streamingStatus: ChatStreamingStatus = .idle,
         currentPartialText: String = "",
@@ -40,6 +42,7 @@ nonisolated struct ChatFlowState: Equatable, Sendable {
         self.conversation = conversation
         self.messages = messages
         self.draftMessage = draftMessage
+        self.draftAttachments = draftAttachments
         self.isSending = isSending
         self.streamingStatus = streamingStatus
         self.currentPartialText = currentPartialText

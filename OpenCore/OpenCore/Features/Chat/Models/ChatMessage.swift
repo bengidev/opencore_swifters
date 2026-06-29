@@ -30,7 +30,9 @@ extension ChatMessage {
         role: ChatMessageRole,
         content: String,
         isComplete: Bool = true,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        attachments: [ChatMessageAttachment] = [],
+        modelContent: String? = nil
     ) -> ChatMessage {
         .text(
             ChatTextMessage(
@@ -38,7 +40,9 @@ extension ChatMessage {
                 role: role,
                 content: content,
                 isComplete: isComplete,
-                timestamp: timestamp
+                timestamp: timestamp,
+                attachments: attachments,
+                modelContent: modelContent
             )
         )
     }
