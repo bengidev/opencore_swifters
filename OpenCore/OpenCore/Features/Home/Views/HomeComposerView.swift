@@ -46,13 +46,7 @@ private struct HomeComposerPromptPanel: View {
     @State private var sendFeedbackTrigger = false
 
     private var composerText: String {
-        if speech.state.isListening, !speech.state.partialTranscript.isEmpty {
-            return SpeechFlowController.mergedDraft(
-                existing: chat.state.draftMessage,
-                transcript: speech.state.partialTranscript
-            )
-        }
-        return chat.state.draftMessage
+        speech.displayedDraft(base: chat.state.draftMessage)
     }
 
     private var canSend: Bool {
@@ -75,9 +69,7 @@ private struct HomeComposerPromptPanel: View {
                 }
             }
 
-            if SpeechRecordingDisplayLogic.shouldShowRecordingIndicator(
-                isListening: speech.state.isListening
-            ) {
+            if speech.state.isListening {
                 SpeechRecordingIndicatorView(
                     elapsedDuration: speech.state.elapsedDuration,
                     audioLevels: speech.state.audioLevels,
@@ -100,6 +92,7 @@ private struct HomeComposerPromptPanel: View {
             .foregroundStyle(palette.textPrimary)
             .lineLimit(1...5)
             .textInputAutocapitalization(.sentences)
+            .disabled(speech.state.isListening)
             .focused(isComposerFocused)
 
             HStack(spacing: 6) {
@@ -147,28 +140,15 @@ private struct HomeComposerPromptPanel: View {
     private func startVoiceInput() {
         dismissKeyboard()
         Task {
-            await speech.toggleListening { transcript in
-                chat.setDraftMessage(
-                    SpeechFlowController.mergedDraft(
-                        existing: chat.state.draftMessage,
-                        transcript: transcript
-                    )
-                )
-            }
+            await speech.startListening()
         }
     }
 
     private func stopVoiceInput() {
         dismissKeyboard()
         Task {
-            await speech.stopListening { transcript in
-                chat.setDraftMessage(
-                    SpeechFlowController.mergedDraft(
-                        existing: chat.state.draftMessage,
-                        transcript: transcript
-                    )
-                )
-            }
+            let merged = await speech.stopListening(mergingInto: chat.state.draftMessage)
+            chat.setDraftMessage(merged)
         }
     }
 
@@ -668,7 +648,6 @@ private struct HomeComposerStopRecordingButton: View {
 private struct HomeComposerIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
-    var isActive = false
     let action: () -> Void
 
     @Environment(\.sharedPalette) private var palette
@@ -677,7 +656,7 @@ private struct HomeComposerIconButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isActive ? palette.accentPrimary : palette.textTertiary)
+                .foregroundStyle(palette.textTertiary)
                 .frame(width: 30, height: 30)
         }
         .buttonStyle(.plain)
