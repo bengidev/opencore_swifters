@@ -5,6 +5,7 @@ struct HomeView: View {
     @Bindable var sidePanel: SidePanelFlowController
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
+    @Bindable var speech: SpeechFlowController
 
     @FocusState private var isComposerFocused: Bool
 
@@ -93,6 +94,7 @@ struct HomeView: View {
         HomeComposerView(
             home: home,
             chat: chat,
+            speech: speech,
             isComposerFocused: $isComposerFocused
         )
     }
@@ -257,13 +259,14 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 #Preview {
     let credentialStore = CredentialInMemoryStore()
     let providerPreference = SidePanelInMemoryProviderPreferenceStore()
-    return HomeView(
+    HomeView(
         sidePanel: SidePanelFlowController(),
         home: HomeFlowController(
             credentialStore: credentialStore,
             providerPreference: providerPreference
         ),
-        chat: ChatFlowController(providerPreference: providerPreference)
+        chat: ChatFlowController(providerPreference: providerPreference),
+        speech: SpeechFlowController()
     )
     .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }

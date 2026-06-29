@@ -4,6 +4,7 @@ import SwiftUI
 struct HomeComposerView: View {
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
+    @Bindable var speech: SpeechFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
@@ -13,6 +14,7 @@ struct HomeComposerView: View {
             HomeComposerPromptPanel(
                 home: home,
                 chat: chat,
+                speech: speech,
                 isComposerFocused: isComposerFocused
             )
             HomeComposerContextRail(
@@ -37,14 +39,20 @@ struct HomeComposerView: View {
 private struct HomeComposerPromptPanel: View {
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
+    @Bindable var speech: SpeechFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
     @State private var sendFeedbackTrigger = false
 
+    private var composerText: String {
+        speech.displayedDraft(base: chat.state.draftMessage)
+    }
+
     private var canSend: Bool {
-        !chat.state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !chat.state.isSending
+            && !speech.state.isListening
             && home.state.hasAPIKey
             && home.state.hasSelectedModel
     }
@@ -55,10 +63,26 @@ private struct HomeComposerPromptPanel: View {
                 MissingAPIKeyHint { home.openSettingsTab() }
             }
 
+            if let errorMessage = speech.state.errorMessage {
+                SpeechInputErrorHint(message: errorMessage) {
+                    speech.clearError()
+                }
+            }
+
+            if speech.state.isListening {
+                SpeechRecordingIndicatorView(
+                    elapsedDuration: speech.state.elapsedDuration,
+                    audioLevels: speech.state.audioLevels,
+                    isVoiceActive: speech.state.isVoiceActive,
+                    onCancel: cancelVoiceInput
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             TextField(
                 "Ask anything... @files, $skills, /commands",
                 text: Binding(
-                    get: { chat.state.draftMessage },
+                    get: { composerText },
                     set: { chat.setDraftMessage($0) }
                 ),
                 axis: .vertical
@@ -68,6 +92,7 @@ private struct HomeComposerPromptPanel: View {
             .foregroundStyle(palette.textPrimary)
             .lineLimit(1...5)
             .textInputAutocapitalization(.sentences)
+            .disabled(speech.state.isListening)
             .focused(isComposerFocused)
 
             HStack(spacing: 6) {
@@ -79,11 +104,15 @@ private struct HomeComposerPromptPanel: View {
 
                 Spacer(minLength: 4)
 
-                HomeComposerIconButton(
-                    systemImage: "mic",
-                    accessibilityLabel: "Start voice input",
-                    action: dismissKeyboard
-                )
+                if speech.state.isListening {
+                    HomeComposerStopRecordingButton(action: stopVoiceInput)
+                } else {
+                    HomeComposerIconButton(
+                        systemImage: "mic",
+                        accessibilityLabel: "Start voice input",
+                        action: startVoiceInput
+                    )
+                }
 
                 HomeComposerSendButton(canSend: canSend, action: send)
             }
@@ -93,6 +122,7 @@ private struct HomeComposerPromptPanel: View {
         .padding(.bottom, 10)
         .homeComposerGlass(cornerRadius: 28, shadowOpacity: 0.16)
         .sensoryFeedback(.success, trigger: sendFeedbackTrigger)
+        .animation(.easeInOut(duration: 0.18), value: speech.state.isListening)
     }
 
     private func send() {
@@ -104,6 +134,28 @@ private struct HomeComposerPromptPanel: View {
                 providerSortBy: home.state.activeProviderSortBy,
                 reasoningEffort: home.state.activeReasoningEffort
             )
+        }
+    }
+
+    private func startVoiceInput() {
+        dismissKeyboard()
+        Task {
+            await speech.startListening()
+        }
+    }
+
+    private func stopVoiceInput() {
+        dismissKeyboard()
+        Task {
+            let merged = await speech.stopListening(mergingInto: chat.state.draftMessage)
+            chat.setDraftMessage(merged)
+        }
+    }
+
+    private func cancelVoiceInput() {
+        dismissKeyboard()
+        Task {
+            await speech.cancelListening()
         }
     }
 
@@ -536,6 +588,63 @@ private struct HomeComposerContextUsagePopover: View {
     }
 }
 
+private struct SpeechInputErrorHint: View {
+    let message: String
+    let dismiss: () -> Void
+
+    @Environment(\.sharedPalette) private var palette
+
+    var body: some View {
+        Button(action: dismiss) {
+            HStack(spacing: 8) {
+                Image(systemName: "mic.slash")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+
+                Text(message)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(palette.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.5 : 0.8))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(message)
+    }
+}
+
+private struct HomeComposerStopRecordingButton: View {
+    let action: () -> Void
+
+    @Environment(\.sharedPalette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.55 : 0.9))
+                    .frame(width: 30, height: 30)
+
+                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    .fill(Color.red.opacity(0.92))
+                    .frame(width: 12, height: 12)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Stop voice input")
+    }
+}
+
 private struct HomeComposerIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
@@ -657,6 +766,7 @@ private struct HomeComposerModelButton: View {
                         providerPreference: SidePanelInMemoryProviderPreferenceStore()
                     ),
                     chat: ChatFlowController(),
+                    speech: SpeechFlowController(),
                     isComposerFocused: $isComposerFocused
                 )
             }

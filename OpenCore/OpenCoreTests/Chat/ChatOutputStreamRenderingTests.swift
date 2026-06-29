@@ -59,7 +59,7 @@ struct ChatOutputStreamDetailTests {
 
 /// Output-stream streaming regression tests for `ChatFlowController`.
 @MainActor
-@Suite("Chat Output Stream Streaming")
+@Suite("Chat Output Stream Streaming", .serialized)
 struct ChatOutputStreamStreamingTests {
     private func outputStreamMessages(_ state: ChatFlowState) -> [ChatOutputStreamMessage] {
         state.messages.compactMap {
@@ -168,43 +168,36 @@ struct ChatOutputStreamStreamingTests {
 
     @Test("Cancel mid-stream finalizes output stream as failed")
     func cancelMidStreamFinalizes() async {
-        final class AppendedMessages: @unchecked Sendable {
+        final class OutputStreamAppendTracker: @unchecked Sendable {
             private let lock = NSLock()
-            private var messages: [ChatMessage] = []
+            private var outputStreams: [ChatOutputStreamMessage] = []
 
             func append(_ message: ChatMessage) {
+                guard case let .outputStream(stream) = message else { return }
                 lock.lock()
-                messages.append(message)
+                outputStreams.append(stream)
                 lock.unlock()
             }
 
-            func snapshot() -> [ChatMessage] {
+            func snapshot() -> [ChatOutputStreamMessage] {
                 lock.lock()
                 defer { lock.unlock() }
-                return messages
+                return outputStreams
             }
         }
 
-        let appended = AppendedMessages()
+        let appended = OutputStreamAppendTracker()
         let preference = SidePanelInMemoryProviderPreferenceStore(
             preference: SidePanelProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
-        let streaming = ChatStreamingClient(stream: { _ in
-            AsyncStream { continuation in
-                continuation.yield(.outputStreamBegan(command: "npm test", cwd: nil))
-                continuation.yield(.outputStreamDelta("partial\n"))
-                Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    continuation.yield(.done)
-                    continuation.finish()
-                }
-            }
-        })
         let controller = ChatFlowController(
-            streaming: streaming,
+            streaming: ChatCannedEventClient(events: [
+                .outputStreamBegan(command: "npm test", cwd: nil),
+                .outputStreamDelta("partial\n"),
+            ]).asHangingStreamingClient,
             history: ChatHistoryClient(
                 loadMessages: { _ in [] },
                 saveConversation: { _ in },
@@ -216,15 +209,25 @@ struct ChatOutputStreamStreamingTests {
         )
 
         controller.setDraftMessage("Run tests")
-        let sendTask = Task { await controller.sendMessage() }
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        let sendTask = Task { @MainActor in
+            await controller.sendMessage()
+        }
+
+        for _ in 0..<100 {
+            if controller.state.streamingOutputStreamID != nil { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(controller.state.streamingOutputStreamID != nil)
+
         controller.clearActiveConversation()
         await sendTask.value
 
-        let persisted = appended.snapshot().compactMap { message -> ChatOutputStreamMessage? in
-            if case let .outputStream(outputStream) = message { return outputStream }
-            return nil
+        for _ in 0..<100 {
+            if !appended.snapshot().isEmpty { break }
+            try? await Task.sleep(for: .milliseconds(10))
         }
+
+        let persisted = appended.snapshot()
         #expect(persisted.count == 1)
         #expect(persisted.first?.command == "npm test")
         #expect(persisted.first?.detail.outputTail == "partial\n")
