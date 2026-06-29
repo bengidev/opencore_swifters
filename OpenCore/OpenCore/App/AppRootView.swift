@@ -8,6 +8,7 @@ struct AppRootView: View {
     @Bindable var chat: ChatFlowController
     @Bindable var settings: SettingsFlowController
     @Bindable var speech: SpeechFlowController
+    @Bindable var vision: VisionFlowController
 
     let onThemeToggle: () -> Void
 
@@ -19,7 +20,8 @@ struct AppRootView: View {
                     home: home,
                     chat: chat,
                     settings: settings,
-                    speech: speech
+                    speech: speech,
+                    vision: vision
                 )
             } else {
                 OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)

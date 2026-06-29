@@ -7,6 +7,7 @@ struct HomeTabShellView: View {
     @Bindable var chat: ChatFlowController
     @Bindable var settings: SettingsFlowController
     @Bindable var speech: SpeechFlowController
+    @Bindable var vision: VisionFlowController
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.colorScheme) private var colorScheme
@@ -17,7 +18,7 @@ struct HomeTabShellView: View {
             get: { home.state.selectedTab },
             set: { home.selectTab($0) }
         )) {
-            HomeView(sidePanel: sidePanel, home: home, chat: chat, speech: speech)
+            HomeView(sidePanel: sidePanel, home: home, chat: chat, speech: speech, vision: vision)
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(HomeTab.home)
 
@@ -84,7 +85,8 @@ struct HomeTabShellView: View {
             credentialStore: credentialStore,
             providerPreference: providerPreference
         ),
-        speech: SpeechFlowController()
+        speech: SpeechFlowController(),
+        vision: VisionFlowController()
     )
     .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }
