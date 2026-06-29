@@ -53,6 +53,24 @@ final class ChatFlowController {
         dispatch(ChatDraftMessageChangedCommand(text: text))
     }
 
+    func addDraftAttachment(_ attachment: ChatMessageAttachment) {
+        dispatch(ChatDraftAttachmentAddedCommand(attachment: attachment))
+    }
+
+    func removeDraftAttachment(id: UUID) {
+        if let attachment = state.draftAttachments.first(where: { $0.id == id }) {
+            ChatAttachmentStore.remove(at: attachment.localPath)
+        }
+        dispatch(ChatDraftAttachmentRemovedCommand(id: id))
+    }
+
+    func clearDraftAttachments() {
+        for attachment in state.draftAttachments {
+            ChatAttachmentStore.remove(at: attachment.localPath)
+        }
+        dispatch(ChatDraftAttachmentsClearedCommand())
+    }
+
     func dismissError() {
         dispatch(ChatErrorDismissedCommand())
     }
@@ -80,12 +98,14 @@ final class ChatFlowController {
         let messages: [ChatMessage]
         let conversation: SidePanelConversation?
         let draftMessage: String
+        let draftAttachments: [ChatMessageAttachment]
     }
 
     func sendMessage(providerSortBy: String? = nil, reasoningEffort: String? = nil) async {
-        let content = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visibleText = state.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = state.draftAttachments
         let preference = providerPreference.preference()
-        guard !content.isEmpty,
+        guard (!visibleText.isEmpty || !attachments.isEmpty),
               !state.isSending,
               let modelID = preference.modelID else {
             return
@@ -94,28 +114,39 @@ final class ChatFlowController {
         let snapshot = SendTurnSnapshot(
             messages: state.messages,
             conversation: state.conversation,
-            draftMessage: state.draftMessage
+            draftMessage: state.draftMessage,
+            draftAttachments: attachments
         )
 
         let timestamp = now()
+        let modelContent = ChatModelInputBuilder.modelContent(
+            visibleText: visibleText,
+            attachments: attachments
+        )
         let userMessage = ChatMessage.text(
             id: makeID(),
             role: .user,
-            content: content,
-            timestamp: timestamp
+            content: visibleText,
+            timestamp: timestamp,
+            attachments: attachments,
+            modelContent: modelContent
         )
         state.draftMessage = ""
+        state.draftAttachments = []
         state.messages.append(userMessage)
 
         if state.conversation == nil {
             state.conversation = SidePanelConversation(
                 id: makeID(),
-                title: Self.conversationTitle(for: content),
+                title: Self.conversationTitle(visibleText: visibleText, attachments: attachments),
                 createdAt: timestamp,
                 updatedAt: timestamp
             )
         } else {
-            state.conversation?.title = Self.conversationTitle(for: content)
+            state.conversation?.title = Self.conversationTitle(
+                visibleText: visibleText,
+                attachments: attachments
+            )
             state.conversation?.updatedAt = timestamp
         }
 
@@ -490,6 +521,7 @@ final class ChatFlowController {
         state.messages = snapshot.messages
         state.conversation = snapshot.conversation
         state.draftMessage = snapshot.draftMessage
+        state.draftAttachments = snapshot.draftAttachments
         state.streamingStatus = .failed
         state.isSending = false
     }
@@ -523,10 +555,18 @@ final class ChatFlowController {
         }
     }
 
-    private static func conversationTitle(for content: String) -> String {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "New chat" }
-        if trimmed.count <= 40 { return trimmed }
-        return String(trimmed.prefix(40)) + "…"
+    private static func conversationTitle(
+        visibleText: String,
+        attachments: [ChatMessageAttachment]
+    ) -> String {
+        let trimmed = visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            if trimmed.count <= 40 { return trimmed }
+            return String(trimmed.prefix(40)) + "…"
+        }
+        if let firstAttachment = attachments.first {
+            return firstAttachment.filename
+        }
+        return "New chat"
     }
 }
