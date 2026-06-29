@@ -59,7 +59,16 @@ nonisolated enum SpeechRecordingDisplayLogic: Sendable {
         }
     }
 
-    static func shouldShowRecordingIndicator(isListening: Bool) -> Bool {
-        isListening
+    static func appendWaveformSample(
+        _ level: Float,
+        to levels: [Float],
+        capacity: Int
+    ) -> [Float] {
+        var updated = levels
+        updated.append(level)
+        if updated.count > capacity {
+            updated.removeFirst(updated.count - capacity)
+        }
+        return updated
     }
 }
