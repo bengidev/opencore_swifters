@@ -1,10 +1,13 @@
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Prompt panel with context rail, speed/model chips, and send action.
 struct HomeComposerView: View {
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
     @Bindable var speech: SpeechFlowController
+    @Bindable var vision: VisionFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
@@ -15,6 +18,7 @@ struct HomeComposerView: View {
                 home: home,
                 chat: chat,
                 speech: speech,
+                vision: vision,
                 isComposerFocused: isComposerFocused
             )
             HomeComposerContextRail(
@@ -40,19 +44,48 @@ private struct HomeComposerPromptPanel: View {
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
     @Bindable var speech: SpeechFlowController
+    @Bindable var vision: VisionFlowController
     let isComposerFocused: FocusState<Bool>.Binding
 
     @Environment(\.sharedPalette) private var palette
     @State private var sendFeedbackTrigger = false
+    @State private var isAttachmentMenuPresented = false
+    @State private var isFileImporterPresented = false
+    @State private var isPhotoPickerPresented = false
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var importTask: Task<Void, Never>?
+    @State private var isVisualCapabilityWarningPresented = false
+
+    private var selectedModel: ChatModel? {
+        home.state.selectedModelOption?.model
+    }
+
+    private var hasUnsupportedVisualAttachments: Bool {
+        HomeComposerModelCapabilityLogic.hasUnsupportedVisualAttachments(
+            attachments: chat.state.draftAttachments,
+            model: selectedModel
+        )
+    }
+
+    private var visualCapabilityWarningMessage: String {
+        let modelName = home.state.selectedModelOption?.title ?? "This model"
+        return HomeComposerModelCapabilityLogic.visualInputWarningMessage(
+            modelName: modelName,
+            attachments: chat.state.draftAttachments
+        )
+    }
 
     private var composerText: String {
         speech.displayedDraft(base: chat.state.draftMessage)
     }
 
     private var canSend: Bool {
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasVisibleText = !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasAttachments = !chat.state.draftAttachments.isEmpty
+        return (hasVisibleText || hasAttachments)
             && !chat.state.isSending
             && !speech.state.isListening
+            && !vision.state.isProcessing
             && home.state.hasAPIKey
             && home.state.hasSelectedModel
     }
@@ -67,6 +100,27 @@ private struct HomeComposerPromptPanel: View {
                 SpeechInputErrorHint(message: errorMessage) {
                     speech.clearError()
                 }
+            }
+
+            if let errorMessage = vision.state.errorMessage {
+                VisionInputErrorHint(message: errorMessage) {
+                    vision.clearError()
+                }
+            }
+
+            if !chat.state.draftAttachments.isEmpty {
+                ChatComposerAttachmentsStripView(
+                    attachments: chat.state.draftAttachments,
+                    onRemove: { chat.removeDraftAttachment(id: $0) }
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            if vision.state.isProcessing, let statusMessage = vision.state.statusMessage {
+                VisionProcessingIndicatorView(statusMessage: statusMessage) {
+                    cancelMediaImport()
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
             if speech.state.isListening {
@@ -88,18 +142,21 @@ private struct HomeComposerPromptPanel: View {
                 axis: .vertical
             )
             .frame(minHeight: 50)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .font(.system(size: 15, weight: .regular))
             .foregroundStyle(palette.textPrimary)
             .lineLimit(1...5)
             .textInputAutocapitalization(.sentences)
-            .disabled(speech.state.isListening)
+            .disabled(speech.state.isListening || vision.state.isProcessing)
             .focused(isComposerFocused)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: focusComposerIfAllowed)
 
             HStack(spacing: 6) {
                 HomeComposerIconButton(
                     systemImage: "plus",
                     accessibilityLabel: "Add attachment",
-                    action: dismissKeyboard
+                    action: presentAttachmentMenu
                 )
 
                 Spacer(minLength: 4)
@@ -123,12 +180,63 @@ private struct HomeComposerPromptPanel: View {
         .homeComposerGlass(cornerRadius: 28, shadowOpacity: 0.16)
         .sensoryFeedback(.success, trigger: sendFeedbackTrigger)
         .animation(.easeInOut(duration: 0.18), value: speech.state.isListening)
+        .animation(.easeInOut(duration: 0.18), value: chat.state.draftAttachments.count)
+        .animation(.easeInOut(duration: 0.18), value: vision.state.isProcessing)
+        .confirmationDialog(
+            "Add to message",
+            isPresented: $isAttachmentMenuPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Import File") {
+                isFileImporterPresented = true
+            }
+            Button("Photo Library") {
+                isPhotoPickerPresented = true
+            }
+        } message: {
+            Text("Attach a file or photo to include with your message.")
+        }
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: [.plainText, .text, .image, .movie, .video, .mpeg4Movie, .quickTimeMovie],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
+        .photosPicker(
+            isPresented: $isPhotoPickerPresented,
+            selection: $photoPickerItem,
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
+        )
+        .onChange(of: photoPickerItem) { _, newItem in
+            guard let newItem else { return }
+            handlePhotoPickerItem(newItem)
+        }
+        .alert(
+            "Attachment not supported",
+            isPresented: $isVisualCapabilityWarningPresented
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(visualCapabilityWarningMessage)
+        }
     }
 
     private func send() {
         guard canSend else { return }
+        if hasUnsupportedVisualAttachments {
+            isVisualCapabilityWarningPresented = true
+            return
+        }
+        performSend()
+    }
+
+    private func performSend() {
+        guard canSend else { return }
         dismissKeyboard()
         sendFeedbackTrigger.toggle()
+        vision.dismissProcessingPresentation()
         Task {
             await chat.sendMessage(
                 providerSortBy: home.state.activeProviderSortBy,
@@ -139,6 +247,10 @@ private struct HomeComposerPromptPanel: View {
 
     private func startVoiceInput() {
         dismissKeyboard()
+        if hasUnsupportedVisualAttachments {
+            isVisualCapabilityWarningPresented = true
+            return
+        }
         Task {
             await speech.startListening()
         }
@@ -147,8 +259,9 @@ private struct HomeComposerPromptPanel: View {
     private func stopVoiceInput() {
         dismissKeyboard()
         Task {
-            let merged = await speech.stopListening(mergingInto: chat.state.draftMessage)
-            chat.setDraftMessage(merged)
+            if let attachment = await speech.stopListening() {
+                chat.addDraftAttachment(attachment)
+            }
         }
     }
 
@@ -159,8 +272,83 @@ private struct HomeComposerPromptPanel: View {
         }
     }
 
+    private func presentAttachmentMenu() {
+        dismissKeyboard()
+        isAttachmentMenuPresented = true
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case let .success(urls) = result, let url = urls.first else { return }
+        importTask?.cancel()
+        importTask = Task {
+            if let attachment = await vision.attachFile(at: url) {
+                guard !Task.isCancelled else { return }
+                if shouldWarnBeforeAdding(attachment) {
+                    ChatAttachmentStore.remove(at: attachment.localPath)
+                    isVisualCapabilityWarningPresented = true
+                    return
+                }
+                chat.addDraftAttachment(attachment)
+            }
+        }
+    }
+
+    private func handlePhotoPickerItem(_ item: PhotosPickerItem) {
+        photoPickerItem = nil
+        importTask?.cancel()
+        importTask = Task {
+            defer { photoPickerItem = nil }
+            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+            let filename = photoFilename(for: item)
+            if let attachment = await vision.attachImportedData(
+                data,
+                filename: filename,
+                contentType: item.supportedContentTypes.first
+            ) {
+                guard !Task.isCancelled else { return }
+                if shouldWarnBeforeAdding(attachment) {
+                    ChatAttachmentStore.remove(at: attachment.localPath)
+                    isVisualCapabilityWarningPresented = true
+                    return
+                }
+                chat.addDraftAttachment(attachment)
+            }
+        }
+    }
+
+    private func shouldWarnBeforeAdding(_ attachment: ChatMessageAttachment) -> Bool {
+        let model = selectedModel
+        switch attachment.kind {
+        case .image:
+            return !HomeComposerModelCapabilityLogic.supportsImageInput(for: model)
+        case .video:
+            return !HomeComposerModelCapabilityLogic.supportsVideoInput(for: model)
+        case .file, .audio:
+            return false
+        }
+    }
+
+    private func photoFilename(for item: PhotosPickerItem) -> String {
+        if let contentType = item.supportedContentTypes.first,
+           let ext = contentType.preferredFilenameExtension {
+            return "photo.\(ext)"
+        }
+        return item.itemIdentifier ?? "photo"
+    }
+
+    private func cancelMediaImport() {
+        importTask?.cancel()
+        importTask = nil
+        vision.dismissProcessingPresentation()
+    }
+
     private func dismissKeyboard() {
         isComposerFocused.wrappedValue = false
+    }
+
+    private func focusComposerIfAllowed() {
+        guard !speech.state.isListening, !vision.state.isProcessing else { return }
+        isComposerFocused.wrappedValue = true
     }
 }
 
@@ -588,6 +776,41 @@ private struct HomeComposerContextUsagePopover: View {
     }
 }
 
+private struct VisionInputErrorHint: View {
+    let message: String
+    let dismiss: () -> Void
+
+    @Environment(\.sharedPalette) private var palette
+
+    var body: some View {
+        Button(action: dismiss) {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+
+                Text(message)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(palette.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.5 : 0.8))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(message)
+    }
+}
+
 private struct SpeechInputErrorHint: View {
     let message: String
     let dismiss: () -> Void
@@ -767,6 +990,7 @@ private struct HomeComposerModelButton: View {
                     ),
                     chat: ChatFlowController(),
                     speech: SpeechFlowController(),
+                    vision: VisionFlowController(),
                     isComposerFocused: $isComposerFocused
                 )
             }
