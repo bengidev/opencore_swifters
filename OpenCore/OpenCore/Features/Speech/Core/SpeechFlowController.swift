@@ -70,6 +70,12 @@ final class SpeechFlowController {
         let stream = recognition.start()
         recognitionTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                stopDurationTimer()
+                if state.isListening {
+                    resetListeningPresentation()
+                }
+            }
             for await event in stream {
                 guard !Task.isCancelled else { return }
                 switch event {

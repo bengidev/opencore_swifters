@@ -59,7 +59,7 @@ struct ChatOutputStreamDetailTests {
 
 /// Output-stream streaming regression tests for `ChatFlowController`.
 @MainActor
-@Suite("Chat Output Stream Streaming")
+@Suite("Chat Output Stream Streaming", .serialized)
 struct ChatOutputStreamStreamingTests {
     private func outputStreamMessages(_ state: ChatFlowState) -> [ChatOutputStreamMessage] {
         state.messages.compactMap {
@@ -209,20 +209,22 @@ struct ChatOutputStreamStreamingTests {
         )
 
         controller.setDraftMessage("Run tests")
-        let sendTask = Task { await controller.sendMessage() }
+        let sendTask = Task { @MainActor in
+            await controller.sendMessage()
+        }
 
-        for _ in 0..<200 {
+        for _ in 0..<100 {
             if controller.state.streamingOutputStreamID != nil { break }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(10))
         }
         #expect(controller.state.streamingOutputStreamID != nil)
 
         controller.clearActiveConversation()
         await sendTask.value
 
-        for _ in 0..<200 {
+        for _ in 0..<100 {
             if !appended.snapshot().isEmpty { break }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(10))
         }
 
         let persisted = appended.snapshot()

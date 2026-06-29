@@ -7,6 +7,7 @@ private final class SpeechRecognitionTestHarness: @unchecked Sendable {
     var authorizationStatus: SpeechAuthorizationStatus = .authorized
     var requestAuthorizationResult: SpeechAuthorizationStatus?
     var events: [SpeechRecognitionEvent] = []
+    var hangsOpenAfterEvents = false
     var stopResult: String?
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
@@ -20,11 +21,14 @@ private final class SpeechRecognitionTestHarness: @unchecked Sendable {
             start: { [self] in
                 startCallCount += 1
                 let events = events
+                let hangsOpen = hangsOpenAfterEvents
                 return AsyncStream { continuation in
                     for event in events {
                         continuation.yield(event)
                     }
-                    continuation.finish()
+                    if !hangsOpen {
+                        continuation.finish()
+                    }
                 }
             },
             stop: { [self] in
@@ -35,7 +39,7 @@ private final class SpeechRecognitionTestHarness: @unchecked Sendable {
     }
 }
 
-@Suite("Speech Flow Controller")
+@Suite("Speech Flow Controller", .serialized)
 @MainActor
 struct SpeechFlowControllerTests {
     @Test("starts idle without listening or transcript")
@@ -50,6 +54,7 @@ struct SpeechFlowControllerTests {
     @Test("toggle starts listening when authorized")
     func startsListeningWhenAuthorized() async {
         let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
         harness.events = [.ready]
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
@@ -58,11 +63,14 @@ struct SpeechFlowControllerTests {
 
         #expect(controller.state.isListening == true)
         #expect(harness.startCallCount == 1)
+
+        await controller.cancelListening()
     }
 
     @Test("partial recognition updates visible transcript")
     func updatesPartialTranscript() async {
         let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
         harness.events = [.ready, .partial("hello")]
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
@@ -70,6 +78,8 @@ struct SpeechFlowControllerTests {
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(controller.state.partialTranscript == "hello")
+
+        await controller.cancelListening()
     }
 
     @Test("background recognition events update state on main actor")
@@ -83,7 +93,6 @@ struct SpeechFlowControllerTests {
                         Task.detached {
                             continuation.yield(.ready)
                             continuation.yield(.partial("from background"))
-                            continuation.finish()
                         }
                     }
                 },
@@ -92,14 +101,20 @@ struct SpeechFlowControllerTests {
         )
 
         await controller.toggleListening { _ in }
-        try? await Task.sleep(for: .milliseconds(50))
+        for _ in 0..<100 {
+            if controller.state.partialTranscript == "from background" { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
 
         #expect(controller.state.partialTranscript == "from background")
+
+        await controller.cancelListening()
     }
 
     @Test("stopping listening applies final transcript to draft")
     func appliesFinalTranscript() async {
         let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
         harness.stopResult = "send this"
         harness.events = [.ready]
         let controller = SpeechFlowController(recognition: harness.makeClient())
@@ -130,6 +145,7 @@ struct SpeechFlowControllerTests {
     @Test("cancel listening discards transcript without applying")
     func cancelListeningDiscardsTranscript() async {
         let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
         harness.events = [.ready, .partial("discard me")]
         harness.stopResult = "discard me"
         let controller = SpeechFlowController(recognition: harness.makeClient())
@@ -157,7 +173,6 @@ struct SpeechFlowControllerTests {
                         continuation.yield(.ready)
                         continuation.yield(.audioLevel(0.001))
                         continuation.yield(.audioLevel(0.05))
-                        continuation.finish()
                     }
                 },
                 stop: { nil }
@@ -165,11 +180,16 @@ struct SpeechFlowControllerTests {
         )
 
         await controller.toggleListening { _ in }
-        try? await Task.sleep(for: .milliseconds(50))
+        for _ in 0..<100 {
+            if controller.state.audioLevels.count >= 2 { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
 
         #expect(controller.state.isVoiceActive == true)
         #expect(controller.state.audioLevels.count == 2)
         #expect(controller.state.audioLevels.last == 0.05)
+
+        await controller.cancelListening()
     }
 
     @Test("recognition failure before ready keeps indicator hidden")
