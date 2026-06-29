@@ -5,12 +5,6 @@ import Testing
 
 @Suite("Speech Recognition Fallback Logic")
 struct SpeechRecognitionFallbackLogicTests {
-    @Test("prefers on-device when supported")
-    func prefersOnDeviceWhenSupported() {
-        #expect(SpeechRecognitionFallbackLogic.prefersOnDeviceRecognition(supportsOnDevice: true) == true)
-        #expect(SpeechRecognitionFallbackLogic.prefersOnDeviceRecognition(supportsOnDevice: false) == false)
-    }
-
     @Test("retries with server after on-device initialization failure")
     func retriesAfterOnDeviceInitializationFailure() {
         #expect(
@@ -40,7 +34,8 @@ struct SpeechRecognitionFallbackLogicTests {
     @Test("maps initialization errors to a clearer message")
     func mapsInitializationErrors() {
         let message = SpeechRecognitionFallbackLogic.userFacingErrorMessage(
-            systemMessage: "Failed to initialize recognizer"
+            systemMessage: "Failed to initialize recognizer",
+            attemptedOnDevice: true
         )
 
         #expect(message.contains("network"))

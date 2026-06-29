@@ -48,10 +48,15 @@ struct SpeechRecordingDisplayLogicTests {
         #expect(heights[2] > heights[1])
     }
 
-    @Test("recording indicator visibility follows listening state")
-    func recordingIndicatorVisibility() {
-        #expect(SpeechRecordingDisplayLogic.shouldShowRecordingIndicator(isListening: false) == false)
-        #expect(SpeechRecordingDisplayLogic.shouldShowRecordingIndicator(isListening: true) == true)
+    @Test("appends waveform samples with ring-buffer capacity")
+    func appendWaveformSample() {
+        let capacity = 3
+        let first = SpeechRecordingDisplayLogic.appendWaveformSample(0.1, to: [], capacity: capacity)
+        let second = SpeechRecordingDisplayLogic.appendWaveformSample(0.2, to: first, capacity: capacity)
+        let third = SpeechRecordingDisplayLogic.appendWaveformSample(0.3, to: second, capacity: capacity)
+        let fourth = SpeechRecordingDisplayLogic.appendWaveformSample(0.4, to: third, capacity: capacity)
+
+        #expect(fourth == [0.2, 0.3, 0.4])
     }
 }
 

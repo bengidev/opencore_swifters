@@ -204,6 +204,56 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.isListening == false)
         #expect(controller.state.errorMessage != nil)
         #expect(controller.state.audioLevels.isEmpty)
+        #expect(harness.stopCallCount == 1)
+    }
+
+    @Test("concurrent start requests only begin one recognition session")
+    func concurrentStartOnlyBeginsOnce() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        harness.events = [.ready]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        async let first: Void = controller.startListening()
+        async let second: Void = controller.startListening()
+        _ = await (first, second)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(harness.startCallCount == 1)
+
+        await controller.cancelListening()
+    }
+
+    @Test("displayedDraft merges partial transcript into base draft")
+    func displayedDraftMergesPartialTranscript() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        harness.events = [.ready, .partial("world")]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(controller.displayedDraft(base: "Hello") == "Hello world")
+
+        await controller.cancelListening()
+    }
+
+    @Test("stopListening returns merged draft without mutating speech state")
+    func stopListeningReturnsMergedDraft() async {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        harness.stopResult = "there"
+        harness.events = [.ready]
+        let controller = SpeechFlowController(recognition: harness.makeClient())
+
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let merged = await controller.stopListening(mergingInto: "Hi")
+
+        #expect(merged == "Hi there")
+        #expect(controller.state.isListening == false)
     }
 
     @Test("mergedDraft inserts spacing between existing text and transcript")
