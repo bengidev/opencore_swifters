@@ -217,9 +217,20 @@ struct ChatOutputStreamStreamingTests {
 
         controller.setDraftMessage("Run tests")
         let sendTask = Task { await controller.sendMessage() }
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        let streamStarted = await waitForCondition(timeoutNanoseconds: 2_000_000_000) {
+            controller.state.streamingOutputStreamID != nil
+        }
+        #expect(streamStarted)
         controller.clearActiveConversation()
         await sendTask.value
+
+        let persistenceCompleted = await waitForCondition(timeoutNanoseconds: 2_000_000_000) {
+            appended.snapshot().contains {
+                if case .outputStream = $0 { return true }
+                return false
+            }
+        }
+        #expect(persistenceCompleted)
 
         let persisted = appended.snapshot().compactMap { message -> ChatOutputStreamMessage? in
             if case let .outputStream(outputStream) = message { return outputStream }
@@ -231,4 +242,18 @@ struct ChatOutputStreamStreamingTests {
         #expect(persisted.first?.detail.status == .failed)
         #expect(persisted.first?.isComplete == true)
     }
+}
+
+@MainActor
+private func waitForCondition(
+    timeoutNanoseconds: UInt64,
+    pollNanoseconds: UInt64 = 10_000_000,
+    condition: () -> Bool
+) async -> Bool {
+    let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+    while DispatchTime.now().uptimeNanoseconds < deadline {
+        if condition() { return true }
+        try? await Task.sleep(nanoseconds: pollNanoseconds)
+    }
+    return condition()
 }
