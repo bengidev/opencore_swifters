@@ -5,10 +5,11 @@ import Speech
 nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     private let audioQueue = DispatchQueue(label: "io.github.bengidev.OpenCore.speech.audio")
     private let speechRecognizer: SFSpeechRecognizer?
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var latestTranscript = ""
+    private var isInputTapInstalled = false
 
     init(locale: Locale = .current) {
         let resolvedLocale = Self.resolvedLocale(for: locale) ?? locale
@@ -33,10 +34,11 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
                 do {
                     try self.beginCapture(continuation: continuation)
                 } catch {
-                    continuation.yield(
-                        .failed(SpeechRecognitionFallbackLogic.userFacingErrorMessage(systemMessage: error.localizedDescription))
+                    self.failCapture(
+                        systemMessage: error.localizedDescription,
+                        attemptedOnDevice: false,
+                        continuation: continuation
                     )
-                    continuation.finish()
                 }
             }
         }
@@ -47,6 +49,7 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
             audioQueue.async {
                 let transcript = self.latestTranscript
                 self.tearDownCapture()
+                self.latestTranscript = ""
                 continuation.resume(
                     returning: transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
@@ -56,6 +59,7 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
 
     private func beginCapture(continuation: AsyncStream<SpeechRecognitionEvent>.Continuation) throws {
         tearDownCapture()
+        latestTranscript = ""
 
         guard let speechRecognizer else {
             throw SpeechSystemRecognitionError.localeUnavailable
@@ -66,12 +70,10 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         }
 
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: .duckOthers)
         try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
-        let preferOnDevice = SpeechRecognitionFallbackLogic.prefersOnDeviceRecognition(
-            supportsOnDevice: speechRecognizer.supportsOnDeviceRecognition
-        )
+        let preferOnDevice = speechRecognizer.supportsOnDeviceRecognition
         try startCapture(
             speechRecognizer: speechRecognizer,
             preferOnDevice: preferOnDevice,
@@ -94,56 +96,96 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
 
-            if let result {
-                let text = result.bestTranscription.formattedString
-                audioQueue.async {
+            audioQueue.async {
+                if let result {
+                    let text = result.bestTranscription.formattedString
                     self.latestTranscript = text
-                }
-                if result.isFinal {
-                    continuation.yield(.final(text))
-                    continuation.finish()
-                } else {
-                    continuation.yield(.partial(text))
-                }
-                return
-            }
-
-            if let error {
-                let message = error.localizedDescription
-                if SpeechRecognitionFallbackLogic.shouldRetryWithServerRecognition(
-                    errorMessage: message,
-                    attemptedOnDevice: preferOnDevice
-                ) {
-                    audioQueue.async {
-                        self.retryWithServerRecognition(
-                            speechRecognizer: speechRecognizer,
-                            continuation: continuation
-                        )
+                    if result.isFinal {
+                        self.deliver(.final(text), continuation: continuation)
+                        self.complete(continuation: continuation)
+                    } else {
+                        self.deliver(.partial(text), continuation: continuation)
                     }
                     return
                 }
 
-                continuation.yield(
-                    .failed(SpeechRecognitionFallbackLogic.userFacingErrorMessage(systemMessage: message))
-                )
-                continuation.finish()
-                return
-            }
+                if let error {
+                    let message = error.localizedDescription
+                    if SpeechRecognitionFallbackLogic.shouldRetryWithServerRecognition(
+                        errorMessage: message,
+                        attemptedOnDevice: preferOnDevice
+                    ) {
+                        self.retryWithServerRecognition(
+                            speechRecognizer: speechRecognizer,
+                            continuation: continuation
+                        )
+                        return
+                    }
 
-            continuation.finish()
+                    self.failCapture(
+                        systemMessage: message,
+                        attemptedOnDevice: preferOnDevice,
+                        continuation: continuation
+                    )
+                    return
+                }
+
+                self.complete(continuation: continuation)
+            }
         }
 
         let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            request.append(buffer)
-            let level = Self.rmsLevel(from: buffer)
-            continuation.yield(.audioLevel(level))
-        }
+        try installInputTap(on: inputNode, request: request, continuation: continuation)
 
         audioEngine.prepare()
-        try audioEngine.start()
-        continuation.yield(.ready)
+        do {
+            try audioEngine.start()
+        } catch {
+            tearDownCapture()
+            throw error
+        }
+        deliver(.ready, continuation: continuation)
+    }
+
+    private func installInputTap(
+        on inputNode: AVAudioInputNode,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        continuation: AsyncStream<SpeechRecognitionEvent>.Continuation
+    ) throws {
+        removeInputTapIfNeeded(from: inputNode)
+
+        let tapFormat = Self.recordingTapFormat(for: inputNode)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: tapFormat) { [weak self] buffer, _ in
+            guard let self else { return }
+            request.append(buffer)
+            let level = Self.rmsLevel(from: buffer)
+            self.audioQueue.async {
+                continuation.yield(.audioLevel(level))
+            }
+        }
+        isInputTapInstalled = true
+    }
+
+    private func removeInputTapIfNeeded(from inputNode: AVAudioInputNode) {
+        guard isInputTapInstalled else { return }
+        inputNode.removeTap(onBus: 0)
+        isInputTapInstalled = false
+    }
+
+    /// Picks a tap format that matches the live hardware input rate (often 48 kHz on device, not 44.1 kHz).
+    nonisolated private static func recordingTapFormat(for inputNode: AVAudioInputNode) -> AVAudioFormat? {
+        let hardwareFormat = inputNode.inputFormat(forBus: 0)
+        guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0 else {
+            return nil
+        }
+
+        let nodeOutputFormat = inputNode.outputFormat(forBus: 0)
+        if nodeOutputFormat.sampleRate == hardwareFormat.sampleRate,
+           nodeOutputFormat.channelCount == hardwareFormat.channelCount {
+            return nodeOutputFormat
+        }
+
+        return hardwareFormat
     }
 
     private func retryWithServerRecognition(
@@ -152,29 +194,72 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     ) {
         tearDownCapture()
         do {
+            try AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
             try startCapture(
                 speechRecognizer: speechRecognizer,
                 preferOnDevice: false,
                 continuation: continuation
             )
         } catch {
-            continuation.yield(
-                .failed(SpeechRecognitionFallbackLogic.userFacingErrorMessage(systemMessage: error.localizedDescription))
+            failCapture(
+                systemMessage: error.localizedDescription,
+                attemptedOnDevice: false,
+                continuation: continuation
             )
-            continuation.finish()
         }
     }
 
+    private func deliver(
+        _ event: SpeechRecognitionEvent,
+        continuation: AsyncStream<SpeechRecognitionEvent>.Continuation
+    ) {
+        continuation.yield(event)
+    }
+
+    private func failCapture(
+        systemMessage: String,
+        attemptedOnDevice: Bool,
+        continuation: AsyncStream<SpeechRecognitionEvent>.Continuation
+    ) {
+        deliver(
+            .failed(
+                SpeechRecognitionFallbackLogic.userFacingErrorMessage(
+                    systemMessage: systemMessage,
+                    attemptedOnDevice: attemptedOnDevice
+                )
+            ),
+            continuation: continuation
+        )
+        complete(continuation: continuation)
+    }
+
+    private func complete(continuation: AsyncStream<SpeechRecognitionEvent>.Continuation) {
+        tearDownCapture()
+        continuation.finish()
+    }
+
     private func tearDownCapture() {
+        let inputNode = audioEngine.inputNode
+        removeInputTapIfNeeded(from: inputNode)
+
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
         }
+        audioEngine.reset()
+        audioEngine = AVAudioEngine()
+
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask = nil
-        latestTranscript = ""
+        deactivateAudioSession()
+    }
+
+    private func deactivateAudioSession() {
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
     }
 
     nonisolated private static func resolvedLocale(for preferred: Locale) -> Locale? {
