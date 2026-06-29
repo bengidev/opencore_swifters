@@ -151,9 +151,15 @@ final class ChatVoiceNotePlaybackController: NSObject {
 }
 
 extension ChatVoiceNotePlaybackController: AVAudioPlayerDelegate {
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        player.currentTime = 0
-        if self.player === player {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        let finishedPlayerID = ObjectIdentifier(player)
+        Task { @MainActor [weak self] in
+            guard let self,
+                  let activePlayer = self.player,
+                  ObjectIdentifier(activePlayer) == finishedPlayerID else {
+                return
+            }
+            activePlayer.currentTime = 0
             stopProgressUpdates()
             self.player = nil
             activeDuration = 0
