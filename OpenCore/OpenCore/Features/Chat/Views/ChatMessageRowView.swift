@@ -41,21 +41,7 @@ struct ChatMessageRowView: View, Equatable {
     @ViewBuilder
     private func textRow(_ textMessage: ChatTextMessage) -> some View {
         if message.role == .user {
-            HStack {
-                Spacer(minLength: Self.oppositeSpacerMinWidth)
-                Text(textMessage.content)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(palette.controlStrongText)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: Self.userBubbleCornerRadius, style: .continuous)
-                            .fill(palette.controlStrong)
-                    )
-                    .textSelection(.enabled)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
+            ChatUserMessageBubbleView(textMessage: textMessage)
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 assistantTextBody(textMessage)
