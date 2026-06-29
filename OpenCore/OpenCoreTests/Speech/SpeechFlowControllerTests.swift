@@ -8,7 +8,7 @@ private final class SpeechRecognitionTestHarness: @unchecked Sendable {
     var requestAuthorizationResult: SpeechAuthorizationStatus?
     var events: [SpeechRecognitionEvent] = []
     var hangsOpenAfterEvents = false
-    var stopResult: String?
+    var stopResult: SpeechRecognitionResult?
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
 
@@ -58,7 +58,7 @@ struct SpeechFlowControllerTests {
         harness.events = [.ready]
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(controller.state.isListening == true)
@@ -67,17 +67,18 @@ struct SpeechFlowControllerTests {
         await controller.cancelListening()
     }
 
-    @Test("partial recognition updates visible transcript")
+    @Test("partial recognition updates internal transcript without changing displayed draft")
     func updatesPartialTranscript() async {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
         harness.events = [.ready, .partial("hello")]
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(controller.state.partialTranscript == "hello")
+        #expect(controller.displayedDraft(base: "typed text") == "typed text")
 
         await controller.cancelListening()
     }
@@ -100,7 +101,7 @@ struct SpeechFlowControllerTests {
             )
         )
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         for _ in 0..<100 {
             if controller.state.partialTranscript == "from background" { break }
             try? await Task.sleep(for: .milliseconds(10))
@@ -111,22 +112,34 @@ struct SpeechFlowControllerTests {
         await controller.cancelListening()
     }
 
-    @Test("stopping listening applies final transcript to draft")
-    func appliesFinalTranscript() async {
+    @Test("stopping listening creates a voice attachment for the chat draft")
+    func createsVoiceAttachment() async throws {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
-        harness.stopResult = "send this"
+        let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: tempAudio.path, contents: Data([0x00, 0x01]))
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "send this",
+            audioFileURL: tempAudio,
+            waveformSamples: [0.1, 0.2],
+            duration: 2
+        )
         harness.events = [.ready]
         let controller = SpeechFlowController(recognition: harness.makeClient())
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
 
-        var applied = ""
-        await controller.toggleListening { applied = $0 }
+        let attachment = await controller.stopListening()
 
-        #expect(applied == "send this")
+        #expect(attachment?.kind == .audio)
+        #expect(attachment?.speechTranscript == "send this")
         #expect(controller.state.isListening == false)
         #expect(harness.stopCallCount == 1)
+        if let localPath = attachment?.localPath {
+            ChatAttachmentStore.remove(at: localPath)
+        }
     }
 
     @Test("denied authorization surfaces an error instead of listening")
@@ -135,7 +148,7 @@ struct SpeechFlowControllerTests {
         harness.authorizationStatus = .denied
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
 
         #expect(controller.state.isListening == false)
         #expect(controller.state.errorMessage != nil)
@@ -147,10 +160,10 @@ struct SpeechFlowControllerTests {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
         harness.events = [.ready, .partial("discard me")]
-        harness.stopResult = "discard me"
+        harness.stopResult = SpeechRecognitionResult(transcript: "discard me")
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(controller.state.partialTranscript == "discard me")
 
@@ -179,7 +192,7 @@ struct SpeechFlowControllerTests {
             )
         )
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         for _ in 0..<100 {
             if controller.state.audioLevels.count >= 2 { break }
             try? await Task.sleep(for: .milliseconds(10))
@@ -198,7 +211,7 @@ struct SpeechFlowControllerTests {
         harness.events = [.failed("Failed to initialize recognizer")]
         let controller = SpeechFlowController(recognition: harness.makeClient())
 
-        await controller.toggleListening { _ in }
+        await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(controller.state.isListening == false)
@@ -224,8 +237,8 @@ struct SpeechFlowControllerTests {
         await controller.cancelListening()
     }
 
-    @Test("displayedDraft merges partial transcript into base draft")
-    func displayedDraftMergesPartialTranscript() async {
+    @Test("displayedDraft leaves the composer text unchanged while listening")
+    func displayedDraftLeavesComposerText() async {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
         harness.events = [.ready, .partial("world")]
@@ -234,32 +247,30 @@ struct SpeechFlowControllerTests {
         await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
 
-        #expect(controller.displayedDraft(base: "Hello") == "Hello world")
+        #expect(controller.displayedDraft(base: "Hello") == "Hello")
 
         await controller.cancelListening()
     }
 
-    @Test("stopListening returns merged draft without mutating speech state")
-    func stopListeningReturnsMergedDraft() async {
-        let harness = SpeechRecognitionTestHarness()
-        harness.hangsOpenAfterEvents = true
-        harness.stopResult = "there"
-        harness.events = [.ready]
-        let controller = SpeechFlowController(recognition: harness.makeClient())
+    @Test("makeVoiceAttachment stores transcript behind the bubble attachment")
+    func makeVoiceAttachmentUsesTranscript() throws {
+        let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: tempAudio.path, contents: Data([0x00, 0x01]))
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
 
-        await controller.startListening()
-        try? await Task.sleep(for: .milliseconds(50))
+        let attachment = SpeechFlowController.makeVoiceAttachment(
+            from: SpeechRecognitionResult(
+                transcript: "there",
+                audioFileURL: tempAudio,
+                duration: 1
+            ),
+            waveformSamples: [0.2],
+            duration: 1
+        )
 
-        let merged = await controller.stopListening(mergingInto: "Hi")
-
-        #expect(merged == "Hi there")
-        #expect(controller.state.isListening == false)
-    }
-
-    @Test("mergedDraft inserts spacing between existing text and transcript")
-    func mergedDraftSpacing() {
-        #expect(SpeechFlowController.mergedDraft(existing: "Hi", transcript: "there") == "Hi there")
-        #expect(SpeechFlowController.mergedDraft(existing: "Hi ", transcript: "there") == "Hi there")
-        #expect(SpeechFlowController.mergedDraft(existing: "", transcript: "there") == "there")
+        #expect(attachment?.speechTranscript == "there")
+        if let localPath = attachment?.localPath {
+            ChatAttachmentStore.remove(at: localPath)
+        }
     }
 }

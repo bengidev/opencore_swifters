@@ -5,13 +5,13 @@ nonisolated struct SpeechRecognitionClient: Sendable {
     var authorizationStatus: @Sendable () -> SpeechAuthorizationStatus
     var requestAuthorization: @Sendable () async -> SpeechAuthorizationStatus
     var start: @Sendable () -> AsyncStream<SpeechRecognitionEvent>
-    var stop: @Sendable () async -> String?
+    var stop: @Sendable () async -> SpeechRecognitionResult?
 
     init(
         authorizationStatus: @escaping @Sendable () -> SpeechAuthorizationStatus,
         requestAuthorization: @escaping @Sendable () async -> SpeechAuthorizationStatus,
         start: @escaping @Sendable () -> AsyncStream<SpeechRecognitionEvent>,
-        stop: @escaping @Sendable () async -> String?
+        stop: @escaping @Sendable () async -> SpeechRecognitionResult?
     ) {
         self.authorizationStatus = authorizationStatus
         self.requestAuthorization = requestAuthorization
@@ -36,7 +36,7 @@ nonisolated struct SpeechRecognitionClient: Sendable {
                 return engine.start()
             }
 
-            func stop() async -> String? {
+            func stop() async -> SpeechRecognitionResult? {
                 guard let engine else { return nil }
                 self.engine = nil
                 return await engine.stop()
