@@ -33,6 +33,7 @@ struct HomeTabShellView: View {
             .tag(HomeTab.about)
         }
         .tint(palette.textPrimary)
+        .background(SharedTabBarPaletteStyle(palette: palette))
         .task {
             wireDelegates()
         }
