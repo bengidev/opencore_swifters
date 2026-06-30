@@ -14,9 +14,9 @@ struct SharedSignalGlitchModifier: ViewModifier {
                     .fill(
                         LinearGradient(
                             colors: [
-                                palette.textPrimary.opacity(0.07 * intensity),
+                                palette.effectGlitchHighlight.opacity(0.07 * intensity),
                                 Color.clear,
-                                palette.textPrimary.opacity(0.04 * intensity)
+                                palette.effectGlitchHighlight.opacity(0.04 * intensity)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
