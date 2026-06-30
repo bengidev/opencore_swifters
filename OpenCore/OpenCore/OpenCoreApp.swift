@@ -80,7 +80,7 @@ struct OpenCoreApp: App {
 
     var body: some Scene {
         WindowGroup {
-            SharedThemedRootView { _, onThemeToggle in
+            SharedThemedRootView {
                 AppRootView(
                     onboardingFlow: onboardingFlow,
                     sidePanel: sidePanel,
@@ -88,8 +88,7 @@ struct OpenCoreApp: App {
                     chat: chat,
                     settings: settings,
                     speech: speech,
-                    vision: vision,
-                    onThemeToggle: onThemeToggle
+                    vision: vision
                 )
             }
             .task {

@@ -7,7 +7,7 @@ struct SharedThemedRootView<Content: View>: View {
     @AppStorage(SharedAppTheme.storageKey) private var sharedAppThemeRaw = SharedAppTheme.system.rawValue
     @Environment(\.colorScheme) private var systemColorScheme
 
-    @ViewBuilder let content: (_ theme: SharedAppTheme, _ onThemeToggle: @escaping () -> Void) -> Content
+    @ViewBuilder let content: () -> Content
 
     private var sharedAppTheme: SharedAppTheme {
         SharedAppTheme(rawValue: sharedAppThemeRaw) ?? .system
@@ -22,10 +22,11 @@ struct SharedThemedRootView<Content: View>: View {
     }
 
     var body: some View {
-        content(sharedAppTheme, toggleTheme)
+        content()
             .environment(\.sharedPalette, resolvedPalette)
             .environment(\.sharedAppTheme, sharedAppTheme)
-            .preferredColorScheme(sharedAppTheme == .system ? nil : effectiveColorScheme)
+            .environment(\.onThemeToggle, toggleTheme)
+            .preferredColorScheme(sharedAppTheme.preferredColorScheme(systemScheme: systemColorScheme))
     }
 
     private func toggleTheme() {

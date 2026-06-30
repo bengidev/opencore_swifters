@@ -3,7 +3,6 @@ import SwiftUI
 /// Main onboarding view — responsive layout with geometry-based sizing.
 struct OnboardingView: View {
     @Bindable var flow: OnboardingFlowController
-    let onThemeToggle: () -> Void
 
     @Environment(\.sharedPalette) private var palette
 
@@ -38,7 +37,7 @@ struct OnboardingView: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: compactHeight ? 12 : 18) {
-                    OnboardingTopBarView(flow: flow, onThemeToggle: onThemeToggle)
+                    OnboardingTopBarView(flow: flow)
 
                     OnboardingFeaturePageView(
                         page: flow.state.currentPageData,
