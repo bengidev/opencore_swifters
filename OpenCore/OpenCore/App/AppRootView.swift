@@ -10,8 +10,6 @@ struct AppRootView: View {
     @Bindable var speech: SpeechFlowController
     @Bindable var vision: VisionFlowController
 
-    let onThemeToggle: () -> Void
-
     var body: some View {
         Group {
             if onboardingFlow.state.isFinished {
@@ -24,7 +22,7 @@ struct AppRootView: View {
                     vision: vision
                 )
             } else {
-                OnboardingView(flow: onboardingFlow, onThemeToggle: onThemeToggle)
+                OnboardingView(flow: onboardingFlow)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: onboardingFlow.state.isFinished)

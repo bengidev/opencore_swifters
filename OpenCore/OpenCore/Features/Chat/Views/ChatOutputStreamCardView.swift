@@ -81,7 +81,7 @@ struct ChatOutputStreamCardView: View {
         case .completed:
             return palette.textSecondary
         case .failed:
-            return .red
+            return palette.danger
         }
     }
 }
@@ -151,7 +151,7 @@ private struct ChatOutputStreamDetailSheet: View {
                 metadataRow(
                     label: "Exit code",
                     value: "\(exitCode)",
-                    valueColor: exitCode == 0 ? .green : .red
+                    valueColor: exitCode == 0 ? palette.success : palette.danger
                 )
             }
             if let durationMs = message.detail.durationMs {

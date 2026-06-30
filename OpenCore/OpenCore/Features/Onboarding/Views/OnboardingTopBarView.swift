@@ -3,14 +3,13 @@ import SwiftUI
 /// Top bar with theme toggle, identity lock-up, page counter, skip button.
 struct OnboardingTopBarView: View {
     @Bindable var flow: OnboardingFlowController
-    let onThemeToggle: () -> Void
 
     @Environment(\.sharedPalette) private var palette
 
     var body: some View {
         HStack(spacing: 12) {
             HStack(spacing: 9) {
-                SharedThemeToggleButton(onTap: onThemeToggle)
+                SharedThemeToggleButton()
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("OPENCORE")

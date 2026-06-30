@@ -16,6 +16,11 @@ enum SharedAppTheme: String, Equatable, Sendable {
         }
     }
 
+    /// `nil` lets the system drive appearance when theme is `.system`.
+    func preferredColorScheme(systemScheme: ColorScheme) -> ColorScheme? {
+        self == .system ? nil : resolveColorScheme(systemScheme)
+    }
+
     var next: SharedAppTheme {
         switch self {
         case .system: .light
@@ -45,5 +50,16 @@ extension EnvironmentValues {
     var sharedAppTheme: SharedAppTheme {
         get { self[SharedAppThemeKey.self] }
         set { self[SharedAppThemeKey.self] = newValue }
+    }
+}
+
+private struct OnThemeToggleKey: EnvironmentKey {
+    nonisolated(unsafe) static var defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    var onThemeToggle: () -> Void {
+        get { self[OnThemeToggleKey.self] }
+        set { self[OnThemeToggleKey.self] = newValue }
     }
 }

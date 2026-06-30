@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var flow: SettingsFlowController
 
+    @Environment(\.sharedPalette) private var palette
     @FocusState private var isKeyFieldFocused: Bool
 
     var body: some View {
@@ -15,7 +16,7 @@ struct SettingsView: View {
             if let errorMessage = flow.state.errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(palette.danger)
                         .accessibilityIdentifier("settings-error")
                 }
             }
@@ -45,8 +46,8 @@ struct SettingsView: View {
         } header: {
             SettingsFormChrome.sectionHeader("Connection")
         } footer: {
-            SettingsFormChrome.sectionFooter(
-                "Models and credentials are scoped per provider."
+            SettingsFormChrome.SectionFooter(
+                text: "Models and credentials are scoped per provider."
             )
         }
     }
@@ -75,7 +76,7 @@ struct SettingsView: View {
 
                 if flow.state.hasStoredKey {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(palette.textSecondary)
                         .accessibilityLabel("Key stored")
                         .accessibilityIdentifier("settings-key-stored")
                 }
@@ -100,7 +101,7 @@ struct SettingsView: View {
         } header: {
             SettingsFormChrome.sectionHeader("API Key")
         } footer: {
-            SettingsFormChrome.sectionFooter(credentialFooterText)
+            SettingsFormChrome.SectionFooter(text: credentialFooterText)
         }
     }
 
