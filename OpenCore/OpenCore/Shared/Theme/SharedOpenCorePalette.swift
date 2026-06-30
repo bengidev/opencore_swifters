@@ -53,14 +53,60 @@ struct SharedOpenCorePalette: Sendable {
 
     // MARK: - Effects
 
+    /// Light source for screen-blend overlays (glitch, shimmer).
+    let effectGlitchHighlight: Color
+
+    /// Dark scrim behind controls overlaid on photos or media.
+    let mediaControlScrim: Color
+    let mediaControlIcon: Color
+
+    /// Disabled primary control fill (e.g. send button).
+    var controlDisabledFill: Color {
+        surfaceGalaxyTint.opacity(isDark ? 0.55 : 0.95)
+    }
+
+    enum ElevationLevel: Sendable {
+        case chip
+        case popover
+        case composerChrome(lightOpacity: Double)
+    }
+
     /// Drop shadow for elevated surfaces — stronger in dark mode for visible depth.
     func elevationShadow(lightOpacity: Double, darkOpacity: Double? = nil) -> Color {
         Color.black.opacity(isDark ? (darkOpacity ?? min(lightOpacity * 3, 0.5)) : lightOpacity)
     }
 
+    /// Named elevation tiers so call sites don't invent opacity multipliers.
+    func elevation(_ level: ElevationLevel) -> Color {
+        switch level {
+        case .chip:
+            elevationShadow(lightOpacity: 0.06)
+        case .popover:
+            elevationShadow(lightOpacity: 0.12, darkOpacity: 0.35)
+        case .composerChrome(let lightOpacity):
+            elevationShadow(lightOpacity: lightOpacity, darkOpacity: min(lightOpacity * 2.5, 0.4))
+        }
+    }
+
     /// Tap-outside scrim overlay.
     func scrimOverlay(opacity: Double) -> Color {
         Color.black.opacity(isDark ? min(opacity * 2.5, 0.35) : opacity)
+    }
+
+    struct ComposerGlassTokens: Sendable {
+        let fill: Color
+        let usesUltraThinMaterial: Bool
+        let strokeOpacity: Double
+        let shadow: Color
+    }
+
+    func composerGlass(shadowOpacity: Double) -> ComposerGlassTokens {
+        ComposerGlassTokens(
+            fill: isDark ? surfacePaper.opacity(0.85) : surfaceRaised,
+            usesUltraThinMaterial: isDark,
+            strokeOpacity: isDark ? 0.35 : 0.55,
+            shadow: elevation(.composerChrome(lightOpacity: shadowOpacity))
+        )
     }
 
     /// Resolve palette for the given color scheme.
@@ -85,7 +131,10 @@ struct SharedOpenCorePalette: Sendable {
                 controlStrongText: Color(hex: "121212"),
                 success: Color(hex: "B5B5B5"),
                 warning: Color(hex: "CECECE"),
-                danger: Color(hex: "EDEDED")
+                danger: Color(hex: "EDEDED"),
+                effectGlitchHighlight: Color(hex: "F5F5F5"),
+                mediaControlScrim: Color.black.opacity(0.55),
+                mediaControlIcon: Color.white
             )
         }
 
@@ -108,7 +157,10 @@ struct SharedOpenCorePalette: Sendable {
             controlStrongText: Color(hex: "FFFFFF"),
             success: Color(hex: "4A4A4A"),
             warning: Color(hex: "333333"),
-            danger: Color(hex: "1A1A1A")
+            danger: Color(hex: "1A1A1A"),
+            effectGlitchHighlight: Color.white,
+            mediaControlScrim: Color.black.opacity(0.72),
+            mediaControlIcon: Color.white
         )
     }
 }
