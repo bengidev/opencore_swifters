@@ -309,7 +309,7 @@ private struct HomeComposerContextUsageIndicator: View {
             Circle()
                 .stroke(palette.accentPrimary.opacity(palette.isDark ? 0.18 : 0.12), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
+        .shadow(color: palette.elevationShadow(lightOpacity: 0.06), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -386,7 +386,7 @@ private struct HomeComposerContextUsagePopover: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(palette.lineSoft.opacity(palette.isDark ? 0.45 : 0.65), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.12), radius: 14, x: 0, y: 8)
+        .shadow(color: palette.elevationShadow(lightOpacity: 0.12, darkOpacity: 0.35), radius: 14, x: 0, y: 8)
     }
 
     private var contextProgressBar: some View {
@@ -507,7 +507,7 @@ struct HomeComposerStopRecordingButton: View {
                     .frame(width: 30, height: 30)
 
                 RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                    .fill(Color.red.opacity(0.92))
+                    .fill(palette.danger.opacity(0.92))
                     .frame(width: 12, height: 12)
             }
         }
@@ -527,7 +527,7 @@ struct HomeComposerIconButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(palette.textTertiary)
+                .foregroundStyle(palette.textSecondary)
                 .frame(width: 30, height: 30)
         }
         .buttonStyle(.plain)
@@ -545,9 +545,13 @@ struct HomeComposerSendButton: View {
         Button(action: action) {
             Image(systemName: "arrow.up")
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(canSend ? palette.controlStrongText : palette.textTertiary)
+                .foregroundStyle(canSend ? palette.controlStrongText : palette.textSecondary)
                 .frame(width: 34, height: 34)
-                .background(canSend ? palette.controlStrong : palette.surfaceSubtle.opacity(0.9))
+                .background(
+                    canSend
+                        ? palette.controlStrong
+                        : palette.surfaceGalaxyTint.opacity(palette.isDark ? 0.55 : 0.95)
+                )
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -566,14 +570,24 @@ private struct HomeComposerGlassChrome: ViewModifier {
         content
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(palette.isDark ? palette.surfacePaper.opacity(0.7) : palette.surfaceRaised.opacity(0.72))
+                    .fill(palette.isDark ? palette.surfacePaper.opacity(0.85) : palette.surfaceRaised)
             }
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background {
+                if palette.isDark {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(palette.lineSoft.opacity(palette.isDark ? 0.35 : 0.55), lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(shadowOpacity), radius: 18, x: 0, y: 8)
+            .shadow(
+                color: palette.elevationShadow(lightOpacity: shadowOpacity, darkOpacity: min(shadowOpacity * 2.5, 0.4)),
+                radius: 18,
+                x: 0,
+                y: 8
+            )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

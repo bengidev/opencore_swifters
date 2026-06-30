@@ -41,6 +41,8 @@ private struct ChatImageAttachmentIndicatorView: View {
     let attachment: ChatMessageAttachment
     let onRemove: (UUID) -> Void
 
+    @Environment(\.sharedPalette) private var palette
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             ChatAttachmentThumbnailView(
@@ -58,11 +60,11 @@ private struct ChatImageAttachmentIndicatorView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.black.opacity(0.72))
+                    .fill(palette.controlStrong.opacity(0.82))
                     .frame(width: 18, height: 18)
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.controlStrongText)
             }
         }
         .buttonStyle(.plain)

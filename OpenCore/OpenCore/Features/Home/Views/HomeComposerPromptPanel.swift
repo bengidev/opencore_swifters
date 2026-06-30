@@ -97,6 +97,7 @@ struct HomeComposerPromptPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .font(.system(size: 15, weight: .regular))
             .foregroundStyle(palette.textPrimary)
+            .tint(palette.accentPrimary)
             .lineLimit(1...5)
             .textInputAutocapitalization(.sentences)
             .disabled(speech.state.isListening || vision.state.isProcessing)

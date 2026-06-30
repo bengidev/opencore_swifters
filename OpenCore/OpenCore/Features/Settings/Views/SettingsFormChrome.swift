@@ -6,9 +6,15 @@ enum SettingsFormChrome {
             .textCase(nil)
     }
 
-    static func sectionFooter(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .textCase(nil)
+    struct SectionFooter: View {
+        let text: String
+
+        @Environment(\.sharedPalette) private var palette
+
+        var body: some View {
+            Text(text)
+                .foregroundStyle(palette.textSecondary)
+                .textCase(nil)
+        }
     }
 }

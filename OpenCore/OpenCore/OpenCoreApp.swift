@@ -3,7 +3,6 @@ import SwiftUI
 
 @main
 struct OpenCoreApp: App {
-    @AppStorage(SharedAppTheme.storageKey) private var sharedAppThemeRaw = SharedAppTheme.system.rawValue
     @State private var onboardingFlow: OnboardingFlowController
     @State private var sidePanel: SidePanelFlowController
     @State private var home: HomeFlowController
@@ -11,8 +10,6 @@ struct OpenCoreApp: App {
     @State private var settings: SettingsFlowController
     @State private var speech: SpeechFlowController
     @State private var vision: VisionFlowController
-
-    @Environment(\.colorScheme) private var systemColorScheme
 
     private let modelContainer: ModelContainer
 
@@ -81,45 +78,24 @@ struct OpenCoreApp: App {
         }
     }
 
-    private var sharedAppTheme: SharedAppTheme {
-        SharedAppTheme(rawValue: sharedAppThemeRaw) ?? .system
-    }
-
-    private var resolvedColorScheme: ColorScheme? {
-        switch sharedAppTheme {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
-    }
-
-    private var resolvedPalette: SharedOpenCorePalette {
-        .resolve(resolvedColorScheme ?? systemColorScheme)
-    }
-
     var body: some Scene {
         WindowGroup {
-            AppRootView(
-                onboardingFlow: onboardingFlow,
-                sidePanel: sidePanel,
-                home: home,
-                chat: chat,
-                settings: settings,
-                speech: speech,
-                vision: vision,
-                onThemeToggle: toggleTheme
-            )
-            .environment(\.sharedPalette, resolvedPalette)
-            .environment(\.sharedAppTheme, sharedAppTheme)
-            .preferredColorScheme(resolvedColorScheme)
+            SharedThemedRootView { _, onThemeToggle in
+                AppRootView(
+                    onboardingFlow: onboardingFlow,
+                    sidePanel: sidePanel,
+                    home: home,
+                    chat: chat,
+                    settings: settings,
+                    speech: speech,
+                    vision: vision,
+                    onThemeToggle: onThemeToggle
+                )
+            }
             .task {
                 await onboardingFlow.onAppear()
             }
         }
         .modelContainer(modelContainer)
-    }
-
-    private func toggleTheme() {
-        sharedAppThemeRaw = sharedAppTheme.next.rawValue
     }
 }

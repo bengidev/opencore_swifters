@@ -5,6 +5,8 @@ struct SharedSignalGlitchModifier: ViewModifier {
     let progress: Double
     let intensity: Double
 
+    @Environment(\.sharedPalette) private var palette
+
     func body(content: Content) -> some View {
         content
             .overlay(
@@ -12,9 +14,9 @@ struct SharedSignalGlitchModifier: ViewModifier {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.07 * intensity),
+                                palette.textPrimary.opacity(0.07 * intensity),
                                 Color.clear,
-                                Color.white.opacity(0.04 * intensity)
+                                palette.textPrimary.opacity(0.04 * intensity)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing

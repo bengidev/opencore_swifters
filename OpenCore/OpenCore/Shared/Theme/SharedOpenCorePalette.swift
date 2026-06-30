@@ -51,6 +51,18 @@ struct SharedOpenCorePalette: Sendable {
     let warning: Color
     let danger: Color
 
+    // MARK: - Effects
+
+    /// Drop shadow for elevated surfaces — stronger in dark mode for visible depth.
+    func elevationShadow(lightOpacity: Double, darkOpacity: Double? = nil) -> Color {
+        Color.black.opacity(isDark ? (darkOpacity ?? min(lightOpacity * 3, 0.5)) : lightOpacity)
+    }
+
+    /// Tap-outside scrim overlay.
+    func scrimOverlay(opacity: Double) -> Color {
+        Color.black.opacity(isDark ? min(opacity * 2.5, 0.35) : opacity)
+    }
+
     /// Resolve palette for the given color scheme.
     static func resolve(_ scheme: ColorScheme) -> SharedOpenCorePalette {
         if scheme == .dark {

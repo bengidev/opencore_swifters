@@ -29,8 +29,10 @@ struct HomeContextUsageDismissScrim: View {
     let reduceMotion: Bool
     let onDismiss: () -> Void
 
+    @Environment(\.sharedPalette) private var palette
+
     var body: some View {
-        Color.black.opacity(reduceMotion ? 0.001 : 0.06)
+        palette.scrimOverlay(opacity: reduceMotion ? 0.001 : 0.06)
             .contentShape(Rectangle())
             .onTapGesture(perform: onDismiss)
     }

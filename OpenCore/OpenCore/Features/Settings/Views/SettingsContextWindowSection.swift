@@ -4,6 +4,8 @@ import SwiftUI
 struct SettingsContextWindowSection: View {
     @Bindable var flow: SettingsFlowController
 
+    @Environment(\.sharedPalette) private var palette
+
     private var isThresholdEditable: Bool {
         !flow.state.contextCompaction.isEnabled
     }
@@ -25,8 +27,8 @@ struct SettingsContextWindowSection: View {
         } header: {
             SettingsFormChrome.sectionHeader("Context Window")
         } footer: {
-            SettingsFormChrome.sectionFooter(
-                "Summarize older turns before the model context limit is reached."
+            SettingsFormChrome.SectionFooter(
+                text: "Summarize older turns before the model context limit is reached."
             )
         }
 
@@ -37,10 +39,12 @@ struct SettingsContextWindowSection: View {
                         if !isThresholdEditable {
                             Image(systemName: "lock.fill")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(palette.textTertiary)
                         }
                         Text("\(thresholdPercent)%")
-                            .foregroundStyle(isThresholdEditable ? .primary : .secondary)
+                            .foregroundStyle(
+                                isThresholdEditable ? palette.textPrimary : palette.textSecondary
+                            )
                             .monospacedDigit()
                             .accessibilityIdentifier("settings-compaction-threshold-value")
                     }
@@ -66,7 +70,7 @@ struct SettingsContextWindowSection: View {
                     : "Turn off automatic compaction to change the threshold"
             )
         } footer: {
-            SettingsFormChrome.sectionFooter(compactionFooterText)
+            SettingsFormChrome.SectionFooter(text: compactionFooterText)
         }
     }
 
