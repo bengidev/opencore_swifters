@@ -309,7 +309,7 @@ private struct HomeComposerContextUsageIndicator: View {
             Circle()
                 .stroke(palette.accentPrimary.opacity(palette.isDark ? 0.18 : 0.12), lineWidth: 1)
         }
-        .shadow(color: palette.elevationShadow(lightOpacity: 0.06), radius: 10, x: 0, y: 4)
+        .shadow(color: palette.elevation(.chip), radius: 10, x: 0, y: 4)
     }
 }
 
@@ -386,7 +386,7 @@ private struct HomeComposerContextUsagePopover: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(palette.lineSoft.opacity(palette.isDark ? 0.45 : 0.65), lineWidth: 1)
         }
-        .shadow(color: palette.elevationShadow(lightOpacity: 0.12, darkOpacity: 0.35), radius: 14, x: 0, y: 8)
+        .shadow(color: palette.elevation(.popover), radius: 14, x: 0, y: 8)
     }
 
     private var contextProgressBar: some View {
@@ -547,11 +547,7 @@ struct HomeComposerSendButton: View {
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(canSend ? palette.controlStrongText : palette.textSecondary)
                 .frame(width: 34, height: 34)
-                .background(
-                    canSend
-                        ? palette.controlStrong
-                        : palette.surfaceGalaxyTint.opacity(palette.isDark ? 0.55 : 0.95)
-                )
+                .background(canSend ? palette.controlStrong : palette.controlDisabledFill)
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -567,27 +563,24 @@ private struct HomeComposerGlassChrome: ViewModifier {
     @Environment(\.sharedPalette) private var palette
 
     func body(content: Content) -> some View {
+        let glass = palette.composerGlass(shadowOpacity: shadowOpacity)
+
         content
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(palette.isDark ? palette.surfacePaper.opacity(0.85) : palette.surfaceRaised)
+                    .fill(glass.fill)
             }
             .background {
-                if palette.isDark {
+                if glass.usesUltraThinMaterial {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.ultraThinMaterial)
                 }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(palette.lineSoft.opacity(palette.isDark ? 0.35 : 0.55), lineWidth: 1)
+                    .stroke(palette.lineSoft.opacity(glass.strokeOpacity), lineWidth: 1)
             }
-            .shadow(
-                color: palette.elevationShadow(lightOpacity: shadowOpacity, darkOpacity: min(shadowOpacity * 2.5, 0.4)),
-                radius: 18,
-                x: 0,
-                y: 8
-            )
+            .shadow(color: glass.shadow, radius: 18, x: 0, y: 8)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
