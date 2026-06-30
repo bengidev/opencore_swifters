@@ -54,7 +54,7 @@ extension EnvironmentValues {
 }
 
 private struct OnThemeToggleKey: EnvironmentKey {
-    static let defaultValue: () -> Void = {}
+    @MainActor static let defaultValue: () -> Void = {}
 }
 
 extension EnvironmentValues {
