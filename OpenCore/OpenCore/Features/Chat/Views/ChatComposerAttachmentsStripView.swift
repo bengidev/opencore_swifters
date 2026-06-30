@@ -60,11 +60,11 @@ private struct ChatImageAttachmentIndicatorView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(palette.controlStrong.opacity(0.82))
+                    .fill(palette.mediaControlScrim)
                     .frame(width: 18, height: 18)
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(palette.controlStrongText)
+                    .foregroundStyle(palette.mediaControlIcon)
             }
         }
         .buttonStyle(.plain)
