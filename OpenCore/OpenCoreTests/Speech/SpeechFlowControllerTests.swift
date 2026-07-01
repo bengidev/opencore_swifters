@@ -276,6 +276,39 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.errorMessage != nil)
     }
 
+    @Test("auto-stops recording when max duration is reached")
+    func autoStopsAtMaxDuration() async throws {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: tempAudio.path, contents: Data([0x00, 0x01]))
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "auto stopped",
+            audioFileURL: tempAudio,
+            duration: SpeechRecordingLimits.maxDurationSeconds
+        )
+        harness.events = [.ready]
+        let controller = SpeechFlowController(
+            recognition: harness.makeClient(),
+            autoStopThreshold: 0.05
+        )
+        await controller.startListening()
+
+        for _ in 0..<100 {
+            if harness.stopCallCount > 0 { break }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(harness.stopCallCount == 1)
+        #expect(controller.state.isListening == false)
+
+        if let localPath = await controller.stopListening()?.localPath {
+            ChatAttachmentStore.remove(at: localPath)
+        }
+    }
+
     @Test("makeVoiceAttachment stores transcript behind the bubble attachment")
     func makeVoiceAttachmentUsesTranscript() throws {
         let tempAudio = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")

@@ -7,11 +7,17 @@ import Observation
 final class SpeechFlowController {
     private(set) var state = SpeechFlowState()
     private let recognition: SpeechRecognitionClient
+    private let autoStopThreshold: TimeInterval
     private var recognitionTask: Task<Void, Never>?
     private var durationTask: Task<Void, Never>?
+    private var autoStopTriggered = false
 
-    init(recognition: SpeechRecognitionClient = .preview) {
+    init(
+        recognition: SpeechRecognitionClient = .preview,
+        autoStopThreshold: TimeInterval = SpeechRecordingLimits.autoStopThreshold
+    ) {
         self.recognition = recognition
+        self.autoStopThreshold = autoStopThreshold
     }
 
     func clearError() {
@@ -41,6 +47,8 @@ final class SpeechFlowController {
         state.elapsedDuration = 0
         state.audioLevels = []
         state.isVoiceActive = false
+        state.isTranscribing = false
+        autoStopTriggered = false
 
         let stream = recognition.start()
         recognitionTask = Task { @MainActor [weak self] in
@@ -76,7 +84,9 @@ final class SpeechFlowController {
     func stopListening() async -> ChatMessageAttachment? {
         let waveformSamples = state.audioLevels
         let duration = state.elapsedDuration
+        state.isTranscribing = true
         let result = await finishListening()
+        state.isTranscribing = false
         if let attachment = Self.makeVoiceAttachment(
             from: result,
             waveformSamples: waveformSamples,
@@ -116,10 +126,12 @@ final class SpeechFlowController {
 
     private func resetListeningPresentation() {
         state.isListening = false
+        state.isTranscribing = false
         state.partialTranscript = ""
         state.elapsedDuration = 0
         state.audioLevels = []
         state.isVoiceActive = false
+        autoStopTriggered = false
     }
 
     private func startDurationTimer() {
@@ -130,7 +142,21 @@ final class SpeechFlowController {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self, state.isListening else { return }
                 state.elapsedDuration = Date().timeIntervalSince(startedAt)
+                handleAutoStopIfNeeded()
             }
+        }
+    }
+
+    private func handleAutoStopIfNeeded() {
+        guard state.isListening,
+              !autoStopTriggered,
+              state.elapsedDuration >= autoStopThreshold else {
+            return
+        }
+
+        autoStopTriggered = true
+        Task { @MainActor [weak self] in
+            _ = await self?.stopListening()
         }
     }
 

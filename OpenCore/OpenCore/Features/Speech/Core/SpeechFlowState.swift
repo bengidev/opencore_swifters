@@ -2,6 +2,7 @@ import Foundation
 
 struct SpeechFlowState: Equatable {
     var isListening = false
+    var isTranscribing = false
     var partialTranscript = ""
     var errorMessage: String?
     var elapsedDuration: TimeInterval = 0
