@@ -1,6 +1,11 @@
 import SwiftUI
 import UIKit
 
+extension Notification.Name {
+    /// Posted when a streaming reasoning card collapses so the thread can re-anchor scroll.
+    static let chatThreadRequestScrollToBottom = Notification.Name("OpenCore.chatThreadRequestScrollToBottom")
+}
+
 /// Collapsible reasoning card — streams monospace text while the model thinks.
 struct ChatReasoningCardView: View {
     let content: String
@@ -58,6 +63,7 @@ struct ChatReasoningCardView: View {
             withAnimation(.easeInOut(duration: 0.22)) {
                 isExpanded = false
             }
+            NotificationCenter.default.post(name: .chatThreadRequestScrollToBottom, object: nil)
         }
     }
 
@@ -92,37 +98,37 @@ struct ChatReasoningCardView: View {
         }
     }
 
+    @ViewBuilder
     private var streamingBody: some View {
-        Group {
-            if isStreaming {
-                TimelineView(.animation(
-                    minimumInterval: 1.0 / 30.0,
-                    paused: !isExpanded || reduceMotion
-                )) { timeline in
-                    ChatStreamingTextView(
-                        text: displayedContent,
-                        font: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-                        textColor: UIColor(palette.textSecondary),
-                        showsCursor: true,
-                        cursorColor: UIColor(palette.accentPrimary),
-                        cursorOpacity: cursorOpacity(at: timeline.date)
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        if isExpanded {
+            Group {
+                if isStreaming {
+                    TimelineView(.animation(
+                        minimumInterval: 1.0 / 30.0,
+                        paused: reduceMotion
+                    )) { timeline in
+                        ChatStreamingTextView(
+                            text: displayedContent,
+                            font: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                            textColor: UIColor(palette.textSecondary),
+                            showsCursor: true,
+                            cursorColor: UIColor(palette.accentPrimary),
+                            cursorOpacity: cursorOpacity(at: timeline.date)
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    Text(displayedContent)
+                        .font(SharedOpenCoreTypography.monoSM)
+                        .foregroundStyle(palette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                Text(displayedContent)
-                    .font(SharedOpenCoreTypography.monoSM)
-                    .foregroundStyle(palette.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+            .accessibilityLabel(displayedContent)
         }
-        .frame(maxHeight: isExpanded ? .infinity : 0, alignment: .top)
-        .opacity(isExpanded ? 1 : 0)
-        .clipped()
-        .accessibilityHidden(!isExpanded)
-        .accessibilityLabel(displayedContent)
     }
 
     private func cursorOpacity(at date: Date) -> Double {
