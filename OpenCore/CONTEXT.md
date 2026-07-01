@@ -33,6 +33,9 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 ## Speech
 
 - **Flow controller**: `SpeechFlowController` records voice notes, keeps transcript for model input, and surfaces waveform audio attachments in the composer and chat bubble
+- **Recognition**: `SpeechRecognitionClient` adapts `SpeechRecognitionStrategy` implementations (on-device `SFSpeechRecognizer`, remote Whisper API, or fallback composite) via a factory
+- **Limits**: `SpeechRecordingLimits` auto-stops clips at 120 seconds, matching remodex-style voice guardrails
+- **Patterns**: Strategy (recognition backends), Factory (`SpeechRecognitionStrategyFactory`), Adapter (`SpeechRecognitionClient`, `SpeechSystemRecognitionEngine`)
 
 ## Settings
 
