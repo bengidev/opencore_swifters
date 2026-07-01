@@ -50,14 +50,20 @@ struct HomeTabShellView: View {
 
         sidePanel.onOpenConversation = { conversation in
             home.selectTab(.home)
-            Task { await chat.reopenConversation(conversation) }
+            Task {
+                await speech.cancelListening()
+                await chat.reopenConversation(conversation)
+            }
         }
         sidePanel.onActiveConversationRenamed = { id, title in
             chat.renameActiveConversation(id: id, title: title)
         }
         sidePanel.onActiveConversationDeleted = { id in
             if chat.state.conversation?.id == id {
-                chat.clearActiveConversation()
+                Task {
+                    await speech.cancelListening()
+                    chat.clearActiveConversation()
+                }
             }
         }
     }

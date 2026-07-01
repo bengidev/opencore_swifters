@@ -117,7 +117,10 @@ struct HomeView: View {
 
             Button {
                 dismissComposerKeyboard()
-                chat.clearActiveConversation()
+                Task {
+                    await speech.cancelListening()
+                    chat.clearActiveConversation()
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .medium))

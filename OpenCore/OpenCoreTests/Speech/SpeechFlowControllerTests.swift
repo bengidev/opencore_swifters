@@ -127,7 +127,7 @@ struct SpeechFlowControllerTests {
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(controller.state.partialTranscript == "hello")
-        #expect(controller.displayedDraft(base: "typed text") == "typed text")
+        #expect(harness.startCallCount == 1)
 
         await controller.cancelListening()
     }
@@ -203,12 +203,18 @@ struct SpeechFlowControllerTests {
         #expect(harness.startCallCount == 0)
     }
 
-    @Test("cancel listening discards transcript without applying")
-    func cancelListeningDiscardsTranscript() async {
+    @Test("cancel listening discards transcript and temporary audio")
+    func cancelListeningDiscardsTranscript() async throws {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
+        let tempAudio = try makeTestVoiceNoteCAF()
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
         harness.events = [.ready, .partial("discard me")]
-        harness.stopResult = SpeechRecognitionResult(transcript: "discard me")
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "discard me",
+            audioFileURL: tempAudio
+        )
         let controller = harness.makeController()
 
         await controller.startListening()
@@ -221,6 +227,7 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.partialTranscript.isEmpty)
         #expect(controller.state.audioLevels.isEmpty)
         #expect(controller.state.isVoiceActive == false)
+        #expect(FileManager.default.fileExists(atPath: tempAudio.path) == false)
     }
 
     @Test("audio level events update voice activity and waveform samples")
@@ -255,10 +262,17 @@ struct SpeechFlowControllerTests {
         await controller.cancelListening()
     }
 
-    @Test("recognition failure before ready keeps indicator hidden")
-    func failureBeforeReadyHidesIndicator() async {
+    @Test("recognition failure before ready keeps indicator hidden and discards audio")
+    func failureBeforeReadyHidesIndicator() async throws {
         let harness = SpeechRecognitionTestHarness()
+        let tempAudio = try makeTestVoiceNoteCAF()
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
         harness.events = [.failed("Failed to initialize recognizer")]
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "",
+            audioFileURL: tempAudio
+        )
         let controller = harness.makeController()
 
         await controller.startListening()
@@ -268,6 +282,7 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.errorMessage != nil)
         #expect(controller.state.audioLevels.isEmpty)
         #expect(harness.stopCallCount == 1)
+        #expect(FileManager.default.fileExists(atPath: tempAudio.path) == false)
     }
 
     @Test("concurrent start requests only begin one recognition session")
@@ -283,22 +298,6 @@ struct SpeechFlowControllerTests {
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(harness.startCallCount == 1)
-
-        await controller.cancelListening()
-    }
-
-    @Test("displayedDraft keeps the visible composer text unchanged while listening")
-    func displayedDraftKeepsBaseWhileListening() async {
-        let harness = SpeechRecognitionTestHarness()
-        harness.hangsOpenAfterEvents = true
-        harness.events = [.ready, .partial("world")]
-        let controller = harness.makeController()
-
-        await controller.startListening()
-        try? await Task.sleep(for: .milliseconds(50))
-
-        #expect(controller.displayedDraft(base: "Hello") == "Hello")
-        #expect(controller.displayedDraft(base: "") == "")
 
         await controller.cancelListening()
     }
@@ -528,8 +527,8 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.errorMessage == nil)
     }
 
-    @Test("stopListening returns capture when voiceCaptureHandler is unset")
-    func stopReturnsCaptureWithoutHandler() async throws {
+    @Test("stopListening publishes pendingCapture for composer consumption")
+    func stopPublishesPendingCapture() async throws {
         let harness = SpeechRecognitionTestHarness()
         harness.hangsOpenAfterEvents = true
         let tempAudio = try makeTestVoiceNoteCAF()
@@ -542,7 +541,6 @@ struct SpeechFlowControllerTests {
         )
         harness.events = [.ready, .partial("hello again")]
         let controller = harness.makeController()
-        controller.voiceCaptureHandler = nil
 
         await controller.startListening()
         try? await Task.sleep(for: .milliseconds(50))
@@ -550,5 +548,56 @@ struct SpeechFlowControllerTests {
         let capture = await controller.stopListening()
 
         #expect(capture?.composerText == "hello again")
+        #expect(controller.state.pendingCapture?.composerText == "hello again")
+    }
+
+    @Test("remote transcription failure surfaces a distinct error")
+    func remoteTranscriptionFailureShowsDistinctError() async throws {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        let tempAudio = try makeTestVoiceNoteCAF()
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "",
+            audioFileURL: tempAudio,
+            duration: 1,
+            failureMessage: "Voice transcription failed. Check your API key in Settings."
+        )
+        harness.events = [.ready]
+        let controller = harness.makeController()
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let capture = await controller.stopListening()
+
+        #expect(capture == nil)
+        #expect(controller.state.errorMessage == "Voice transcription failed. Check your API key in Settings.")
+        #expect(controller.state.pendingCapture == nil)
+    }
+
+    @Test("concurrent stopListening calls only complete once")
+    func concurrentStopOnlyCompletesOnce() async throws {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        let tempAudio = try makeTestVoiceNoteCAF()
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "once only",
+            audioFileURL: tempAudio,
+            duration: 1
+        )
+        harness.events = [.ready]
+        let controller = harness.makeController()
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        async let first = controller.stopListening()
+        async let second = controller.stopListening()
+        let results = await [first, second]
+
+        #expect(results.compactMap { $0 }.count == 1)
+        #expect(harness.stopCallCount == 1)
     }
 }

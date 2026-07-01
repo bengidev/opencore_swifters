@@ -1,30 +1,20 @@
 import Foundation
-import AVFoundation
 
-/// Remote speech recognition via an OpenAI-compatible Whisper transcription API.
+/// Remote speech transcription via an OpenAI-compatible Whisper API.
 ///
-/// Records audio locally to a file while streaming audio levels for the
-/// waveform indicator. On `stop()`, the recorded audio is posted to the
-/// `/v1/audio/transcriptions` endpoint and the returned transcript is
-/// packaged into `SpeechRecognitionResult`.
-///
-/// The API endpoint and credentials are resolved lazily per request so a
-/// credential change takes effect on the next recording session.
-nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrategy {
-    let identifier = "remote"
-
+/// Used as a post-recording fallback when on-device recognition produces
+/// no usable transcript. The credential provider ID defaults to `"openai"`.
+nonisolated final class RemoteSpeechRecognitionStrategy: SpeechPostRecordingTranscriber {
     private let credentialStore: CredentialStoring
     private let credentialProviderID: String
     private let apiBaseURL: URL
     private let model: String
     private let urlSession: URLSession
-    private let audioQueue: DispatchQueue
 
     /// - Parameters:
     ///   - credentialStore: Resolves the API key at transcription time.
     ///   - credentialProviderID: Provider ID used to look up the API key
-    ///     in the credential store. Defaults to `"openai"` matching the
-    ///     project's provider ID convention.
+    ///     in the credential store. Defaults to `"openai"`.
     ///   - apiBaseURL: Base URL for the OpenAI-compatible API
     ///     (e.g. `https://api.openai.com/v1`).
     ///   - model: Whisper model identifier (default `whisper-1`).
@@ -41,174 +31,59 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
         self.apiBaseURL = apiBaseURL
         self.model = model
         self.urlSession = urlSession
-        self.audioQueue = DispatchQueue(
-            label: "io.github.bengidev.OpenCore.speech.remote",
-            qos: .userInitiated
-        )
     }
 
-    // MARK: - Authorization
-
-    /// Returns `.denied` when no API credential is available so
-    /// `SpeechFlowController` can surface a meaningful error rather than
-    /// silently recording audio that will fail to transcribe.
-    nonisolated func authorizationStatus() -> SpeechAuthorizationStatus {
-        credentialStore.secret(for: credentialProviderID) != nil ? .authorized : .denied
+    /// Whether an API credential is available for cloud transcription.
+    nonisolated func hasCredential() -> Bool {
+        credentialStore.secret(for: credentialProviderID) != nil
     }
 
-    nonisolated func requestAuthorization() async -> SpeechAuthorizationStatus {
-        credentialStore.secret(for: credentialProviderID) != nil ? .authorized : .denied
-    }
-
-    // MARK: - Recognition
-
-    nonisolated func start() -> AsyncStream<SpeechRecognitionEvent> {
-        AsyncStream { continuation in
-            audioQueue.async {
-                do {
-                    try self.beginRecording(continuation: continuation)
-                } catch {
-                    continuation.yield(.failed(error.localizedDescription))
-                    continuation.finish()
-                }
-            }
-        }
-    }
-
-    nonisolated func stop() async -> SpeechRecognitionResult? {
-        var capturedState: RecordingState?
-        audioQueue.sync {
-            capturedState = self.state
-            self.state = nil
-        }
-        guard let state = capturedState else { return nil }
-
-        let result = await finishRecording(state: state)
-        audioQueue.async {
-            self.tearDownRecording(state: state)
-        }
-        return result
-    }
-
-    /// Transcribe an externally captured audio file through the Whisper API.
-    ///
-    /// Used by `FallbackSpeechRecognitionStrategy` to transcribe audio
-    /// already recorded by the on-device strategy.
     nonisolated func transcribe(
         audioFileURL: URL,
         waveformSamples: [Float],
         duration: TimeInterval
     ) async -> SpeechRecognitionResult? {
-        guard let apiKey = credentialStore.secret(for: credentialProviderID) else { return nil }
-        let transcript = await transcribeAudio(fileURL: audioFileURL, apiKey: apiKey)
-        return SpeechRecognitionResult(
-            transcript: transcript,
-            audioFileURL: audioFileURL,
-            waveformSamples: waveformSamples,
-            duration: duration
-        )
-    }
-
-    // MARK: - Recording State
-
-    private final class RecordingState: @unchecked Sendable {
-        var audioEngine: AVAudioEngine?
-        var audioFile: AVAudioFile?
-        var recordingURL: URL?
-        var waveformSamples: [Float] = []
-        var recordingStartedAt: Date?
-        var continuation: AsyncStream<SpeechRecognitionEvent>.Continuation?
-    }
-
-    private nonisolated(unsafe) var state: RecordingState?
-
-    // MARK: - Audio Capture
-
-    private func beginRecording(
-        continuation: AsyncStream<SpeechRecognitionEvent>.Continuation
-    ) throws {
-        let recordingState = RecordingState()
-        self.state = recordingState
-        recordingState.continuation = continuation
-
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-
-        let recordingURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("m4a")
-        recordingState.recordingURL = recordingURL
-        recordingState.recordingStartedAt = Date()
-
-        let engine = AVAudioEngine()
-        recordingState.audioEngine = engine
-
-        let inputNode = engine.inputNode
-        let tapFormat = self.recordingTapFormat(for: inputNode)
-        guard let tapFormat else {
-            throw SpeechSystemRecognitionError.audioFormatUnavailable
-        }
-
-        let audioFile = try AVAudioFile(forWriting: recordingURL, settings: tapFormat.settings)
-        recordingState.audioFile = audioFile
-
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: tapFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            try? audioFile.write(from: buffer)
-            let level = Self.rmsLevel(from: buffer)
-            self.audioQueue.async {
-                recordingState.waveformSamples.append(level)
-                continuation.yield(.audioLevel(level))
-            }
-        }
-
-        engine.prepare()
-        try engine.start()
-
-        continuation.yield(.ready)
-    }
-
-    private func finishRecording(state: RecordingState) async -> SpeechRecognitionResult? {
-        let duration = state.recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
-        let waveformSamples = state.waveformSamples
-        guard let recordingURL = state.recordingURL else { return nil }
-
         guard let apiKey = credentialStore.secret(for: credentialProviderID) else {
             return SpeechRecognitionResult(
                 transcript: "",
-                audioFileURL: recordingURL,
+                audioFileURL: audioFileURL,
                 waveformSamples: waveformSamples,
-                duration: duration
+                duration: duration,
+                failureMessage: Self.missingCredentialMessage
             )
         }
 
-        let transcript = await transcribeAudio(fileURL: recordingURL, apiKey: apiKey)
-        return SpeechRecognitionResult(
-            transcript: transcript,
-            audioFileURL: recordingURL,
-            waveformSamples: waveformSamples,
-            duration: duration
-        )
-    }
-
-    private func tearDownRecording(state: RecordingState) {
-        state.audioEngine?.stop()
-        state.audioEngine?.reset()
-        state.audioFile = nil
-        state.continuation?.finish()
-        state.continuation = nil
-        try? AVAudioSession.sharedInstance().setActive(
-            false,
-            options: .notifyOthersOnDeactivation
-        )
+        switch await transcribeAudio(fileURL: audioFileURL, apiKey: apiKey) {
+        case let .success(transcript):
+            return SpeechRecognitionResult(
+                transcript: transcript,
+                audioFileURL: audioFileURL,
+                waveformSamples: waveformSamples,
+                duration: duration
+            )
+        case let .failure(message):
+            return SpeechRecognitionResult(
+                transcript: "",
+                audioFileURL: audioFileURL,
+                waveformSamples: waveformSamples,
+                duration: duration,
+                failureMessage: message
+            )
+        }
     }
 
     // MARK: - Transcription API
 
-    private func transcribeAudio(fileURL: URL, apiKey: String) async -> String {
+    private enum TranscriptionOutcome: Sendable {
+        case success(String)
+        case failure(String)
+    }
+
+    private func transcribeAudio(fileURL: URL, apiKey: String) async -> TranscriptionOutcome {
         let boundary = UUID().uuidString
-        guard let audioData = try? Data(contentsOf: fileURL) else { return "" }
+        guard let audioData = try? Data(contentsOf: fileURL), !audioData.isEmpty else {
+            return .failure("Voice recording could not be read.")
+        }
 
         let upload = Self.audioUploadMetadata(for: fileURL)
 
@@ -235,48 +110,33 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
         request.httpBody = body
 
         do {
-            let (data, _) = try await urlSession.data(for: request)
+            let (data, response) = try await urlSession.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse,
+               !(200...299).contains(httpResponse.statusCode) {
+                return .failure(Self.httpFailureMessage(statusCode: httpResponse.statusCode))
+            }
+
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let text = json["text"] as? String else {
-                return ""
+                return .failure("Voice transcription returned an unexpected response.")
             }
-            return text
+            return .success(text)
         } catch {
-            return ""
+            return .failure("Voice transcription failed. Check your network connection.")
         }
     }
 
-    // MARK: - Audio Utilities
-
-    private func recordingTapFormat(for inputNode: AVAudioInputNode) -> AVAudioFormat? {
-        let hardwareFormat = inputNode.inputFormat(forBus: 0)
-        guard hardwareFormat.sampleRate > 0, hardwareFormat.channelCount > 0 else {
-            return nil
+    private static func httpFailureMessage(statusCode: Int) -> String {
+        switch statusCode {
+        case 401, 403:
+            "Voice transcription failed. Check your API key in Settings."
+        case 413:
+            "Voice recording is too large to transcribe."
+        case 429:
+            "Voice transcription is rate limited. Try again shortly."
+        default:
+            "Voice transcription failed (HTTP \(statusCode))."
         }
-        let nodeOutputFormat = inputNode.outputFormat(forBus: 0)
-        if nodeOutputFormat.sampleRate == hardwareFormat.sampleRate,
-           nodeOutputFormat.channelCount == hardwareFormat.channelCount {
-            return nodeOutputFormat
-        }
-        return hardwareFormat
-    }
-
-    nonisolated private static func rmsLevel(from buffer: AVAudioPCMBuffer) -> Float {
-        let frameLength = Int(buffer.frameLength)
-        guard frameLength > 0 else { return 0 }
-
-        guard let channelData = buffer.floatChannelData else { return 0 }
-        var sum: Float = 0
-        let channelCount = Int(buffer.format.channelCount)
-        let sampleCount = frameLength * channelCount
-        for channel in 0..<channelCount {
-            let samples = channelData[channel]
-            for frame in 0..<frameLength {
-                let sample = samples[frame]
-                sum += sample * sample
-            }
-        }
-        return sqrt(sum / Float(sampleCount))
     }
 
     private struct AudioUploadMetadata: Sendable {
@@ -284,7 +144,7 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
         let mimeType: String
     }
 
-    nonisolated private static func audioUploadMetadata(for fileURL: URL) -> AudioUploadMetadata {
+    private static func audioUploadMetadata(for fileURL: URL) -> AudioUploadMetadata {
         switch fileURL.pathExtension.lowercased() {
         case "caf":
             return AudioUploadMetadata(filename: "audio.caf", mimeType: "audio/x-caf")
@@ -296,6 +156,7 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
             return AudioUploadMetadata(filename: "audio.m4a", mimeType: "audio/mp4")
         }
     }
-}
 
-extension RemoteSpeechRecognitionStrategy: SpeechPostRecordingTranscriber {}
+    private static let missingCredentialMessage =
+        "Add an OpenAI API key in Settings to transcribe voice with the server."
+}

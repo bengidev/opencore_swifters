@@ -95,9 +95,13 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
-                try? PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
-                    modelContainer: modelContainer
-                )
+                do {
+                    try PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
+                        modelContainer: modelContainer
+                    )
+                } catch {
+                    assertionFailure("Voice attachment retention sweep failed: \(error)")
+                }
             }
         }
         .modelContainer(modelContainer)

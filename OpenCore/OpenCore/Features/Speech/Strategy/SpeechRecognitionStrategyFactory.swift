@@ -38,15 +38,4 @@ nonisolated enum SpeechRecognitionStrategyFactory {
     nonisolated static func makeOnDeviceOnly(locale: Locale = .current) -> SpeechRecognitionStrategy {
         OnDeviceSpeechRecognitionStrategy(locale: locale)
     }
-
-    /// Remote-only recognition — useful when the device lacks speech support.
-    nonisolated static func makeRemoteOnly(
-        credentialStore: CredentialStoring,
-        urlSession: URLSession = .shared
-    ) -> SpeechRecognitionStrategy {
-        RemoteSpeechRecognitionStrategy(
-            credentialStore: credentialStore,
-            urlSession: urlSession
-        )
-    }
 }

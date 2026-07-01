@@ -11,4 +11,6 @@ struct SpeechFlowState: Equatable {
     var elapsedDuration: TimeInterval = 0
     var audioLevels: [Float] = []
     var isVoiceActive = false
+    /// Delivered when a capture completes (manual or auto-stop) for the composer to consume.
+    var pendingCapture: SpeechCaptureResult?
 }

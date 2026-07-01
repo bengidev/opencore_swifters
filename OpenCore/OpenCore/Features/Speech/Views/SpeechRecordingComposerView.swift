@@ -6,57 +6,75 @@ struct SpeechRecordingComposerView: View {
     let audioLevels: [Float]
     let isVoiceActive: Bool
     let isTranscribing: Bool
-    let onCancel: () -> Void
+    let showsCloudTranscriptionNotice: Bool
 
     @Environment(\.sharedPalette) private var palette
 
     var body: some View {
-        HStack(spacing: 12) {
-            recordingIndicator
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                recordingIndicator
 
-            GeometryReader { geometry in
-                SpeechComposerWaveformView(
-                    heights: SpeechRecordingDisplayLogic.waveformBarHeights(
-                        levels: audioLevels,
-                        barCount: SpeechRecordingDisplayLogic.composerBarCount(
-                            forWidth: geometry.size.width
-                        )
-                    ),
-                    activeColor: palette.accentPrimary,
-                    idleColor: palette.textTertiary.opacity(0.4)
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                GeometryReader { geometry in
+                    SpeechComposerWaveformView(
+                        heights: SpeechRecordingDisplayLogic.waveformBarHeights(
+                            levels: audioLevels,
+                            barCount: SpeechRecordingDisplayLogic.composerBarCount(
+                                forWidth: geometry.size.width
+                            )
+                        ),
+                        activeColor: palette.accentPrimary,
+                        idleColor: palette.textTertiary.opacity(0.4)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                }
+                .frame(height: 28)
+
+                Text(SpeechRecordingDisplayLogic.formatElapsedDuration(elapsedDuration))
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundStyle(palette.textSecondary)
+                    .monospacedDigit()
+                    .accessibilityLabel("Recording duration")
+                    .accessibilityValue(SpeechRecordingDisplayLogic.formatElapsedDuration(elapsedDuration))
+
+                if isTranscribing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(palette.accentPrimary)
+                        .accessibilityLabel("Transcribing voice")
+                }
             }
-            .frame(height: 28)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(minHeight: 56)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.45 : 0.65))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(palette.textTertiary.opacity(0.12), lineWidth: 1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(isTranscribing ? "Transcribing voice" : "Voice recording in progress")
 
-            Text(SpeechRecordingDisplayLogic.formatElapsedDuration(elapsedDuration))
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                .foregroundStyle(palette.textSecondary)
-                .monospacedDigit()
-                .accessibilityLabel("Recording duration")
-                .accessibilityValue(SpeechRecordingDisplayLogic.formatElapsedDuration(elapsedDuration))
-
-            if isTranscribing {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(palette.accentPrimary)
-                    .accessibilityLabel("Transcribing voice")
+            if showsCloudTranscriptionNotice {
+                Text(cloudTranscriptionNotice)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.textTertiary)
+                    .padding(.horizontal, 4)
+                    .accessibilityLabel(cloudTranscriptionNotice)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .frame(minHeight: 56)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(palette.surfaceSubtle.opacity(palette.isDark ? 0.45 : 0.65))
+    }
+
+    private var cloudTranscriptionNotice: String {
+        if isTranscribing {
+            "Transcribing via your configured API provider."
+        } else {
+            "Audio may be sent to your configured API if on-device recognition fails."
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(palette.textTertiary.opacity(0.12), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(isTranscribing ? "Transcribing voice" : "Voice recording in progress")
     }
 
     private var recordingIndicator: some View {
@@ -98,7 +116,7 @@ private struct SpeechComposerWaveformView: View {
             audioLevels: [0.02, 0.08, 0.2, 0.15, 0.05, 0.12],
             isVoiceActive: true,
             isTranscribing: false,
-            onCancel: {}
+            showsCloudTranscriptionNotice: true
         )
 
         SpeechRecordingComposerView(
@@ -106,7 +124,7 @@ private struct SpeechComposerWaveformView: View {
             audioLevels: [0.05, 0.1, 0.08],
             isVoiceActive: false,
             isTranscribing: true,
-            onCancel: {}
+            showsCloudTranscriptionNotice: true
         )
     }
     .padding()

@@ -15,8 +15,7 @@ final class SpeechFlowController {
     private var startTask: Task<Void, Never>?
     private var recognitionSessionID: UInt64 = 0
     private var autoStopTriggered = false
-    /// Delivers auto-stop capture results when no caller applies `stopListening()`'s return value.
-    var voiceCaptureHandler: (@MainActor (SpeechCaptureResult) -> Void)?
+    private var isStopping = false
 
     init(
         recognition: SpeechRecognitionClient = .preview,
@@ -38,9 +37,8 @@ final class SpeechFlowController {
         state.errorMessage = nil
     }
 
-    /// Composer draft is user-typed while listening; transcript is applied after stop.
-    func displayedDraft(base: String) -> String {
-        base
+    func clearPendingCapture() {
+        state.pendingCapture = nil
     }
 
     func startListening() async {
@@ -62,6 +60,7 @@ final class SpeechFlowController {
 
     private func performStartListening() async {
         clearError()
+        clearPendingCapture()
 
         var status = recognition.authorizationStatus()
         if status == .notDetermined {
@@ -116,7 +115,8 @@ final class SpeechFlowController {
                     state.partialTranscript = text
                 case let .failed(message):
                     state.errorMessage = message
-                    _ = await recognition.stop()
+                    let result = await recognition.stop()
+                    Self.discardRecordedAudio(from: result)
                     resetListeningPresentation()
                     return
                 case let .audioLevel(level):
@@ -129,9 +129,13 @@ final class SpeechFlowController {
     func stopListening() async -> SpeechCaptureResult? {
         await startTask?.value
 
+        guard !isStopping else { return nil }
         guard state.isListening || state.isTranscribing || recognitionTask != nil else {
             return nil
         }
+
+        isStopping = true
+        defer { isStopping = false }
 
         let waveformSamples = state.audioLevels
         let duration = state.elapsedDuration
@@ -153,6 +157,11 @@ final class SpeechFlowController {
         )
         Self.discardRecordedAudio(from: enrichedResult)
 
+        if let failureMessage = enrichedResult?.failureMessage {
+            state.errorMessage = failureMessage
+            return nil
+        }
+
         let transcript = enrichedResult?.transcript
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
@@ -161,13 +170,17 @@ final class SpeechFlowController {
             return nil
         }
 
-        return SpeechCaptureResult(composerText: transcript)
+        let capture = SpeechCaptureResult(composerText: transcript)
+        state.pendingCapture = capture
+        return capture
     }
 
     func cancelListening() async {
         await startTask?.value
-        _ = await finishListening()
+        let result = await finishListening()
+        Self.discardRecordedAudio(from: result)
         resetListeningPresentation()
+        clearPendingCapture()
     }
 
     private func finishListening() async -> SpeechRecognitionResult? {
@@ -224,8 +237,7 @@ final class SpeechFlowController {
 
         autoStopTriggered = true
         Task { @MainActor [weak self] in
-            guard let self, let capture = await stopListening() else { return }
-            voiceCaptureHandler?(capture)
+            _ = await self?.stopListening()
         }
     }
 
@@ -234,6 +246,13 @@ final class SpeechFlowController {
         partialTranscript: String,
         duration: TimeInterval
     ) -> SpeechRecognitionResult? {
+        if let failureMessage = result?.failureMessage {
+            return result ?? SpeechRecognitionResult(
+                transcript: "",
+                failureMessage: failureMessage
+            )
+        }
+
         let stoppedTranscript = result?.transcript.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !stoppedTranscript.isEmpty {
             return result
@@ -243,7 +262,8 @@ final class SpeechFlowController {
             transcript: partialTranscript,
             audioFileURL: result?.audioFileURL,
             waveformSamples: result?.waveformSamples ?? [],
-            duration: result?.duration ?? duration
+            duration: result?.duration ?? duration,
+            failureMessage: result?.failureMessage
         )
     }
 

@@ -90,7 +90,7 @@ struct HomeComposerPromptPanel: View {
                         : speech.state.audioLevels,
                     isVoiceActive: speech.state.isVoiceActive,
                     isTranscribing: speech.state.isTranscribing,
-                    onCancel: cancelVoiceInput
+                    showsCloudTranscriptionNotice: home.state.hasAPIKey
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
@@ -184,10 +184,10 @@ struct HomeComposerPromptPanel: View {
         } message: {
             Text(visualCapabilityWarningMessage)
         }
-        .onAppear {
-            speech.voiceCaptureHandler = { capture in
-                applyVoiceCapture(capture)
-            }
+        .onChange(of: speech.state.pendingCapture) { _, capture in
+            guard let capture else { return }
+            applyVoiceCapture(capture)
+            speech.clearPendingCapture()
         }
     }
 
@@ -234,11 +234,7 @@ struct HomeComposerPromptPanel: View {
 
     private func stopVoiceInput() {
         dismissKeyboard()
-        Task {
-            if let capture = await speech.stopListening() {
-                applyVoiceCapture(capture)
-            }
-        }
+        Task { _ = await speech.stopListening() }
     }
 
     private func applyVoiceCapture(_ capture: SpeechCaptureResult) {

@@ -23,8 +23,6 @@ struct SpeechStrategyFactoryTests {
     func makeDefaultWithEmptyCredential() {
         let store = CredentialInMemoryStore()
         let strategy = SpeechRecognitionStrategyFactory.makeDefault(credentialStore: store)
-        // Even without a credential for "openai", the factory builds a fallback
-        // strategy — the remote strategy inside will report .denied on auth check.
         #expect(strategy.identifier == "fallback")
     }
 
@@ -33,66 +31,70 @@ struct SpeechStrategyFactoryTests {
         let strategy = SpeechRecognitionStrategyFactory.makeOnDeviceOnly()
         #expect(strategy.identifier == "on-device")
     }
-
-    @Test("makeRemoteOnly returns RemoteSpeechRecognitionStrategy")
-    func makeRemoteOnly() {
-        let store = CredentialInMemoryStore()
-        let strategy = SpeechRecognitionStrategyFactory.makeRemoteOnly(credentialStore: store)
-        #expect(strategy.identifier == "remote")
-    }
 }
 
-@Suite("Remote Speech Recognition Strategy - Authorization")
-struct RemoteAuthStrategyTests {
-    @Test("authorizationStatus returns denied when no credential exists")
-    func authDeniedWithoutCredential() {
+@Suite("Remote Speech Transcription")
+struct RemoteTranscriptionStrategyTests {
+    @Test("hasCredential returns false when no credential exists")
+    func hasCredentialDeniedWithoutCredential() {
         let store = CredentialInMemoryStore()
         let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
-        #expect(strategy.authorizationStatus() == .denied)
+        #expect(strategy.hasCredential() == false)
     }
 
-    @Test("authorizationStatus returns authorized when credential exists")
-    func authAuthorizedWithCredential() throws {
+    @Test("hasCredential returns true when credential exists")
+    func hasCredentialAuthorizedWithCredential() throws {
         let store = CredentialInMemoryStore()
         try store.save("sk-test-key", for: "openai")
         let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
-        #expect(strategy.authorizationStatus() == .authorized)
+        #expect(strategy.hasCredential() == true)
     }
 
-    @Test("authorizationStatus uses custom provider id")
-    func authWithCustomProviderID() throws {
+    @Test("transcribe returns failure message when credential is missing")
+    func transcribeMissingCredential() async throws {
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+
         let store = CredentialInMemoryStore()
-        try store.save("sk-whisper-key", for: "whisper")
-        let strategy = RemoteSpeechRecognitionStrategy(
-            credentialStore: store,
-            credentialProviderID: "whisper"
+        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        let result = await strategy.transcribe(
+            audioFileURL: audioURL,
+            waveformSamples: [],
+            duration: 1
         )
-        #expect(strategy.authorizationStatus() == .authorized)
+
+        #expect(result?.failureMessage != nil)
+        #expect(result?.transcript.isEmpty == true)
     }
 
-    @Test("authorizationStatus returns denied for wrong provider id")
-    func authDeniedForWrongProviderID() throws {
-        let store = CredentialInMemoryStore()
-        try store.save("sk-test", for: "openrouter")
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
-        #expect(strategy.authorizationStatus() == .denied)
-    }
+    @Test("transcribe surfaces HTTP errors from Whisper API")
+    func transcribeHTTPError() async throws {
+        let audioURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01, 0x02]))
+        defer { try? FileManager.default.removeItem(at: audioURL) }
 
-    @Test("requestAuthorization mirrors denied status")
-    func requestAuthDenied() async {
-        let store = CredentialInMemoryStore()
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
-        let status = await strategy.requestAuthorization()
-        #expect(status == .denied)
-    }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [WhisperHTTPErrorURLProtocol.self]
+        let session = URLSession(configuration: config)
 
-    @Test("requestAuthorization mirrors authorized status")
-    func requestAuthAuthorized() async throws {
         let store = CredentialInMemoryStore()
         try store.save("sk-test", for: "openai")
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
-        let status = await strategy.requestAuthorization()
-        #expect(status == .authorized)
+        let strategy = RemoteSpeechRecognitionStrategy(
+            credentialStore: store,
+            urlSession: session
+        )
+
+        let result = await strategy.transcribe(
+            audioFileURL: audioURL,
+            waveformSamples: [],
+            duration: 1
+        )
+
+        #expect(result?.failureMessage?.contains("API key") == true)
+        #expect(result?.transcript.isEmpty == true)
     }
 }
 
@@ -113,7 +115,6 @@ struct FallbackStrategyTests {
         let store = CredentialInMemoryStore()
         let remote = RemoteSpeechRecognitionStrategy(credentialStore: store)
         let fallback = FallbackSpeechRecognitionStrategy(primary: primary, remoteTranscriber: remote)
-        // Primary returns .authorized when no auth needed (on-device)
         #expect(fallback.authorizationStatus() == primary.authorizationStatus())
     }
 
@@ -158,6 +159,31 @@ struct FallbackStrategyTests {
         #expect(result?.transcript == "from whisper")
         #expect(remote.transcribeCallCount == 1)
     }
+
+    @Test("fallback propagates remote transcription failure")
+    func fallbackPropagatesRemoteFailure() async throws {
+        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
+        defer { try? FileManager.default.removeItem(at: audioURL) }
+
+        let primary = StubSpeechRecognitionStrategy(
+            identifier: "stub-primary",
+            stopResult: SpeechRecognitionResult(transcript: "", audioFileURL: audioURL, duration: 2)
+        )
+        let remote = StubPostRecordingTranscriber(
+            result: SpeechRecognitionResult(
+                transcript: "",
+                audioFileURL: audioURL,
+                duration: 2,
+                failureMessage: "Voice transcription failed."
+            )
+        )
+        let fallback = FallbackSpeechRecognitionStrategy(primary: primary, remoteTranscriber: remote)
+
+        let result = await fallback.stop()
+
+        #expect(result?.failureMessage == "Voice transcription failed.")
+    }
 }
 
 private final class StubSpeechRecognitionStrategy: SpeechRecognitionStrategy, @unchecked Sendable {
@@ -196,4 +222,28 @@ private final class StubPostRecordingTranscriber: SpeechPostRecordingTranscriber
         transcribeCallCount += 1
         return result
     }
+}
+
+private final class WhisperHTTPErrorURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.path.contains("audio/transcriptions") == true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 401,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
