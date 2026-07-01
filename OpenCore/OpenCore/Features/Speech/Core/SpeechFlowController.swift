@@ -1,36 +1,66 @@
 import Foundation
 import Observation
 
-/// Owns composer speech-to-text lifecycle — permissions, listening state, and voice-note delivery.
+/// Owns composer speech-to-text lifecycle — permissions, listening state, and transcript delivery.
 @MainActor
 @Observable
 final class SpeechFlowController {
     private(set) var state = SpeechFlowState()
     private let recognition: SpeechRecognitionClient
     private let autoStopThreshold: TimeInterval
+    private let microphoneAuthorizationStatus: @Sendable () -> SpeechAuthorizationStatus
+    private let requestMicrophoneAuthorization: @Sendable () async -> SpeechAuthorizationStatus
     private var recognitionTask: Task<Void, Never>?
     private var durationTask: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
+    private var recognitionSessionID: UInt64 = 0
     private var autoStopTriggered = false
+    /// Delivers auto-stop capture results when no caller applies `stopListening()`'s return value.
+    var voiceCaptureHandler: (@MainActor (SpeechCaptureResult) -> Void)?
 
     init(
         recognition: SpeechRecognitionClient = .preview,
-        autoStopThreshold: TimeInterval = SpeechRecordingLimits.autoStopThreshold
+        autoStopThreshold: TimeInterval = SpeechRecordingLimits.autoStopThreshold,
+        microphoneAuthorizationStatus: @escaping @Sendable () -> SpeechAuthorizationStatus = {
+            SpeechMicrophoneAccess.authorizationStatus()
+        },
+        requestMicrophoneAuthorization: @escaping @Sendable () async -> SpeechAuthorizationStatus = {
+            await SpeechMicrophoneAccess.requestAuthorization()
+        }
     ) {
         self.recognition = recognition
         self.autoStopThreshold = autoStopThreshold
+        self.microphoneAuthorizationStatus = microphoneAuthorizationStatus
+        self.requestMicrophoneAuthorization = requestMicrophoneAuthorization
     }
 
     func clearError() {
         state.errorMessage = nil
     }
 
-    /// Composer draft stays user-typed only; live transcript is not mirrored into the text field.
+    /// Composer draft is user-typed while listening; transcript is applied after stop.
     func displayedDraft(base: String) -> String {
         base
     }
 
     func startListening() async {
+        if let startTask {
+            await startTask.value
+            return
+        }
+
         guard recognitionTask == nil else { return }
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await performStartListening()
+        }
+        startTask = task
+        await task.value
+        startTask = nil
+    }
+
+    private func performStartListening() async {
         clearError()
 
         var status = recognition.authorizationStatus()
@@ -39,9 +69,23 @@ final class SpeechFlowController {
         }
 
         guard status == .authorized else {
+            resetListeningPresentation()
             state.errorMessage = Self.permissionDeniedMessage
             return
         }
+
+        var microphoneStatus = microphoneAuthorizationStatus()
+        if microphoneStatus == .notDetermined {
+            microphoneStatus = await requestMicrophoneAuthorization()
+        }
+
+        guard microphoneStatus == .authorized else {
+            resetListeningPresentation()
+            state.errorMessage = Self.permissionDeniedMessage
+            return
+        }
+
+        guard recognitionTask == nil else { return }
 
         state.partialTranscript = ""
         state.elapsedDuration = 0
@@ -49,13 +93,18 @@ final class SpeechFlowController {
         state.isVoiceActive = false
         state.isTranscribing = false
         autoStopTriggered = false
+        state.isListening = true
 
+        recognitionSessionID &+= 1
+        let sessionID = recognitionSessionID
         let stream = recognition.start()
         recognitionTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
-                recognitionTask = nil
-                stopDurationTimer()
+                if recognitionSessionID == sessionID {
+                    recognitionTask = nil
+                    stopDurationTimer()
+                }
             }
             for await event in stream {
                 guard !Task.isCancelled else { return }
@@ -74,44 +123,59 @@ final class SpeechFlowController {
                     applyAudioLevel(level)
                 }
             }
-            if !Task.isCancelled {
-                _ = await recognition.stop()
-                resetListeningPresentation()
-            }
         }
     }
 
-    func stopListening() async -> ChatMessageAttachment? {
+    func stopListening() async -> SpeechCaptureResult? {
+        await startTask?.value
+
+        guard state.isListening || state.isTranscribing || recognitionTask != nil else {
+            return nil
+        }
+
         let waveformSamples = state.audioLevels
         let duration = state.elapsedDuration
+        let capturedPartial = state.partialTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        state.transcribingWaveformSamples = waveformSamples
+        state.transcribingDuration = duration
         state.isTranscribing = true
+        state.isListening = false
+
         let result = await finishListening()
         state.isTranscribing = false
-        if let attachment = Self.makeVoiceAttachment(
-            from: result,
-            waveformSamples: waveformSamples,
+        state.transcribingWaveformSamples = []
+        state.transcribingDuration = 0
+
+        let enrichedResult = Self.enrichResult(
+            result,
+            partialTranscript: capturedPartial,
             duration: duration
-        ) {
-            return attachment
+        )
+        Self.discardRecordedAudio(from: enrichedResult)
+
+        let transcript = enrichedResult?.transcript
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !transcript.isEmpty else {
+            state.errorMessage = "No speech was detected. Try again or type your message."
+            return nil
         }
-        if result?.audioFileURL != nil,
-           result?.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            state.errorMessage = "Voice note could not be transcribed. Try again or type your message."
-        }
-        return nil
+
+        return SpeechCaptureResult(composerText: transcript)
     }
 
     func cancelListening() async {
+        await startTask?.value
         _ = await finishListening()
+        resetListeningPresentation()
     }
 
     private func finishListening() async -> SpeechRecognitionResult? {
+        stopDurationTimer()
+        let result = await recognition.stop()
         recognitionTask?.cancel()
         recognitionTask = nil
-        stopDurationTimer()
-
-        let result = await recognition.stop()
-        resetListeningPresentation()
+        resetListeningPresentation(clearTranscribing: false)
         return result
     }
 
@@ -124,9 +188,13 @@ final class SpeechFlowController {
         )
     }
 
-    private func resetListeningPresentation() {
+    private func resetListeningPresentation(clearTranscribing: Bool = true) {
         state.isListening = false
-        state.isTranscribing = false
+        if clearTranscribing {
+            state.isTranscribing = false
+            state.transcribingWaveformSamples = []
+            state.transcribingDuration = 0
+        }
         state.partialTranscript = ""
         state.elapsedDuration = 0
         state.audioLevels = []
@@ -156,8 +224,27 @@ final class SpeechFlowController {
 
         autoStopTriggered = true
         Task { @MainActor [weak self] in
-            _ = await self?.stopListening()
+            guard let self, let capture = await stopListening() else { return }
+            voiceCaptureHandler?(capture)
         }
+    }
+
+    static func enrichResult(
+        _ result: SpeechRecognitionResult?,
+        partialTranscript: String,
+        duration: TimeInterval
+    ) -> SpeechRecognitionResult? {
+        let stoppedTranscript = result?.transcript.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !stoppedTranscript.isEmpty {
+            return result
+        }
+        guard !partialTranscript.isEmpty else { return result }
+        return SpeechRecognitionResult(
+            transcript: partialTranscript,
+            audioFileURL: result?.audioFileURL,
+            waveformSamples: result?.waveformSamples ?? [],
+            duration: result?.duration ?? duration
+        )
     }
 
     private func stopDurationTimer() {
@@ -165,31 +252,9 @@ final class SpeechFlowController {
         durationTask = nil
     }
 
-    static func makeVoiceAttachment(
-        from result: SpeechRecognitionResult?,
-        waveformSamples: [Float],
-        duration: TimeInterval
-    ) -> ChatMessageAttachment? {
-        guard let result else { return nil }
-        let transcript = result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !transcript.isEmpty else { return nil }
-        guard let audioFileURL = result.audioFileURL,
-              let storedURL = try? ChatAttachmentStore.save(
-                  copyingFrom: audioFileURL,
-                  suggestedFilename: "voice-note.caf"
-              ) else {
-            return nil
-        }
+    static func discardRecordedAudio(from result: SpeechRecognitionResult?) {
+        guard let audioFileURL = result?.audioFileURL else { return }
         try? FileManager.default.removeItem(at: audioFileURL)
-
-        return ChatMessageAttachment(
-            kind: .audio,
-            filename: "Voice note",
-            localPath: storedURL.path,
-            waveformSamples: waveformSamples,
-            audioDuration: max(duration, result.duration),
-            speechTranscript: transcript
-        )
     }
 
     private static let permissionDeniedMessage =
