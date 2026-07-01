@@ -77,11 +77,13 @@ final class ChatFlowController {
 
     func clearActiveConversation() {
         cancelStream()
+        clearDraftAttachments()
         dispatch(ChatClearActiveConversationCommand())
     }
 
     func reopenConversation(_ conversation: SidePanelConversation) async {
         cancelStream()
+        clearDraftAttachments()
         dispatch(ChatReopenConversationCommand(conversation: conversation))
         let restored = (try? await history.loadMessages(conversation.id)) ?? []
         dispatch(ChatMessagesRestoredCommand(messages: restored))
@@ -576,6 +578,13 @@ final class ChatFlowController {
         if !trimmed.isEmpty {
             if trimmed.count <= 40 { return trimmed }
             return String(trimmed.prefix(40)) + "…"
+        }
+        if let voiceTranscript = attachments
+            .compactMap(\.speechTranscript)
+            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) {
+            if voiceTranscript.count <= 40 { return voiceTranscript }
+            return String(voiceTranscript.prefix(40)) + "…"
         }
         if let firstAttachment = attachments.first {
             return firstAttachment.filename
