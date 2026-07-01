@@ -21,6 +21,18 @@ struct SpeechRecognitionFallbackLogicTests {
         )
     }
 
+    @Test("retries after assistant on-device error codes")
+    func retriesAfterAssistantErrorCodes() {
+        let error = NSError(domain: "kAFAssistantErrorDomain", code: 1110)
+        #expect(
+            SpeechRecognitionFallbackLogic.shouldRetryWithServerRecognition(
+                errorMessage: "The operation could not be completed.",
+                attemptedOnDevice: true,
+                error: error
+            ) == true
+        )
+    }
+
     @Test("does not retry when server recognition already failed")
     func doesNotRetryAfterServerFailure() {
         #expect(

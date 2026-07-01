@@ -210,13 +210,18 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
         let boundary = UUID().uuidString
         guard let audioData = try? Data(contentsOf: fileURL) else { return "" }
 
+        let upload = Self.audioUploadMetadata(for: fileURL)
+
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
         body.append("\(model)\r\n".data(using: .utf8)!)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/mp4\r\n\r\n".data(using: .utf8)!)
+        body.append(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"\(upload.filename)\"\r\n"
+                .data(using: .utf8)!
+        )
+        body.append("Content-Type: \(upload.mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(audioData)
         body.append("\r\n".data(using: .utf8)!)
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
@@ -272,6 +277,24 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
             }
         }
         return sqrt(sum / Float(sampleCount))
+    }
+
+    private struct AudioUploadMetadata: Sendable {
+        let filename: String
+        let mimeType: String
+    }
+
+    nonisolated private static func audioUploadMetadata(for fileURL: URL) -> AudioUploadMetadata {
+        switch fileURL.pathExtension.lowercased() {
+        case "caf":
+            return AudioUploadMetadata(filename: "audio.caf", mimeType: "audio/x-caf")
+        case "wav":
+            return AudioUploadMetadata(filename: "audio.wav", mimeType: "audio/wav")
+        case "mp3":
+            return AudioUploadMetadata(filename: "audio.mp3", mimeType: "audio/mpeg")
+        default:
+            return AudioUploadMetadata(filename: "audio.m4a", mimeType: "audio/mp4")
+        }
     }
 }
 

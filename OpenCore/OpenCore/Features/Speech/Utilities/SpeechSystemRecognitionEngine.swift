@@ -1,3 +1,4 @@
+import AVFAudio
 import AVFoundation
 import Speech
 
@@ -13,6 +14,9 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     private var audioFile: AVAudioFile?
     private var recordingURL: URL?
     private var recordingStartedAt: Date?
+    /// Bumped on teardown so audio-tap and recognition callbacks ignore stale work.
+    private var captureGeneration: UInt64 = 0
+    private var lastStopResult: SpeechRecognitionResult?
 
     init(locale: Locale = .current) {
         let resolvedLocale = Self.resolvedLocale(for: locale) ?? locale
@@ -33,6 +37,13 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
 
     func start() -> AsyncStream<SpeechRecognitionEvent> {
         AsyncStream { continuation in
+            continuation.onTermination = { @Sendable _ in
+                self.audioQueue.async {
+                    guard self.lastStopResult == nil else { return }
+                    self.tearDownCapture()
+                }
+            }
+
             audioQueue.async {
                 do {
                     try self.beginCapture(continuation: continuation)
@@ -50,25 +61,31 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     func stop() async -> SpeechRecognitionResult? {
         await withCheckedContinuation { continuation in
             audioQueue.async {
+                if let lastStopResult = self.lastStopResult {
+                    continuation.resume(returning: lastStopResult)
+                    return
+                }
+
                 let transcript = self.latestTranscript
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let audioFileURL = self.recordingURL
                 let duration = self.recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+                let result = SpeechRecognitionResult(
+                    transcript: transcript,
+                    audioFileURL: audioFileURL,
+                    duration: duration
+                )
+                self.lastStopResult = result
                 self.tearDownCapture()
                 self.latestTranscript = ""
-                continuation.resume(
-                    returning: SpeechRecognitionResult(
-                        transcript: transcript,
-                        audioFileURL: audioFileURL,
-                        duration: duration
-                    )
-                )
+                continuation.resume(returning: result)
             }
         }
     }
 
     private func beginCapture(continuation: AsyncStream<SpeechRecognitionEvent>.Continuation) throws {
         tearDownCapture()
+        lastStopResult = nil
         latestTranscript = ""
         recordingURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -83,8 +100,16 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
             throw SpeechSystemRecognitionError.recognizerUnavailable
         }
 
+        guard AVAudioApplication.shared.recordPermission == .granted else {
+            throw SpeechSystemRecognitionError.microphoneDenied
+        }
+
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: .duckOthers)
+        try audioSession.setCategory(
+            .playAndRecord,
+            mode: .spokenAudio,
+            options: [.duckOthers, .defaultToSpeaker, .allowBluetooth]
+        )
         try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
         let preferOnDevice = speechRecognizer.supportsOnDeviceRecognition
@@ -100,6 +125,9 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         preferOnDevice: Bool,
         continuation: AsyncStream<SpeechRecognitionEvent>.Continuation
     ) throws {
+        captureGeneration &+= 1
+        let generation = captureGeneration
+
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         if preferOnDevice {
@@ -111,12 +139,13 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
             guard let self else { return }
 
             audioQueue.async {
+                guard self.captureGeneration == generation else { return }
+
                 if let result {
                     let text = result.bestTranscription.formattedString
                     self.latestTranscript = text
                     if result.isFinal {
                         self.deliver(.final(text), continuation: continuation)
-                        self.complete(continuation: continuation)
                     } else {
                         self.deliver(.partial(text), continuation: continuation)
                     }
@@ -124,10 +153,12 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
                 }
 
                 if let error {
+                    let nsError = error as NSError
                     let message = error.localizedDescription
                     if SpeechRecognitionFallbackLogic.shouldRetryWithServerRecognition(
                         errorMessage: message,
-                        attemptedOnDevice: preferOnDevice
+                        attemptedOnDevice: preferOnDevice,
+                        error: nsError
                     ) {
                         self.retryWithServerRecognition(
                             speechRecognizer: speechRecognizer,
@@ -144,7 +175,9 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
                     return
                 }
 
-                self.complete(continuation: continuation)
+                // Recognition segment ended without a terminal error. Keep the
+                // microphone capture alive until `stop()` so voice notes are not
+                // truncated when the recognizer pauses between utterances.
             }
         }
 
@@ -177,12 +210,15 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
             audioFile = try AVAudioFile(forWriting: recordingURL, settings: tapFormat.settings)
         }
 
+        let generation = captureGeneration
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: tapFormat) { [weak self] buffer, _ in
             guard let self else { return }
+            guard self.captureGeneration == generation else { return }
             request.append(buffer)
             try? self.audioFile?.write(from: buffer)
             let level = Self.rmsLevel(from: buffer)
             self.audioQueue.async {
+                guard self.captureGeneration == generation else { return }
                 continuation.yield(.audioLevel(level))
             }
         }
@@ -262,6 +298,8 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
     }
 
     private func tearDownCapture() {
+        captureGeneration &+= 1
+
         let inputNode = audioEngine.inputNode
         removeInputTapIfNeeded(from: inputNode)
 
@@ -366,6 +404,7 @@ enum SpeechSystemRecognitionError: LocalizedError {
     case localeUnavailable
     case recognizerUnavailable
     case audioFormatUnavailable
+    case microphoneDenied
 
     var errorDescription: String? {
         switch self {
@@ -375,6 +414,8 @@ enum SpeechSystemRecognitionError: LocalizedError {
             "Speech recognition is temporarily unavailable."
         case .audioFormatUnavailable:
             "Could not configure microphone audio for recording."
+        case .microphoneDenied:
+            "Microphone access is required for voice input."
         }
     }
 }

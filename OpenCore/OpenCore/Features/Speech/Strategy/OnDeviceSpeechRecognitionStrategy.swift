@@ -30,13 +30,21 @@ nonisolated final class OnDeviceSpeechRecognitionStrategy: SpeechRecognitionStra
 
     // MARK: - Recognition
     nonisolated func start() -> AsyncStream<SpeechRecognitionEvent> {
-        AsyncStream { continuation in
-            Task {
+        let session = session
+        return AsyncStream { continuation in
+            let forwardingTask = Task {
                 let stream = await session.start(locale: locale)
                 for await event in stream {
+                    guard !Task.isCancelled else { break }
                     continuation.yield(event)
                 }
                 continuation.finish()
+            }
+            continuation.onTermination = { @Sendable _ in
+                forwardingTask.cancel()
+                Task {
+                    await session.stopIfActive()
+                }
             }
         }
     }
@@ -50,8 +58,10 @@ nonisolated final class OnDeviceSpeechRecognitionStrategy: SpeechRecognitionStra
     /// Actor that serialises access to the recognition engine.
     private actor Session {
         private var engine: SpeechSystemRecognitionEngine?
+        private var lastStopResult: SpeechRecognitionResult?
 
         func start(locale: Locale) -> AsyncStream<SpeechRecognitionEvent> {
+            lastStopResult = nil
             let resolvedLocale = Self.resolveLocale(for: locale)
             let engine = SpeechSystemRecognitionEngine(locale: resolvedLocale)
             self.engine = engine
@@ -59,9 +69,17 @@ nonisolated final class OnDeviceSpeechRecognitionStrategy: SpeechRecognitionStra
         }
 
         func stop() async -> SpeechRecognitionResult? {
-            guard let engine else { return nil }
+            guard let engine else { return lastStopResult }
             self.engine = nil
-            return await engine.stop()
+            let result = await engine.stop()
+            lastStopResult = result
+            return result
+        }
+
+        /// Stops only when the caller did not already stop explicitly.
+        func stopIfActive() async {
+            guard engine != nil else { return }
+            _ = await stop()
         }
 
         private static func resolveLocale(for preferred: Locale) -> Locale {
