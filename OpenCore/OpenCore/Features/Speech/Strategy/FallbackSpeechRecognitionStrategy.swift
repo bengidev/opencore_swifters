@@ -13,15 +13,15 @@ import Foundation
 nonisolated final class FallbackSpeechRecognitionStrategy: SpeechRecognitionStrategy {
     let identifier = "fallback"
 
-    private let primary: OnDeviceSpeechRecognitionStrategy
-    private let remote: RemoteSpeechRecognitionStrategy
+    private let primary: SpeechRecognitionStrategy
+    private let remoteTranscriber: SpeechPostRecordingTranscriber
 
     init(
-        primary: OnDeviceSpeechRecognitionStrategy,
-        remote: RemoteSpeechRecognitionStrategy
+        primary: SpeechRecognitionStrategy,
+        remoteTranscriber: SpeechPostRecordingTranscriber
     ) {
         self.primary = primary
-        self.remote = remote
+        self.remoteTranscriber = remoteTranscriber
     }
 
     // MARK: - Authorization
@@ -52,7 +52,7 @@ nonisolated final class FallbackSpeechRecognitionStrategy: SpeechRecognitionStra
         // Primary recorded audio but got no usable transcript — fall back
         // by sending the captured audio to the remote Whisper API.
         if let primaryResult, let audioURL = primaryResult.audioFileURL {
-            return await remote.transcribe(
+            return await remoteTranscriber.transcribe(
                 audioFileURL: audioURL,
                 waveformSamples: primaryResult.waveformSamples,
                 duration: primaryResult.duration

@@ -28,7 +28,10 @@ nonisolated enum SpeechRecognitionStrategyFactory {
             urlSession: urlSession
         )
 
-        return FallbackSpeechRecognitionStrategy(primary: onDevice, remote: remote)
+        return FallbackSpeechRecognitionStrategy(
+            primary: onDevice,
+            remoteTranscriber: remote
+        )
     }
 
     /// On-device recognition only — no network dependency.

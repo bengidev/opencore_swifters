@@ -274,3 +274,5 @@ nonisolated final class RemoteSpeechRecognitionStrategy: SpeechRecognitionStrate
         return sqrt(sum / Float(sampleCount))
     }
 }
+
+extension RemoteSpeechRecognitionStrategy: SpeechPostRecordingTranscriber {}
