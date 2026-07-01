@@ -59,7 +59,9 @@ struct OpenCoreApp: App {
             contextCompactionPreference: contextCompactionPreference
         ))
 
-        _speech = State(initialValue: SpeechFlowController(recognition: .live()))
+        _speech = State(initialValue: SpeechFlowController(
+            recognition: .live(credentialStore: credentialStore)
+        ))
         _vision = State(initialValue: VisionFlowController())
     }
 
