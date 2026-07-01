@@ -28,7 +28,11 @@ struct HomeComposerPromptPanel: View {
     }
 
     private var composerText: String {
-        speech.displayedDraft(base: chat.state.draftMessage)
+        chat.state.draftMessage
+    }
+
+    private var isSpeechComposerActive: Bool {
+        speech.state.isListening || speech.state.isTranscribing
     }
 
     private var canSend: Bool {
@@ -37,6 +41,7 @@ struct HomeComposerPromptPanel: View {
         return (hasVisibleText || hasAttachments)
             && !chat.state.isSending
             && !speech.state.isListening
+            && !speech.state.isTranscribing
             && !vision.state.isProcessing
             && home.state.hasAPIKey
             && home.state.hasSelectedModel
@@ -60,7 +65,7 @@ struct HomeComposerPromptPanel: View {
                 }
             }
 
-            if !chat.state.draftAttachments.isEmpty {
+            if !chat.state.draftAttachments.isEmpty, !isSpeechComposerActive {
                 ChatComposerAttachmentsStripView(
                     attachments: chat.state.draftAttachments,
                     onRemove: { chat.removeDraftAttachment(id: $0) }
@@ -75,35 +80,40 @@ struct HomeComposerPromptPanel: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            if speech.state.isListening {
-                SpeechRecordingIndicatorView(
-                    elapsedDuration: speech.state.elapsedDuration,
-                    audioLevels: speech.state.audioLevels,
+            if isSpeechComposerActive {
+                SpeechRecordingComposerView(
+                    elapsedDuration: speech.state.isTranscribing
+                        ? speech.state.transcribingDuration
+                        : speech.state.elapsedDuration,
+                    audioLevels: speech.state.isTranscribing
+                        ? speech.state.transcribingWaveformSamples
+                        : speech.state.audioLevels,
                     isVoiceActive: speech.state.isVoiceActive,
+                    isTranscribing: speech.state.isTranscribing,
                     onCancel: cancelVoiceInput
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                TextField(
+                    "Ask anything... @files, $skills, /commands",
+                    text: Binding(
+                        get: { composerText },
+                        set: { chat.setDraftMessage($0) }
+                    ),
+                    axis: .vertical
+                )
+                .frame(minHeight: 50)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(palette.textPrimary)
+                .tint(palette.accentPrimary)
+                .lineLimit(1...5)
+                .textInputAutocapitalization(.sentences)
+                .disabled(vision.state.isProcessing)
+                .focused(isComposerFocused)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: focusComposerIfAllowed)
             }
-
-            TextField(
-                "Ask anything... @files, $skills, /commands",
-                text: Binding(
-                    get: { composerText },
-                    set: { chat.setDraftMessage($0) }
-                ),
-                axis: .vertical
-            )
-            .frame(minHeight: 50)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .font(.system(size: 15, weight: .regular))
-            .foregroundStyle(palette.textPrimary)
-            .tint(palette.accentPrimary)
-            .lineLimit(1...5)
-            .textInputAutocapitalization(.sentences)
-            .disabled(speech.state.isListening || vision.state.isProcessing)
-            .focused(isComposerFocused)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: focusComposerIfAllowed)
 
             HStack(spacing: 6) {
                 HomeComposerIconButton(
@@ -114,7 +124,7 @@ struct HomeComposerPromptPanel: View {
 
                 Spacer(minLength: 4)
 
-                if speech.state.isListening {
+                if speech.state.isListening || speech.state.isTranscribing {
                     HomeComposerStopRecordingButton(action: stopVoiceInput)
                 } else {
                     HomeComposerIconButton(
@@ -132,7 +142,7 @@ struct HomeComposerPromptPanel: View {
         .padding(.bottom, 10)
         .homeComposerGlass(cornerRadius: 28, shadowOpacity: 0.16)
         .sensoryFeedback(.success, trigger: sendFeedbackTrigger)
-        .animation(.easeInOut(duration: 0.18), value: speech.state.isListening)
+        .animation(.easeInOut(duration: 0.18), value: isSpeechComposerActive)
         .animation(.easeInOut(duration: 0.18), value: chat.state.draftAttachments.count)
         .animation(.easeInOut(duration: 0.18), value: vision.state.isProcessing)
         .confirmationDialog(
@@ -173,6 +183,11 @@ struct HomeComposerPromptPanel: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(visualCapabilityWarningMessage)
+        }
+        .onAppear {
+            speech.voiceCaptureHandler = { capture in
+                applyVoiceCapture(capture)
+            }
         }
     }
 
@@ -220,10 +235,23 @@ struct HomeComposerPromptPanel: View {
     private func stopVoiceInput() {
         dismissKeyboard()
         Task {
-            if let attachment = await speech.stopListening() {
-                chat.addDraftAttachment(attachment)
+            if let capture = await speech.stopListening() {
+                applyVoiceCapture(capture)
             }
         }
+    }
+
+    private func applyVoiceCapture(_ capture: SpeechCaptureResult) {
+        let transcript = capture.composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transcript.isEmpty else { return }
+
+        let existing = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if existing.isEmpty {
+            chat.setDraftMessage(transcript)
+        } else {
+            chat.setDraftMessage("\(existing) \(transcript)")
+        }
+        isComposerFocused.wrappedValue = true
     }
 
     private func cancelVoiceInput() {
@@ -303,7 +331,7 @@ struct HomeComposerPromptPanel: View {
     }
 
     private func focusComposerIfAllowed() {
-        guard !speech.state.isListening, !vision.state.isProcessing else { return }
+        guard !isSpeechComposerActive, !vision.state.isProcessing else { return }
         isComposerFocused.wrappedValue = true
     }
 }
