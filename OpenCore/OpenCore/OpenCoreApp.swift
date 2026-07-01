@@ -95,6 +95,9 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
+                try? PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
+                    modelContainer: modelContainer
+                )
             }
         }
         .modelContainer(modelContainer)

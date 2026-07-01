@@ -7,9 +7,11 @@ import Foundation
 final class ChatVoiceNotePlaybackController: NSObject {
     private(set) var playbackState: PlaybackState = .idle
     private(set) var playbackCurrentTime: TimeInterval = 0
+    private(set) var lastErrorMessage: String?
     private var player: AVAudioPlayer?
+    private var activeAttachmentID: UUID?
     private var activeDuration: TimeInterval = 0
-    private var progressTask: Task<Void, Never>?
+    private var progressTimer: Timer?
 
     enum PlaybackState: Equatable {
         case idle
@@ -65,27 +67,55 @@ final class ChatVoiceNotePlaybackController: NSObject {
     }
 
     func stop() {
-        stopProgressUpdates()
+        stopProgressTimer()
         player?.stop()
         player = nil
+        activeAttachmentID = nil
         activeDuration = 0
         playbackCurrentTime = 0
         playbackState = .idle
     }
 
     private func startPlayback(for attachment: ChatMessageAttachment) {
+        lastErrorMessage = nil
+        let fileURL = attachment.fileURL
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            lastErrorMessage = "Voice note is no longer available."
+            return
+        }
+
         do {
-            activatePlaybackSession()
-            let newPlayer = try AVAudioPlayer(contentsOf: attachment.fileURL)
+            try activatePlaybackSession()
+            let newPlayer = try AVAudioPlayer(contentsOf: fileURL)
             newPlayer.delegate = self
-            newPlayer.prepareToPlay()
+            newPlayer.volume = 1
+            guard newPlayer.prepareToPlay() else {
+                lastErrorMessage = "Voice note could not be played."
+                return
+            }
+
+            let resolved = resolvedDuration(
+                for: attachment,
+                playerDuration: newPlayer.duration
+            )
+            guard resolved > 0 else {
+                lastErrorMessage = "Voice note could not be played."
+                return
+            }
+
             player = newPlayer
-            activeDuration = resolvedDuration(for: attachment, playerDuration: newPlayer.duration)
+            activeAttachmentID = attachment.id
+            activeDuration = resolved
             playbackCurrentTime = 0
+            startProgressTimer()
+            guard newPlayer.play() else {
+                lastErrorMessage = "Voice note could not be played."
+                stop()
+                return
+            }
             playbackState = .playing(attachment.id)
-            newPlayer.play()
-            startProgressUpdates()
         } catch {
+            lastErrorMessage = "Voice note could not be played."
             stop()
         }
     }
@@ -93,19 +123,29 @@ final class ChatVoiceNotePlaybackController: NSObject {
     private func pauseActivePlayback() {
         syncProgressFromPlayer()
         player?.pause()
-        stopProgressUpdates()
         if case let .playing(attachmentID) = playbackState {
             playbackState = .paused(attachmentID)
         }
+        stopProgressTimer()
     }
 
     private func resumeActivePlayback() {
-        activatePlaybackSession()
-        player?.play()
+        do {
+            try activatePlaybackSession()
+        } catch {
+            lastErrorMessage = "Voice note could not be played."
+            stop()
+            return
+        }
+        guard player?.play() == true else {
+            lastErrorMessage = "Voice note could not be played."
+            stop()
+            return
+        }
+        startProgressTimer()
         if case let .paused(attachmentID) = playbackState {
             playbackState = .playing(attachmentID)
         }
-        startProgressUpdates()
     }
 
     private func resolvedDuration(
@@ -120,51 +160,58 @@ final class ChatVoiceNotePlaybackController: NSObject {
                 return playerDuration
             }
         }
+        if let playerDuration, playerDuration > 0 {
+            return playerDuration
+        }
         return max(attachment.audioDuration, 0)
     }
 
     private func syncProgressFromPlayer() {
-        playbackCurrentTime = player?.currentTime ?? 0
+        guard let player else { return }
+        playbackCurrentTime = max(0, player.currentTime)
     }
 
-    private func startProgressUpdates() {
-        stopProgressUpdates()
-        progressTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(50))
+    private func startProgressTimer() {
+        stopProgressTimer()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
                 guard let self, let player = self.player, player.isPlaying else { return }
-                self.playbackCurrentTime = player.currentTime
+                self.playbackCurrentTime = max(0, player.currentTime)
             }
         }
     }
 
-    private func stopProgressUpdates() {
-        progressTask?.cancel()
-        progressTask = nil
+    private func stopProgressTimer() {
+        progressTimer?.invalidate()
+        progressTimer = nil
     }
 
-    private func activatePlaybackSession() {
+    private func handlePlaybackEnded() {
+        player?.currentTime = 0
+        playbackCurrentTime = 0
+        playbackState = .idle
+        stopProgressTimer()
+    }
+
+    private func activatePlaybackSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default)
-        try? session.setActive(true)
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.defaultToSpeaker, .mixWithOthers])
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
     }
 }
 
 extension ChatVoiceNotePlaybackController: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        let finishedPlayerID = ObjectIdentifier(player)
         Task { @MainActor [weak self] in
-            guard let self,
-                  let activePlayer = self.player,
-                  ObjectIdentifier(activePlayer) == finishedPlayerID else {
-                return
-            }
-            activePlayer.currentTime = 0
-            stopProgressUpdates()
-            self.player = nil
-            activeDuration = 0
-            playbackCurrentTime = 0
-            playbackState = .idle
+            self?.handlePlaybackEnded()
+        }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: (any Error)?) {
+        Task { @MainActor [weak self] in
+            self?.lastErrorMessage = "Voice note could not be played."
+            self?.stop()
         }
     }
 }

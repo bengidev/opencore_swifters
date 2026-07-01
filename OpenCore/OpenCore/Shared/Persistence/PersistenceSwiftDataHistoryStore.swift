@@ -152,6 +152,44 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
+    static func sweepExpiredVoiceAttachments(
+        modelContainer: ModelContainer,
+        now: Date = .now
+    ) throws {
+        let cutoff = ChatVoiceAttachmentRetention.expirationCutoff(from: now)
+        let context = ModelContext(modelContainer)
+        let conversations = try context.fetch(FetchDescriptor<SidePanelConversationEntity>())
+
+        for conversation in conversations {
+            let messages = conversation.messages
+                .sorted { $0.order < $1.order }
+                .compactMap(Self.chatMessage(from:))
+
+            let result = ChatVoiceAttachmentRetention.expireVoiceAttachments(
+                in: messages,
+                cutoff: cutoff
+            )
+            guard !result.removedPaths.isEmpty else { continue }
+
+            ChatAttachmentStore.removeAll(at: result.removedPaths)
+
+            for entity in conversation.messages {
+                context.delete(entity)
+            }
+            conversation.messages.removeAll()
+
+            for (order, message) in result.messages.enumerated() {
+                let entity = Self.entity(from: message, order: order)
+                entity.conversation = conversation
+                conversation.messages.append(entity)
+                context.insert(entity)
+            }
+        }
+
+        try context.save()
+    }
+
+    @MainActor
     private static func fetchConversation(
         _ id: UUID,
         in context: ModelContext

@@ -126,7 +126,7 @@ private struct ChatUserVideoAttachmentBubbleView: View {
 
 private struct ChatUserAudioAttachmentBubbleView: View {
     let attachment: ChatMessageAttachment
-    let playback: ChatVoiceNotePlaybackController
+    @Bindable var playback: ChatVoiceNotePlaybackController
 
     @Environment(\.sharedPalette) private var palette
 
@@ -146,44 +146,53 @@ private struct ChatUserAudioAttachmentBubbleView: View {
     }
 
     var body: some View {
-        Button {
-            playback.toggle(attachment: attachment)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.controlStrongText)
+        VStack(alignment: .trailing, spacing: 4) {
+            Button {
+                playback.toggle(attachment: attachment)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(palette.controlStrongText)
 
-                ChatWaveformBarsView(
-                    heights: waveformHeights,
-                    progress: playback.playbackProgress(for: attachment),
-                    showsPlaybackProgress: isPlaybackActive,
-                    activeColor: palette.controlStrongText,
-                    idleColor: palette.controlStrongText.opacity(0.35),
-                    unplayedColor: palette.controlStrongText.opacity(0.22)
-                )
-                .frame(height: 24)
-
-                Text(
-                    SpeechRecordingDisplayLogic.formatElapsedDuration(
-                        playback.displayedDuration(for: attachment)
+                    ChatWaveformBarsView(
+                        heights: waveformHeights,
+                        progress: playback.playbackProgress(for: attachment),
+                        showsPlaybackProgress: isPlaybackActive,
+                        activeColor: palette.controlStrongText,
+                        idleColor: palette.controlStrongText.opacity(0.35),
+                        unplayedColor: palette.controlStrongText.opacity(0.22)
                     )
+                    .frame(height: 24)
+
+                    Text(
+                        SpeechRecordingDisplayLogic.formatElapsedDuration(
+                            playback.displayedDuration(for: attachment)
+                        )
+                    )
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(palette.controlStrongText.opacity(0.85))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.linear(duration: 0.05), value: playback.displayedDuration(for: attachment))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(palette.controlStrong)
                 )
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(palette.controlStrongText.opacity(0.85))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.linear(duration: 0.05), value: playback.displayedDuration(for: attachment))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(palette.controlStrong)
-            )
+            .buttonStyle(.plain)
+            .accessibilityLabel(isPlaying ? "Pause voice note" : "Play voice note")
+
+            if let errorMessage = playback.lastErrorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.danger)
+                    .multilineTextAlignment(.trailing)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isPlaying ? "Pause voice note" : "Play voice note")
     }
 }
 
