@@ -60,7 +60,10 @@ struct OpenCoreApp: App {
         ))
 
         _speech = State(initialValue: SpeechFlowController(
-            recognition: .live(credentialStore: credentialStore)
+            recognition: .live(
+                credentialStore: credentialStore,
+                providerPreference: providerPreference
+            )
         ))
         _vision = State(initialValue: VisionFlowController())
     }

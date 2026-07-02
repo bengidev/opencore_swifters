@@ -46,14 +46,24 @@ nonisolated struct SpeechRecognitionClient: Sendable {
     /// Construct a live client with the default strategy for the given locale.
     ///
     /// Uses `SpeechRecognitionStrategyFactory.makeDefault()` which selects a
-    /// fallback strategy when credentials are available or on-device-only
-    /// otherwise.
+    /// fallback strategy when the active provider has a stored API key, or
+    /// on-device-only otherwise.
     static func live(
         locale: Locale = .current,
-        credentialStore: CredentialStoring? = nil
+        credentialStore: CredentialStoring? = nil,
+        providerPreference: SidePanelProviderPreferenceStore? = nil
     ) -> SpeechRecognitionClient {
+        let transcriptionContext: @Sendable () -> SpeechRemoteTranscriptionContext? = {
+            guard let credentialStore, let providerPreference else { return nil }
+            return SpeechRemoteTranscriptionContextResolver.make(
+                credentialStore: credentialStore,
+                providerPreference: providerPreference
+            )()
+        }
+
         let strategy = SpeechRecognitionStrategyFactory.makeDefault(
             credentialStore: credentialStore,
+            transcriptionContext: transcriptionContext,
             locale: locale
         )
         return SpeechRecognitionClient(strategy: strategy)

@@ -11,19 +11,37 @@ struct SpeechStrategyFactoryTests {
         #expect(strategy.identifier == "on-device")
     }
 
-    @Test("makeDefault with credential returns FallbackSpeechRecognitionStrategy")
+    @Test("makeDefault with stored provider key returns FallbackSpeechRecognitionStrategy")
     func makeDefaultWithCredential() {
         let store = CredentialInMemoryStore()
-        try? store.save("sk-test", for: "openai")
-        let strategy = SpeechRecognitionStrategyFactory.makeDefault(credentialStore: store)
+        try? store.save("sk-test", for: ProviderDescriptor.openRouter.id)
+        let strategy = SpeechRecognitionStrategyFactory.makeDefault(
+            credentialStore: store,
+            transcriptionContext: {
+                SpeechRemoteTranscriptionContext(
+                    providerID: ProviderDescriptor.openRouter.id,
+                    apiBaseURL: ProviderDescriptor.openRouter.baseURL,
+                    defaultHeaders: ProviderDescriptor.openRouter.defaultHeaders
+                )
+            }
+        )
         #expect(strategy.identifier == "fallback")
     }
 
-    @Test("makeDefault with empty credential store returns FallbackSpeechRecognitionStrategy")
+    @Test("makeDefault with empty credential store returns OnDeviceSpeechRecognitionStrategy")
     func makeDefaultWithEmptyCredential() {
         let store = CredentialInMemoryStore()
-        let strategy = SpeechRecognitionStrategyFactory.makeDefault(credentialStore: store)
-        #expect(strategy.identifier == "fallback")
+        let strategy = SpeechRecognitionStrategyFactory.makeDefault(
+            credentialStore: store,
+            transcriptionContext: {
+                SpeechRemoteTranscriptionContext(
+                    providerID: ProviderDescriptor.openRouter.id,
+                    apiBaseURL: ProviderDescriptor.openRouter.baseURL,
+                    defaultHeaders: ProviderDescriptor.openRouter.defaultHeaders
+                )
+            }
+        )
+        #expect(strategy.identifier == "on-device")
     }
 
     @Test("makeOnDeviceOnly returns OnDeviceSpeechRecognitionStrategy")
@@ -35,30 +53,47 @@ struct SpeechStrategyFactoryTests {
 
 @Suite("Remote Speech Transcription")
 struct RemoteTranscriptionStrategyTests {
+    private func makeContext() -> SpeechRemoteTranscriptionContext {
+        SpeechRemoteTranscriptionContext(
+            providerID: ProviderDescriptor.openRouter.id,
+            apiBaseURL: ProviderDescriptor.openRouter.baseURL,
+            defaultHeaders: ProviderDescriptor.openRouter.defaultHeaders
+        )
+    }
+
     @Test("hasCredential returns false when no credential exists")
     func hasCredentialDeniedWithoutCredential() {
         let store = CredentialInMemoryStore()
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        let strategy = RemoteSpeechRecognitionStrategy(
+            credentialStore: store,
+            contextResolver: makeContext
+        )
         #expect(strategy.hasCredential() == false)
     }
 
     @Test("hasCredential returns true when credential exists")
     func hasCredentialAuthorizedWithCredential() throws {
         let store = CredentialInMemoryStore()
-        try store.save("sk-test-key", for: "openai")
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        try store.save("sk-test-key", for: ProviderDescriptor.openRouter.id)
+        let strategy = RemoteSpeechRecognitionStrategy(
+            credentialStore: store,
+            contextResolver: makeContext
+        )
         #expect(strategy.hasCredential() == true)
     }
 
     @Test("transcribe returns failure message when credential is missing")
     func transcribeMissingCredential() async throws {
         let audioURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".caf")
+            .appendingPathComponent(UUID().uuidString + ".wav")
         FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
         defer { try? FileManager.default.removeItem(at: audioURL) }
 
         let store = CredentialInMemoryStore()
-        let strategy = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        let strategy = RemoteSpeechRecognitionStrategy(
+            credentialStore: store,
+            contextResolver: makeContext
+        )
         let result = await strategy.transcribe(
             audioFileURL: audioURL,
             waveformSamples: [],
@@ -72,7 +107,7 @@ struct RemoteTranscriptionStrategyTests {
     @Test("transcribe surfaces HTTP errors from Whisper API")
     func transcribeHTTPError() async throws {
         let audioURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".caf")
+            .appendingPathComponent(UUID().uuidString + ".wav")
         FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01, 0x02]))
         defer { try? FileManager.default.removeItem(at: audioURL) }
 
@@ -81,9 +116,10 @@ struct RemoteTranscriptionStrategyTests {
         let session = URLSession(configuration: config)
 
         let store = CredentialInMemoryStore()
-        try store.save("sk-test", for: "openai")
+        try store.save("sk-test", for: ProviderDescriptor.openRouter.id)
         let strategy = RemoteSpeechRecognitionStrategy(
             credentialStore: store,
+            contextResolver: makeContext,
             urlSession: session
         )
 
@@ -100,11 +136,24 @@ struct RemoteTranscriptionStrategyTests {
 
 @Suite("Fallback Speech Recognition Strategy")
 struct FallbackStrategyTests {
+    private func makeRemote(store: CredentialInMemoryStore) -> RemoteSpeechRecognitionStrategy {
+        RemoteSpeechRecognitionStrategy(
+            credentialStore: store,
+            contextResolver: {
+                SpeechRemoteTranscriptionContext(
+                    providerID: ProviderDescriptor.openRouter.id,
+                    apiBaseURL: ProviderDescriptor.openRouter.baseURL,
+                    defaultHeaders: ProviderDescriptor.openRouter.defaultHeaders
+                )
+            }
+        )
+    }
+
     @Test("fallback identifier is 'fallback'")
     func fallbackHasCorrectIdentifier() {
         let primary = OnDeviceSpeechRecognitionStrategy(locale: Locale(identifier: "en-US"))
         let store = CredentialInMemoryStore()
-        let remote = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        let remote = makeRemote(store: store)
         let fallback = FallbackSpeechRecognitionStrategy(primary: primary, remoteTranscriber: remote)
         #expect(fallback.identifier == "fallback")
     }
@@ -113,14 +162,14 @@ struct FallbackStrategyTests {
     func fallbackDelegatesAuth() {
         let primary = OnDeviceSpeechRecognitionStrategy(locale: Locale(identifier: "en-US"))
         let store = CredentialInMemoryStore()
-        let remote = RemoteSpeechRecognitionStrategy(credentialStore: store)
+        let remote = makeRemote(store: store)
         let fallback = FallbackSpeechRecognitionStrategy(primary: primary, remoteTranscriber: remote)
         #expect(fallback.authorizationStatus() == primary.authorizationStatus())
     }
 
     @Test("fallback returns primary transcript when non-empty")
     func fallbackUsesPrimaryTranscript() async throws {
-        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
         FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
         defer { try? FileManager.default.removeItem(at: audioURL) }
 
@@ -141,7 +190,7 @@ struct FallbackStrategyTests {
 
     @Test("fallback transcribes captured audio when primary transcript is empty")
     func fallbackTranscribesCapturedAudio() async throws {
-        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
         FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
         defer { try? FileManager.default.removeItem(at: audioURL) }
 
@@ -162,7 +211,7 @@ struct FallbackStrategyTests {
 
     @Test("fallback propagates remote transcription failure")
     func fallbackPropagatesRemoteFailure() async throws {
-        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        let audioURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
         FileManager.default.createFile(atPath: audioURL.path, contents: Data([0x01]))
         defer { try? FileManager.default.removeItem(at: audioURL) }
 

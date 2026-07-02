@@ -8,13 +8,11 @@ import Foundation
 nonisolated enum SpeechRecognitionStrategyFactory {
     /// Build a strategy appropriate for the available infrastructure.
     ///
-    /// - If a credential store with a Whisper API key is available, returns
-    ///   a fallback strategy (on-device → remote). Otherwise returns an
-    ///   on-device-only strategy.
-    /// - Parameter credentialStore: Optional credential store to resolve
-    ///   Whisper API keys. When `nil`, the factory defaults to on-device only.
+    /// Returns a fallback strategy (on-device → remote Whisper) only when the
+    /// active provider has a stored API key. Otherwise returns on-device only.
     nonisolated static func makeDefault(
         credentialStore: CredentialStoring? = nil,
+        transcriptionContext: @escaping @Sendable () -> SpeechRemoteTranscriptionContext? = { nil },
         locale: Locale = .current,
         urlSession: URLSession = .shared
     ) -> SpeechRecognitionStrategy {
@@ -22,11 +20,17 @@ nonisolated enum SpeechRecognitionStrategyFactory {
             return makeOnDeviceOnly(locale: locale)
         }
 
-        let onDevice = OnDeviceSpeechRecognitionStrategy(locale: locale)
         let remote = RemoteSpeechRecognitionStrategy(
             credentialStore: credentialStore,
+            contextResolver: transcriptionContext,
             urlSession: urlSession
         )
+
+        guard remote.hasCredential() else {
+            return makeOnDeviceOnly(locale: locale)
+        }
+
+        let onDevice = OnDeviceSpeechRecognitionStrategy(locale: locale)
 
         return FallbackSpeechRecognitionStrategy(
             primary: onDevice,
