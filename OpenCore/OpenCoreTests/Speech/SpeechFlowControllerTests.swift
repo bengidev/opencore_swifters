@@ -576,6 +576,31 @@ struct SpeechFlowControllerTests {
         #expect(controller.state.pendingCapture == nil)
     }
 
+    @Test("remote transcription failure preserves partial transcript in composer")
+    func remoteTranscriptionFailurePreservesPartialTranscript() async throws {
+        let harness = SpeechRecognitionTestHarness()
+        harness.hangsOpenAfterEvents = true
+        let tempAudio = try makeTestVoiceNoteCAF()
+        defer { try? FileManager.default.removeItem(at: tempAudio) }
+
+        harness.stopResult = SpeechRecognitionResult(
+            transcript: "",
+            audioFileURL: tempAudio,
+            duration: 1,
+            failureMessage: "Voice transcription failed. Check your API key in Settings."
+        )
+        harness.events = [.ready, .partial("partial take")]
+        let controller = harness.makeController()
+        await controller.startListening()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let capture = await controller.stopListening()
+
+        #expect(capture?.composerText == "partial take")
+        #expect(controller.state.pendingCapture?.composerText == "partial take")
+        #expect(controller.state.errorMessage == nil)
+    }
+
     @Test("concurrent stopListening calls only complete once")
     func concurrentStopOnlyCompletesOnce() async throws {
         let harness = SpeechRecognitionTestHarness()

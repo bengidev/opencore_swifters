@@ -12,7 +12,10 @@ nonisolated enum SpeechRecordingLimits: Sendable {
         max(0, maxDurationSeconds - autoStopLeadTime)
     }
 
-    static func shouldAutoStop(elapsed: TimeInterval) -> Bool {
-        elapsed >= autoStopThreshold
+    static func shouldAutoStop(
+        elapsed: TimeInterval,
+        threshold: TimeInterval = autoStopThreshold
+    ) -> Bool {
+        elapsed >= threshold
     }
 }

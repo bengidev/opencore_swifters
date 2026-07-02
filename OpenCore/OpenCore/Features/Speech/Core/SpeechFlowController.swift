@@ -158,8 +158,12 @@ final class SpeechFlowController {
         Self.discardRecordedAudio(from: enrichedResult)
 
         if let failureMessage = enrichedResult?.failureMessage {
-            state.errorMessage = failureMessage
-            return nil
+            let transcript = enrichedResult?.transcript
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if transcript.isEmpty {
+                state.errorMessage = failureMessage
+                return nil
+            }
         }
 
         let transcript = enrichedResult?.transcript
@@ -231,7 +235,10 @@ final class SpeechFlowController {
     private func handleAutoStopIfNeeded() {
         guard state.isListening,
               !autoStopTriggered,
-              state.elapsedDuration >= autoStopThreshold else {
+              SpeechRecordingLimits.shouldAutoStop(
+                elapsed: state.elapsedDuration,
+                threshold: autoStopThreshold
+              ) else {
             return
         }
 
@@ -246,9 +253,17 @@ final class SpeechFlowController {
         partialTranscript: String,
         duration: TimeInterval
     ) -> SpeechRecognitionResult? {
-        if let failureMessage = result?.failureMessage {
-            return result ?? SpeechRecognitionResult(
-                transcript: "",
+        if let result, let failureMessage = result.failureMessage {
+            let stoppedTranscript = result.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !stoppedTranscript.isEmpty {
+                return result
+            }
+            guard !partialTranscript.isEmpty else { return result }
+            return SpeechRecognitionResult(
+                transcript: partialTranscript,
+                audioFileURL: result.audioFileURL,
+                waveformSamples: result.waveformSamples,
+                duration: result.duration ?? duration,
                 failureMessage: failureMessage
             )
         }
