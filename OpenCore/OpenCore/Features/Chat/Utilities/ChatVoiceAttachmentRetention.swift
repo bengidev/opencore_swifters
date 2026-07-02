@@ -42,7 +42,8 @@ nonisolated enum ChatVoiceAttachmentRetention: Sendable {
         var promotedTranscript: String?
 
         for attachment in message.attachments {
-            guard attachment.kind == .audio else {
+            guard attachment.kind == .audio,
+                  attachment.speechTranscript != nil else {
                 keptAttachments.append(attachment)
                 continue
             }

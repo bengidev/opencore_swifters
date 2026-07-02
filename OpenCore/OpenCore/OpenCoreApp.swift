@@ -3,6 +3,8 @@ import SwiftUI
 
 @main
 struct OpenCoreApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var onboardingFlow: OnboardingFlowController
     @State private var sidePanel: SidePanelFlowController
     @State private var home: HomeFlowController
@@ -98,15 +100,26 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
-                do {
-                    try PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
-                        modelContainer: modelContainer
-                    )
-                } catch {
-                    assertionFailure("Voice attachment retention sweep failed: \(error)")
+                await sweepExpiredVoiceAttachmentsIfNeeded()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task {
+                    await sweepExpiredVoiceAttachmentsIfNeeded()
                 }
             }
         }
         .modelContainer(modelContainer)
+    }
+
+    @MainActor
+    private func sweepExpiredVoiceAttachmentsIfNeeded() async {
+        do {
+            try PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
+                modelContainer: modelContainer
+            )
+        } catch {
+            assertionFailure("Voice attachment retention sweep failed: \(error)")
+        }
     }
 }

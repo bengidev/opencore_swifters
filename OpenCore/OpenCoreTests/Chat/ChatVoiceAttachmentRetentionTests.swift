@@ -64,4 +64,33 @@ struct ChatVoiceAttachmentRetentionTests {
         #expect(updated.content.isEmpty)
         #expect(removedPaths.isEmpty)
     }
+
+    @Test("keeps imported audio attachments without speech transcripts")
+    func keepsImportedAudioWithoutSpeechTranscript() throws {
+        let cutoff = Date(timeIntervalSince1970: 1_000_000)
+        let oldTimestamp = cutoff.addingTimeInterval(-60)
+        let message = ChatTextMessage(
+            id: UUID(),
+            role: .user,
+            content: "Imported clip",
+            isComplete: true,
+            timestamp: oldTimestamp,
+            attachments: [
+                ChatMessageAttachment(
+                    kind: .audio,
+                    filename: "sample.mp3",
+                    localPath: "/tmp/sample.mp3"
+                )
+            ]
+        )
+
+        let (updated, removedPaths) = ChatVoiceAttachmentRetention.expireVoiceAttachments(
+            in: message,
+            cutoff: cutoff
+        )
+
+        #expect(updated.attachments.count == 1)
+        #expect(updated.content == "Imported clip")
+        #expect(removedPaths.isEmpty)
+    }
 }
