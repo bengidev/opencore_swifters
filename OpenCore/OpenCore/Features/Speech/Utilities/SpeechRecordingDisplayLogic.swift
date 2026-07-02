@@ -1,10 +1,13 @@
+import CoreGraphics
 import Foundation
 
 /// Pure display rules for the speech recording indicator — timer, waveform, and voice activity.
 nonisolated enum SpeechRecordingDisplayLogic: Sendable {
     static let defaultVoiceActivityThreshold: Float = 0.015
-    static let waveformSampleCapacity = 24
+    static let waveformSampleCapacity = 240
     static let defaultBarCount = 16
+    static let composerIdealBarWidth: CGFloat = 2.5
+    static let composerBarSpacing: CGFloat = 2
     private static let idleBarHeight: Float = 0.12
     private static let maxBarHeight: Float = 1.0
 
@@ -57,6 +60,12 @@ nonisolated enum SpeechRecordingDisplayLogic: Sendable {
                 voiceActive: isVoiceActive(level: level, threshold: threshold)
             )
         }
+    }
+
+    static func composerBarCount(forWidth width: CGFloat) -> Int {
+        let slotWidth = composerIdealBarWidth + composerBarSpacing
+        guard slotWidth > 0 else { return defaultBarCount }
+        return max(defaultBarCount, Int((max(width, 0) + composerBarSpacing) / slotWidth))
     }
 
     static func appendWaveformSample(

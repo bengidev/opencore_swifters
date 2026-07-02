@@ -4,9 +4,14 @@ import Foundation
 nonisolated enum SpeechRecognitionFallbackLogic: Sendable {
     static func shouldRetryWithServerRecognition(
         errorMessage: String,
-        attemptedOnDevice: Bool
+        attemptedOnDevice: Bool,
+        error: NSError? = nil
     ) -> Bool {
         guard attemptedOnDevice else { return false }
+
+        if let error, isRetryableOnDeviceAssistantError(error) {
+            return true
+        }
 
         let lowered = errorMessage.lowercased()
         return lowered.contains("initialize")
@@ -14,6 +19,18 @@ nonisolated enum SpeechRecognitionFallbackLogic: Sendable {
             || lowered.contains("on device")
             || lowered.contains("not downloaded")
             || lowered.contains("not available")
+            || lowered.contains("siri")
+            || lowered.contains("dictation")
+    }
+
+    private static func isRetryableOnDeviceAssistantError(_ error: NSError) -> Bool {
+        if error.domain == "kAFAssistantErrorDomain", error.code == 1110 {
+            return true
+        }
+        if error.domain == "com.apple.speech.recognition" {
+            return true
+        }
+        return false
     }
 
     static func userFacingErrorMessage(

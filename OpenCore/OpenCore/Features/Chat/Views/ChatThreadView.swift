@@ -87,6 +87,13 @@ struct ChatThreadView<BottomChrome: View>: View {
                     delayNanoseconds: ChatThreadLayout.keyboardScrollDelayNanoseconds
                 )
             }
+            .onReceive(NotificationCenter.default.publisher(for: .chatThreadRequestScrollToBottom)) { _ in
+                scheduleScrollToLast(
+                    proxy: proxy,
+                    animate: true,
+                    delayNanoseconds: ChatThreadLayout.historyRestoreScrollDelayNanoseconds
+                )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

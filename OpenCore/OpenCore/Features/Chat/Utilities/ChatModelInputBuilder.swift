@@ -21,21 +21,28 @@ nonisolated enum ChatModelInputBuilder: Sendable {
             }
         }
 
+        let trimmedVisible = visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
         let speechTranscripts = attachments
             .compactMap(\.speechTranscript)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if !speechTranscripts.isEmpty {
-            let listing = speechTranscripts.joined(separator: "\n\n")
-            sections.append("[Voice transcript]\n\(listing)")
+
+        for transcript in speechTranscripts where !sectionExists(transcript, in: sections) {
+            if trimmedVisible.isEmpty
+                || !trimmedVisible.localizedCaseInsensitiveContains(transcript) {
+                sections.append(transcript)
+            }
         }
 
-        let trimmedVisible = visibleText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedVisible.isEmpty {
             sections.append(trimmedVisible)
         }
 
         return sections
+    }
+
+    private static func sectionExists(_ candidate: String, in sections: [String]) -> Bool {
+        sections.contains { $0.localizedCaseInsensitiveCompare(candidate) == .orderedSame }
     }
 
     static func attachmentKind(
@@ -45,5 +52,3 @@ nonisolated enum ChatModelInputBuilder: Sendable {
         ChatAttachmentKindResolver.attachmentKind(filename: filename, contentType: contentType)
     }
 }
-
-import UniformTypeIdentifiers

@@ -58,6 +58,12 @@ struct SpeechRecordingDisplayLogicTests {
 
         #expect(fourth == [0.2, 0.3, 0.4])
     }
+
+    @Test("computes composer bar count from available width")
+    func composerBarCount() {
+        #expect(SpeechRecordingDisplayLogic.composerBarCount(forWidth: 0) == SpeechRecordingDisplayLogic.defaultBarCount)
+        #expect(SpeechRecordingDisplayLogic.composerBarCount(forWidth: 200) >= SpeechRecordingDisplayLogic.defaultBarCount)
+    }
 }
 
 @Suite("Speech Recognizer Locale Resolver")

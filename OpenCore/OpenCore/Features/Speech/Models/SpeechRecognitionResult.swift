@@ -6,16 +6,20 @@ nonisolated struct SpeechRecognitionResult: Equatable, Sendable {
     let audioFileURL: URL?
     let waveformSamples: [Float]
     let duration: TimeInterval
+    /// Set when post-recording transcription fails (e.g. Whisper API error).
+    let failureMessage: String?
 
     init(
         transcript: String,
         audioFileURL: URL? = nil,
         waveformSamples: [Float] = [],
-        duration: TimeInterval = 0
+        duration: TimeInterval = 0,
+        failureMessage: String? = nil
     ) {
         self.transcript = transcript
         self.audioFileURL = audioFileURL
         self.waveformSamples = waveformSamples
         self.duration = duration
+        self.failureMessage = failureMessage
     }
 }

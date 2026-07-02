@@ -16,6 +16,12 @@ nonisolated enum ChatAttachmentStore: Sendable {
         return try save(data: data, suggestedFilename: suggestedFilename)
     }
 
+    static func makeAttachmentURL(suggestedFilename: String) throws -> URL {
+        let directory = try attachmentsDirectory()
+        let filename = uniqueFilename(basedOn: suggestedFilename)
+        return directory.appendingPathComponent(filename)
+    }
+
     static func remove(at localPath: String) {
         try? FileManager.default.removeItem(atPath: localPath)
     }
