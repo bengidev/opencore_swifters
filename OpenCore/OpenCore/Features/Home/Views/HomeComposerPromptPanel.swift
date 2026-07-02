@@ -11,6 +11,8 @@ struct HomeComposerPromptPanel: View {
 
     @Environment(\.sharedPalette) private var palette
     @State private var sendFeedbackTrigger = false
+    @State private var micFeedbackTrigger = false
+    @State private var stopFeedbackTrigger = false
     @State private var isAttachmentMenuPresented = false
     @State private var isFileImporterPresented = false
     @State private var isPhotoPickerPresented = false
@@ -90,7 +92,7 @@ struct HomeComposerPromptPanel: View {
                         : speech.state.audioLevels,
                     isVoiceActive: speech.state.isVoiceActive,
                     isTranscribing: speech.state.isTranscribing,
-                    showsCloudTranscriptionNotice: home.state.hasAPIKey
+                    onCancel: speech.state.isTranscribing ? nil : { cancelVoiceInput() }
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
@@ -142,6 +144,8 @@ struct HomeComposerPromptPanel: View {
         .padding(.bottom, 10)
         .homeComposerGlass(cornerRadius: 28, shadowOpacity: 0.16)
         .sensoryFeedback(.success, trigger: sendFeedbackTrigger)
+        .sensoryFeedback(.success, trigger: micFeedbackTrigger)
+        .sensoryFeedback(.success, trigger: stopFeedbackTrigger)
         .animation(.easeInOut(duration: 0.18), value: isSpeechComposerActive)
         .animation(.easeInOut(duration: 0.18), value: chat.state.draftAttachments.count)
         .animation(.easeInOut(duration: 0.18), value: vision.state.isProcessing)
@@ -226,6 +230,7 @@ struct HomeComposerPromptPanel: View {
             modelName: selectedModelName
         ) {
         case .allowed:
+            micFeedbackTrigger.toggle()
             Task { await speech.startListening() }
         case let .blocked(message):
             presentCapabilityWarning(message)
@@ -234,6 +239,7 @@ struct HomeComposerPromptPanel: View {
 
     private func stopVoiceInput() {
         dismissKeyboard()
+        stopFeedbackTrigger.toggle()
         Task { _ = await speech.stopListening() }
     }
 
