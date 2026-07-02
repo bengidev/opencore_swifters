@@ -8,9 +8,22 @@ struct SpeechRecognitionClientTests {
     @Test("live with credential store selects fallback strategy")
     func liveWithCredentialStoreUsesFallback() {
         let store = CredentialInMemoryStore()
-        try? store.save("sk-test", for: "openai")
-        let client = SpeechRecognitionClient.live(credentialStore: store)
-        let strategy = SpeechRecognitionStrategyFactory.makeDefault(credentialStore: store)
+        try? store.save("sk-test", for: ProviderDescriptor.openRouter.id)
+        let providerPreference = SidePanelInMemoryProviderPreferenceStore(
+            preference: SidePanelProviderPreference(providerID: ProviderDescriptor.openRouter.id)
+        )
+        let transcriptionContext = SpeechRemoteTranscriptionContextResolver.make(
+            credentialStore: store,
+            providerPreference: providerPreference
+        )
+        let client = SpeechRecognitionClient.live(
+            credentialStore: store,
+            providerPreference: providerPreference
+        )
+        let strategy = SpeechRecognitionStrategyFactory.makeDefault(
+            credentialStore: store,
+            transcriptionContext: transcriptionContext
+        )
 
         #expect(strategy.identifier == "fallback")
         #expect(client.authorizationStatus() == strategy.authorizationStatus())
