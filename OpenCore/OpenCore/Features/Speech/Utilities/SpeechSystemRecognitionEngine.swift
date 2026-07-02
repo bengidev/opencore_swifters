@@ -89,7 +89,7 @@ nonisolated final class SpeechSystemRecognitionEngine: @unchecked Sendable {
         latestTranscript = ""
         recordingURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("caf")
+            .appendingPathExtension("wav")
         recordingStartedAt = Date()
 
         guard let speechRecognizer else {
