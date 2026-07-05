@@ -112,6 +112,8 @@
 			);
 			name = OpenCore;
 			packageProductDependencies = (
+				B6E1A0012FE2AA0100ED1A41 /* MarkdownUI */,
+				B6E1A0022FE2AA0100ED1A41 /* LaTeXSwiftUI */,
 			);
 			productName = OpenCore;
 			productReference = B6D73C152FE1992D00ED1A41 /* OpenCore.app */;
@@ -195,6 +197,10 @@
 			);
 			mainGroup = B6D73C0C2FE1992D00ED1A41;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B6E1A0112FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				B6E1A0122FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "LaTeXSwiftUI" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B6D73C162FE1992D00ED1A41 /* Products */;
 			projectDirPath = "";
@@ -596,6 +602,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B6E1A0112FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.0;
+			};
+		};
+		B6E1A0122FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "LaTeXSwiftUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/colinc86/LaTeXSwiftUI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B6E1A0012FE2AA0100ED1A41 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6E1A0112FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+		B6E1A0022FE2AA0100ED1A41 /* LaTeXSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6E1A0122FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "LaTeXSwiftUI" */;
+			productName = LaTeXSwiftUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B6D73C0D2FE1992D00ED1A41 /* Project object */;
 }
