@@ -11,8 +11,21 @@ struct ChatRichContentView: View {
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var displayedText = ""
+    @State private var displayedText: String
     @State private var updateTask: Task<Void, Never>?
+
+    init(
+        text: String,
+        style: ChatRichContentStyle = .assistant,
+        isStreaming: Bool = false,
+        showsCursor: Bool = false
+    ) {
+        self.text = text
+        self.style = style
+        self.isStreaming = isStreaming
+        self.showsCursor = showsCursor
+        _displayedText = State(initialValue: text)
+    }
 
     private static let cursorGlyph = "▍"
     private static let cursorBlinkPeriod = 1.1

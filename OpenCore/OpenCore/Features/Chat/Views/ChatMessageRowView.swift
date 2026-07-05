@@ -56,19 +56,17 @@ struct ChatMessageRowView: View, Equatable {
 
     @ViewBuilder
     private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
-        Group {
-            if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
-                ChatRichContentView(
-                    text: textMessage.content,
-                    isStreaming: true
-                )
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(0)
-            } else {
-                ChatRichContentView(text: textMessage.content)
-            }
-        }
+        ChatRichContentView(
+            text: textMessage.content,
+            isStreaming: isAssistantTextStreaming(textMessage)
+        )
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(0)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isAssistantTextStreaming(_ textMessage: ChatTextMessage) -> Bool {
+        !textMessage.isComplete && isLastAssistantMessage && streamingStatus == .running
     }
 
     @ViewBuilder
