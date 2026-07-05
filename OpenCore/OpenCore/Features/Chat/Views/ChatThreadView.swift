@@ -156,7 +156,7 @@ struct ChatThreadView<BottomChrome: View>: View {
     }
 
     private func scrollToLast(proxy: ScrollViewProxy, animate: Bool) {
-        guard let scrollTarget = flow.state.messages.last?.id else { return }
+        guard let scrollTarget = ChatThreadScrollTarget.messageID(in: flow.state.messages) else { return }
 
         if animate {
             withAnimation(.easeOut(duration: 0.15)) {
