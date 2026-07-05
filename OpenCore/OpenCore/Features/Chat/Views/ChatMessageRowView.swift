@@ -25,10 +25,7 @@ struct ChatMessageRowView: View, Equatable {
                 ChatReasoningCardView(message: thinkingMessage)
             }
         case let .system(systemMessage):
-            Text(systemMessage.content)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(palette.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .center)
+            ChatRichContentView(text: systemMessage.content, style: .system)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
         case let .outputStream(outputStreamMessage):
@@ -61,14 +58,14 @@ struct ChatMessageRowView: View, Equatable {
     private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
         Group {
             if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
-                ChatAssistantStreamingTextView(
+                ChatRichContentView(
                     text: textMessage.content,
-                    palette: palette
+                    isStreaming: true
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(0)
             } else {
-                ChatAssistantMarkdownTextView(text: textMessage.content)
+                ChatRichContentView(text: textMessage.content)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

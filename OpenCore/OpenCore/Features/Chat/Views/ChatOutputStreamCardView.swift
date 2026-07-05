@@ -197,16 +197,16 @@ private struct ChatOutputStreamDetailSheet: View {
             .buttonStyle(.plain)
 
             if isOutputExpanded {
-                Text(message.detail.outputTail)
-                    .font(SharedOpenCoreTypography.monoXS)
-                    .foregroundStyle(palette.textSecondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(palette.surfaceRaised)
-                    )
+                ChatRichContentView(
+                    text: message.detail.outputTail,
+                    style: .terminal
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(palette.surfaceRaised)
+                )
             }
         }
     }

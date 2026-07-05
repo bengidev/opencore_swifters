@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 extension Notification.Name {
     /// Posted when a streaming reasoning card collapses so the thread can re-anchor scroll.
@@ -13,12 +12,7 @@ struct ChatReasoningCardView: View {
     let isStreaming: Bool
 
     @Environment(\.sharedPalette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let cursorBlinkPeriod = 1.1
-    private static let cursorMinOpacity = 0.15
-    /// Drives 1 → minOpacity → 1 each half-cycle (piecewise linear).
-    private static let cursorBlinkFade = 1.7
     /// Collapsed by default; auto-expands while reasoning is actively streaming,
     /// then collapses again once thinking completes. User can toggle manually anytime.
     @State private var isExpanded: Bool
@@ -101,43 +95,15 @@ struct ChatReasoningCardView: View {
     @ViewBuilder
     private var streamingBody: some View {
         if isExpanded {
-            Group {
-                if isStreaming {
-                    TimelineView(.animation(
-                        minimumInterval: 1.0 / 30.0,
-                        paused: reduceMotion
-                    )) { timeline in
-                        ChatStreamingTextView(
-                            text: displayedContent,
-                            font: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-                            textColor: UIColor(palette.textSecondary),
-                            showsCursor: true,
-                            cursorColor: UIColor(palette.accentPrimary),
-                            cursorOpacity: cursorOpacity(at: timeline.date)
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                } else {
-                    Text(displayedContent)
-                        .font(SharedOpenCoreTypography.monoSM)
-                        .foregroundStyle(palette.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            ChatRichContentView(
+                text: displayedContent,
+                style: .reasoning,
+                isStreaming: isStreaming,
+                showsCursor: isStreaming
+            )
             .transition(.opacity.combined(with: .move(edge: .top)))
             .accessibilityLabel(displayedContent)
         }
-    }
-
-    private func cursorOpacity(at date: Date) -> Double {
-        guard !reduceMotion else { return 1 }
-        let phase = date.timeIntervalSinceReferenceDate
-            .truncatingRemainder(dividingBy: Self.cursorBlinkPeriod) / Self.cursorBlinkPeriod
-        return phase < 0.5
-            ? 1 - phase * Self.cursorBlinkFade
-            : Self.cursorMinOpacity + (phase - 0.5) * Self.cursorBlinkFade
     }
 
     private var displayedContent: String {
