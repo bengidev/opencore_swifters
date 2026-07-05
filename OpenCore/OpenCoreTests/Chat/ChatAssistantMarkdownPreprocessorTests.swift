@@ -51,4 +51,24 @@ struct ChatAssistantMarkdownPreprocessorTests {
         #expect(normalized.contains("let value = 1**Not A Header:**"))
         #expect(normalized.contains("Tail\n\n**Another:** end"))
     }
+
+    @Test("Inserts blank line before glued GFM tables")
+    func gfmTableSpacing() {
+        let raw = """
+        Further Reading / Resources
+        | Type | Title / Link |
+        |------|--------------|
+        | Books | Example |
+        """
+        let normalized = ChatAssistantMarkdownPreprocessor.normalize(raw)
+        #expect(normalized.contains("Resources\n\n| Type |"))
+    }
+
+    @Test("Rewrites HTML line breaks for markdown cells")
+    func htmlLineBreaks() {
+        let raw = "| Books | Title <br> subtitle |"
+        let normalized = ChatAssistantMarkdownPreprocessor.normalize(raw)
+        #expect(normalized.contains("Title  subtitle"))
+        #expect(!normalized.contains("<br>"))
+    }
 }

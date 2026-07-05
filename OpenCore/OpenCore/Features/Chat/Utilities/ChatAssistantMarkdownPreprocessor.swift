@@ -55,11 +55,25 @@ nonisolated enum ChatAssistantMarkdownPreprocessor: Sendable {
             with: "\n\n",
             options: .regularExpression
         )
+        text = text.replacingOccurrences(
+            of: #"\s*<br\s*/?>\s*"#,
+            with: "  ",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        text = ensureGFMTableSpacing(text)
 
         return text
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .joined(separator: "\n")
             .replacingOccurrences(of: "\n\n\n+", with: "\n\n", options: .regularExpression)
+    }
+
+    private static func ensureGFMTableSpacing(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"(?<=\S)\n(\|[^\n]+\|)\n(\|[ :\-|]+\|)"#,
+            with: "\n\n$1\n$2",
+            options: .regularExpression
+        )
     }
 }

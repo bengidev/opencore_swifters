@@ -5,6 +5,7 @@ struct ChatMessageRowView: View, Equatable {
     let isLastAssistantMessage: Bool
     let streamingStatus: ChatStreamingStatus
     let streamErrorMessage: String?
+    var collapseThinkingForDownstreamStream: Bool = false
 
     @Environment(\.sharedPalette) private var palette
     private static let oppositeSpacerMinWidth: CGFloat = 60
@@ -14,6 +15,7 @@ struct ChatMessageRowView: View, Equatable {
             && lhs.isLastAssistantMessage == rhs.isLastAssistantMessage
             && lhs.streamingStatus == rhs.streamingStatus
             && lhs.streamErrorMessage == rhs.streamErrorMessage
+            && lhs.collapseThinkingForDownstreamStream == rhs.collapseThinkingForDownstreamStream
     }
 
     var body: some View {
@@ -22,13 +24,13 @@ struct ChatMessageRowView: View, Equatable {
             textRow(textMessage)
         case let .thinking(thinkingMessage):
             assistantSurround {
-                ChatReasoningCardView(message: thinkingMessage)
+                ChatReasoningCardView(
+                    message: thinkingMessage,
+                    collapseForDownstreamStream: collapseThinkingForDownstreamStream
+                )
             }
         case let .system(systemMessage):
-            Text(systemMessage.content)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(palette.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .center)
+            ChatRichContentView(text: systemMessage.content, style: .system)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
         case let .outputStream(outputStreamMessage):
@@ -59,19 +61,17 @@ struct ChatMessageRowView: View, Equatable {
 
     @ViewBuilder
     private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
-        Group {
-            if !textMessage.isComplete, isLastAssistantMessage, streamingStatus == .running {
-                ChatAssistantStreamingTextView(
-                    text: textMessage.content,
-                    palette: palette
-                )
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(0)
-            } else {
-                ChatAssistantMarkdownTextView(text: textMessage.content)
-            }
-        }
+        ChatRichContentView(
+            text: textMessage.content,
+            isStreaming: isAssistantTextStreaming(textMessage)
+        )
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(0)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isAssistantTextStreaming(_ textMessage: ChatTextMessage) -> Bool {
+        !textMessage.isComplete && isLastAssistantMessage && streamingStatus == .running
     }
 
     @ViewBuilder

@@ -28,7 +28,8 @@ struct ChatThreadView<BottomChrome: View>: View {
                             message: message,
                             isLastAssistantMessage: isLastAssistantMessage(message),
                             streamingStatus: flow.state.streamingStatus,
-                            streamErrorMessage: flow.state.streamErrorMessage
+                            streamErrorMessage: flow.state.streamErrorMessage,
+                            collapseThinkingForDownstreamStream: shouldCollapseThinking(for: message)
                         )
                         .equatable()
                         .id(message.id)
@@ -105,6 +106,29 @@ struct ChatThreadView<BottomChrome: View>: View {
         return flow.state.messages[lastAssistantIndex].id == message.id
     }
 
+    private func shouldCollapseThinking(for message: ChatMessage) -> Bool {
+        guard case .thinking = message else { return false }
+
+        if flow.state.streamingAnswerID != nil || flow.state.streamingOutputStreamID != nil {
+            return true
+        }
+
+        guard let index = flow.state.messages.firstIndex(where: { $0.id == message.id }) else {
+            return false
+        }
+
+        return flow.state.messages[(index + 1)...].contains { downstream in
+            switch downstream {
+            case let .text(textMessage):
+                textMessage.role == .assistant
+            case .outputStream:
+                true
+            default:
+                false
+            }
+        }
+    }
+
     private func scheduleScrollToLast(
         proxy: ScrollViewProxy,
         animate: Bool,
@@ -132,7 +156,7 @@ struct ChatThreadView<BottomChrome: View>: View {
     }
 
     private func scrollToLast(proxy: ScrollViewProxy, animate: Bool) {
-        guard let scrollTarget = flow.state.messages.last?.id else { return }
+        guard let scrollTarget = ChatThreadScrollTarget.messageID(in: flow.state.messages) else { return }
 
         if animate {
             withAnimation(.easeOut(duration: 0.15)) {
