@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 16px;
+      background: transparent;
+    }
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 80px;
+    }
+    .error {
+      color: #b00020;
+      font: 13px/1.4 -apple-system, sans-serif;
+      white-space: pre-wrap;
+    }
+  </style>
+  <script src="mermaid.min.js"></script>
+</head>
+<body>
+  <div id="container"></div>
+  <script>
+    window.renderMermaid = async function(source, theme) {
+      const container = document.getElementById('container');
+      container.innerHTML = '';
+      try {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: theme === 'dark' ? 'dark' : 'default',
+          securityLevel: 'strict'
+        });
+        const id = 'mermaid-' + Math.random().toString(36).slice(2);
+        const { svg } = await mermaid.render(id, source);
+        container.innerHTML = svg;
+        return { ok: true };
+      } catch (error) {
+        container.innerHTML = '<div class="error">' + String(error) + '</div>';
+        return { ok: false, error: String(error) };
+      }
+    };
+  </script>
+</body>
+</html>
