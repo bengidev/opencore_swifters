@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B65666202FFA33D5009B72E4 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0012FE2AA0100ED1A41 /* MarkdownUI */; };
+		B65666212FFA33D5009B72E4 /* LaTeXSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0022FE2AA0100ED1A41 /* LaTeXSwiftUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B6D73C252FE1992E00ED1A41 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B65666212FFA33D5009B72E4 /* LaTeXSwiftUI in Frameworks */,
+				B65666202FFA33D5009B72E4 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
