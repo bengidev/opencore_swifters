@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 
 extension SharedOpenCorePalette {
+    @MainActor
     func richContentTheme(style: ChatRichContentStyle) -> Theme {
         let bodyUIFont = uiFont(for: style)
         let bodyFont = Font(bodyUIFont)
