@@ -56,8 +56,8 @@ nonisolated enum ChatAssistantMarkdownPreprocessor: Sendable {
             options: .regularExpression
         )
         text = text.replacingOccurrences(
-            of: #"<br\s*/?>"#,
-            with: " ",
+            of: #"\s*<br\s*/?>\s*"#,
+            with: "  ",
             options: [.regularExpression, .caseInsensitive]
         )
         text = ensureGFMTableSpacing(text)

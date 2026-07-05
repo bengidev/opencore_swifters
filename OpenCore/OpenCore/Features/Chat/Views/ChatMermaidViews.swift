@@ -27,9 +27,12 @@ enum ChatMermaidRenderer {
         await load(webView: webView, url: htmlURL)
 
         let theme = isDark ? "dark" : "light"
-        let escaped = jsEscaped(source)
-        _ = try? await webView.evaluateJavaScript("window.renderMermaid(\"\(escaped)\", \"\(theme)\")")
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        let sourceArg = ChatMermaidJSEscaping.quotedJavaScriptString(source)
+        let script = "window.renderMermaid(\(sourceArg), \"\(theme)\")"
+        guard let result = try? await webView.evaluateJavaScript(script) as? [String: Any],
+              (result["ok"] as? Bool) == true else {
+            return nil
+        }
 
         let config = WKSnapshotConfiguration()
         config.rect = webView.bounds
@@ -38,14 +41,6 @@ enum ChatMermaidRenderer {
                 continuation.resume(returning: image)
             }
         }
-    }
-
-    private static func jsEscaped(_ source: String) -> String {
-        source
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "`", with: "\\`")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 
     private static func load(webView: WKWebView, url: URL) async {
@@ -110,6 +105,14 @@ private final class MermaidSnapshotCache {
     }
 }
 
+private struct ContainerWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct ChatMermaidSnapshotView: View {
     let source: String
     let palette: SharedOpenCorePalette
@@ -117,6 +120,7 @@ struct ChatMermaidSnapshotView: View {
     @State private var image: UIImage?
     @State private var failed = false
     @State private var isExpanded = false
+    @State private var layoutWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -143,11 +147,21 @@ struct ChatMermaidSnapshotView: View {
                     .padding(.vertical, 8)
             }
         }
+        .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: ContainerWidthPreferenceKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(ContainerWidthPreferenceKey.self) { width in
+            layoutWidth = width
+        }
         .sheet(isPresented: $isExpanded) {
             ChatMermaidExpandedSheet(source: source, palette: palette)
         }
-        .task(id: taskKey) {
-            await renderSnapshot()
+        .task(id: "\(taskKey)-\(Int(layoutWidth))") {
+            guard layoutWidth > 0 else { return }
+            await renderSnapshot(width: layoutWidth)
         }
     }
 
@@ -156,10 +170,10 @@ struct ChatMermaidSnapshotView: View {
     }
 
     @MainActor
-    private func renderSnapshot() async {
-        let width = UIScreen.main.bounds.width - 72
+    private func renderSnapshot(width: CGFloat) async {
         if let cached = MermaidSnapshotCache.shared.image(for: source, isDark: palette.isDark, width: width) {
             image = cached
+            failed = false
             return
         }
         let rendered = await ChatMermaidRenderer.snapshot(
@@ -169,8 +183,10 @@ struct ChatMermaidSnapshotView: View {
         )
         if let rendered {
             image = rendered
+            failed = false
             MermaidSnapshotCache.shared.store(rendered, for: source, isDark: palette.isDark, width: width)
         } else {
+            image = nil
             failed = true
         }
     }
@@ -271,13 +287,9 @@ private struct ChatMermaidLiveWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let pendingRender else { return }
             self.pendingRender = nil
-            let escaped = pendingRender.0
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "`", with: "\\`")
-                .replacingOccurrences(of: "\n", with: "\\n")
-                .replacingOccurrences(of: "\"", with: "\\\"")
+            let sourceArg = ChatMermaidJSEscaping.quotedJavaScriptString(pendingRender.0)
             let theme = pendingRender.1 ? "dark" : "light"
-            webView.evaluateJavaScript("window.renderMermaid(\"\(escaped)\", \"\(theme)\")")
+            webView.evaluateJavaScript("window.renderMermaid(\(sourceArg), \"\(theme)\")")
         }
     }
 }

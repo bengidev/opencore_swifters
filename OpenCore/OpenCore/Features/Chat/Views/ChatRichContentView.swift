@@ -60,7 +60,7 @@ struct ChatRichContentView: View {
         VStack(alignment: style == .system ? .center : .leading, spacing: 0) {
             ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                 segmentView(segment, isLast: index == segments.count - 1, cursorOpacity: cursorOpacity)
-                    .id(segment)
+                    .id("\(index)-\(segment)")
             }
         }
         .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)

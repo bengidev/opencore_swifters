@@ -95,16 +95,3 @@ struct ChatInlineLaTeXView: View {
             .accessibilityLabel(latex)
     }
 }
-
-struct ChatLaTeXFallbackText: View {
-    let latex: String
-    let font: Font
-    let color: Color
-
-    var body: some View {
-        Text(latex)
-            .font(font)
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
