@@ -115,12 +115,87 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
                 output.append(contentsOf: splitMarkdownProse(prefix, progressive: progressive))
             }
             if !tail.isEmpty {
-                output.append(.plainTail(tail))
+                output.append(contentsOf: segmentsFromProgressiveTail(tail))
             }
             return output
         }
 
         return [classifyResolvedMarkdownProse(prose)]
+    }
+
+    /// Pulls complete markdown blocks out of a progressive tail so tables and headings
+    /// render richly even when an earlier delimiter is still incomplete.
+    private static func segmentsFromProgressiveTail(_ tail: String) -> [ChatAssistantContentSegment] {
+        let lines = tail.components(separatedBy: "\n")
+        var output: [ChatAssistantContentSegment] = []
+        var plainLines: [String] = []
+        var index = 0
+
+        func flushPlainLines() {
+            guard !plainLines.isEmpty else { return }
+            output.append(.plainTail(plainLines.joined(separator: "\n")))
+            plainLines = []
+        }
+
+        while index < lines.count {
+            if isGFMTableHeader(lines[index]),
+               index + 1 < lines.count,
+               isGFMTableSeparator(lines[index + 1]) {
+                flushPlainLines()
+                var tableLines = [lines[index], lines[index + 1]]
+                index += 2
+                while index < lines.count, isGFMTableRow(lines[index]) {
+                    tableLines.append(lines[index])
+                    index += 1
+                }
+                output.append(.markdown(markdownTableBlock(from: tableLines)))
+            } else if isMarkdownHeadingLine(lines[index]) || isThematicBreakLine(lines[index]) {
+                flushPlainLines()
+                output.append(.markdown(lines[index]))
+                index += 1
+            } else {
+                plainLines.append(lines[index])
+                index += 1
+            }
+        }
+
+        flushPlainLines()
+        return output
+    }
+
+    private static func markdownTableBlock(from lines: [String]) -> String {
+        "\n\n" + lines.joined(separator: "\n")
+    }
+
+    private static func isGFMTableRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|"), trimmed.count > 2 else { return false }
+        return true
+    }
+
+    private static func isGFMTableHeader(_ line: String) -> Bool {
+        isGFMTableRow(line)
+    }
+
+    private static func isGFMTableSeparator(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|") else { return false }
+        let inner = trimmed.dropFirst().dropLast()
+        guard !inner.isEmpty else { return false }
+        return inner.allSatisfy { $0 == "|" || $0 == "-" || $0 == ":" || $0 == " " }
+    }
+
+    private static func isMarkdownHeadingLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("#") else { return false }
+        return trimmed.range(of: #"^#{1,6}\s+\S"#, options: .regularExpression) != nil
+    }
+
+    private static func isThematicBreakLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        return trimmed.allSatisfy { $0 == "-" || $0 == " " || $0 == "*" || $0 == "_" }
+            && trimmed.contains("-")
     }
 
     private static func classifyResolvedMarkdownProse(_ prose: String) -> ChatAssistantContentSegment {

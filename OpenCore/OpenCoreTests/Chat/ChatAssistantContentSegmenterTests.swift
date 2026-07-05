@@ -111,6 +111,31 @@ struct ChatAssistantContentSegmenterTests {
         #expect(markdown.contains("| Books |"))
     }
 
+    @Test("Progressive tail extracts complete GFM tables for rich rendering")
+    func progressiveTailExtractsGFMTable() {
+        let table = """
+        | Feature | Traditional RNNs | CNNs | Transformers |
+        |---------|------------------|------|--------------|
+        | **Sequential processing** | One token at a time ✔️ | Local patches only ❌ | Fully parallel ✔️ |
+        | **Long-range dependencies** | Weak (vanishing gradients) ❌ | Limited receptive field ❌ | Excellent via attention ✔️ |
+        """
+        let raw = "Earlier text about `transformer\n\n" + table + "\n\n---\n\n# 2️⃣ Core Building Blocks"
+        let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: true)
+
+        #expect(segments.contains { if case .markdown(let markdown) = $0 { return markdown.contains("| Feature |") } else { return false } })
+        #expect(segments.contains { if case .markdown(let markdown) = $0 { return markdown.contains("# 2️⃣ Core Building Blocks") } else { return false } })
+        #expect(!segments.contains { if case .plainTail(let tail) = $0 { return tail.contains("| Feature |") } else { return false } })
+    }
+
+    @Test("Progressive tail keeps only the incomplete delimiter as plain text")
+    func progressiveTailPreservesIncompleteDelimiter() {
+        let raw = "Partial $E = mc"
+        let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: true)
+        #expect(segments.count == 2)
+        #expect(segments[0] == .markdown("Partial "))
+        #expect(segments[1] == .plainTail("$E = mc"))
+    }
+
     @Test("Completed messages ignore unclosed inline delimiters")
     func completedMessageIgnoresUnclosedDelimiter() {
         let raw = "Partial $E = mc"
