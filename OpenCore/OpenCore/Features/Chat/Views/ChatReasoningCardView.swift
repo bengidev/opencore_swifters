@@ -10,19 +10,25 @@ struct ChatReasoningCardView: View {
     let content: String
     let isComplete: Bool
     let isStreaming: Bool
+    var collapseForDownstreamStream: Bool = false
 
     @Environment(\.sharedPalette) private var palette
 
-    /// Collapsed by default; auto-expands while reasoning is actively streaming,
-    /// then collapses again once thinking completes. User can toggle manually anytime.
+    /// Expands while thinking streams; auto-collapses before answer or tool output appears.
     @State private var isExpanded: Bool
     @State private var didAutoCollapse = false
 
-    init(content: String, isComplete: Bool, isStreaming: Bool) {
+    init(
+        content: String,
+        isComplete: Bool,
+        isStreaming: Bool,
+        collapseForDownstreamStream: Bool = false
+    ) {
         self.content = content
         self.isComplete = isComplete
         self.isStreaming = isStreaming
-        _isExpanded = State(initialValue: isStreaming)
+        self.collapseForDownstreamStream = collapseForDownstreamStream
+        _isExpanded = State(initialValue: isStreaming && !collapseForDownstreamStream)
     }
 
     var body: some View {
@@ -51,14 +57,22 @@ struct ChatReasoningCardView: View {
         }
         .animation(.easeInOut(duration: 0.22), value: isExpanded)
         .onChange(of: isStreaming) { _, streaming in
-            // Auto-collapse once thinking finishes (only once; respects later manual toggles).
-            guard !streaming, !didAutoCollapse else { return }
-            didAutoCollapse = true
-            withAnimation(.easeInOut(duration: 0.22)) {
-                isExpanded = false
-            }
-            NotificationCenter.default.post(name: .chatThreadRequestScrollToBottom, object: nil)
+            guard !streaming else { return }
+            autoCollapseIfNeeded()
         }
+        .onChange(of: collapseForDownstreamStream) { _, shouldCollapse in
+            guard shouldCollapse else { return }
+            autoCollapseIfNeeded()
+        }
+    }
+
+    private func autoCollapseIfNeeded() {
+        guard !didAutoCollapse, isExpanded else { return }
+        didAutoCollapse = true
+        withAnimation(.easeInOut(duration: 0.22)) {
+            isExpanded = false
+        }
+        NotificationCenter.default.post(name: .chatThreadRequestScrollToBottom, object: nil)
     }
 
     private var showsStreamingBody: Bool {
@@ -115,11 +129,12 @@ struct ChatReasoningCardView: View {
 }
 
 extension ChatReasoningCardView {
-    init(message: ChatThinkingMessage) {
+    init(message: ChatThinkingMessage, collapseForDownstreamStream: Bool = false) {
         self.init(
             content: message.content,
             isComplete: message.isComplete,
-            isStreaming: !message.isComplete
+            isStreaming: !message.isComplete,
+            collapseForDownstreamStream: collapseForDownstreamStream
         )
     }
 }

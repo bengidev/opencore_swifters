@@ -5,6 +5,7 @@ struct ChatMessageRowView: View, Equatable {
     let isLastAssistantMessage: Bool
     let streamingStatus: ChatStreamingStatus
     let streamErrorMessage: String?
+    var collapseThinkingForDownstreamStream: Bool = false
 
     @Environment(\.sharedPalette) private var palette
     private static let oppositeSpacerMinWidth: CGFloat = 60
@@ -14,6 +15,7 @@ struct ChatMessageRowView: View, Equatable {
             && lhs.isLastAssistantMessage == rhs.isLastAssistantMessage
             && lhs.streamingStatus == rhs.streamingStatus
             && lhs.streamErrorMessage == rhs.streamErrorMessage
+            && lhs.collapseThinkingForDownstreamStream == rhs.collapseThinkingForDownstreamStream
     }
 
     var body: some View {
@@ -22,7 +24,10 @@ struct ChatMessageRowView: View, Equatable {
             textRow(textMessage)
         case let .thinking(thinkingMessage):
             assistantSurround {
-                ChatReasoningCardView(message: thinkingMessage)
+                ChatReasoningCardView(
+                    message: thinkingMessage,
+                    collapseForDownstreamStream: collapseThinkingForDownstreamStream
+                )
             }
         case let .system(systemMessage):
             ChatRichContentView(text: systemMessage.content, style: .system)

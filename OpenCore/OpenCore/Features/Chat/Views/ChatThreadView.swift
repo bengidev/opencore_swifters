@@ -28,7 +28,8 @@ struct ChatThreadView<BottomChrome: View>: View {
                             message: message,
                             isLastAssistantMessage: isLastAssistantMessage(message),
                             streamingStatus: flow.state.streamingStatus,
-                            streamErrorMessage: flow.state.streamErrorMessage
+                            streamErrorMessage: flow.state.streamErrorMessage,
+                            collapseThinkingForDownstreamStream: shouldCollapseThinking(for: message)
                         )
                         .equatable()
                         .id(message.id)
@@ -103,6 +104,29 @@ struct ChatThreadView<BottomChrome: View>: View {
               let lastAssistantIndex = flow.state.messages.lastIndex(where: { $0.role == .assistant })
         else { return false }
         return flow.state.messages[lastAssistantIndex].id == message.id
+    }
+
+    private func shouldCollapseThinking(for message: ChatMessage) -> Bool {
+        guard case .thinking = message else { return false }
+
+        if flow.state.streamingAnswerID != nil || flow.state.streamingOutputStreamID != nil {
+            return true
+        }
+
+        guard let index = flow.state.messages.firstIndex(where: { $0.id == message.id }) else {
+            return false
+        }
+
+        return flow.state.messages[(index + 1)...].contains { downstream in
+            switch downstream {
+            case let .text(textMessage):
+                textMessage.role == .assistant
+            case .outputStream:
+                true
+            default:
+                false
+            }
+        }
     }
 
     private func scheduleScrollToLast(
