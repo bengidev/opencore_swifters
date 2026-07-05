@@ -74,6 +74,7 @@ enum ChatMermaidRenderer {
     }
 }
 
+@MainActor
 private final class MermaidSnapshotCache {
     static let shared = MermaidSnapshotCache()
 
@@ -106,7 +107,7 @@ private final class MermaidSnapshotCache {
 }
 
 private struct ContainerWidthPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static let defaultValue: CGFloat = 0
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
