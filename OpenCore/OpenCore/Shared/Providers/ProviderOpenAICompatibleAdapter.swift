@@ -55,6 +55,8 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         return request
     }
 
+    func makeModelDetailURLRequest(modelID: String, secret: String) -> URLRequest? { nil }
+
     static func makeRequestBody(
         chatRequest: ChatRequest,
         reasoningWireStyle: ProviderReasoningWireStyle,
