@@ -7,13 +7,16 @@ final class HomeFlowController {
     private(set) var state: HomeFlowState
     private let catalog: HomeModelCatalogClient
     private let cachePreference: HomeModelCatalogCachePreferenceClient
+    private let capabilityClient: HomeModelCapabilityClient
     private let credentialStore: any CredentialStoring
     private let providerPreference: any SidePanelProviderPreferenceStore
     private var searchDebounceTask: Task<Void, Never>?
+    private var capabilityFetchTask: Task<Void, Never>?
     private var contextMessages: [ChatMessage] = []
     private var contextDraft = ""
 
     var onModelSelectionChanged: (() -> Void)?
+    var onInputCapabilitiesResolved: ((ModelInputCapabilities) -> Void)?
 
     func selectTab(_ tab: HomeTab) {
         state.selectedTab = tab
@@ -27,12 +30,14 @@ final class HomeFlowController {
         state: HomeFlowState = HomeFlowState(),
         catalog: HomeModelCatalogClient = .live,
         cachePreference: HomeModelCatalogCachePreferenceClient = .live,
+        capabilityClient: HomeModelCapabilityClient = .live,
         credentialStore: any CredentialStoring,
         providerPreference: any SidePanelProviderPreferenceStore
     ) {
         self.state = state
         self.catalog = catalog
         self.cachePreference = cachePreference
+        self.capabilityClient = capabilityClient
         self.credentialStore = credentialStore
         self.providerPreference = providerPreference
     }
@@ -64,6 +69,7 @@ final class HomeFlowController {
         state.selectedModelID = nil
         state.catalogModels = []
         state.catalogError = nil
+        state.inputCapabilities = nil
         refreshAPIKeyStatus()
         await loadCatalog(allowAutoSelect: true)
     }
@@ -85,6 +91,7 @@ final class HomeFlowController {
         }
         refreshStoredContextUsage()
         onModelSelectionChanged?()
+        refreshInputCapabilities()
     }
 
     func selectReasoningEffort(_ effort: ModelReasoningEffort) {
@@ -153,6 +160,34 @@ final class HomeFlowController {
         reconcileModelSelection(allowAutoSelect: allowAutoSelect)
         refreshStoredContextUsage()
         onModelSelectionChanged?()
+        refreshInputCapabilities()
+    }
+
+    private func refreshInputCapabilities() {
+        guard let modelID = state.selectedModelID else {
+            state.inputCapabilities = nil
+            state.isLoadingInputCapabilities = false
+            return
+        }
+        guard state.hasAPIKey else {
+            state.inputCapabilities = ModelInputCapabilities(inputModalities: [.text])
+            state.isLoadingInputCapabilities = false
+            return
+        }
+        let catalogModel = state.catalogModels.first { $0.id == modelID }
+        capabilityFetchTask?.cancel()
+        state.isLoadingInputCapabilities = true
+        let providerID = state.selectedProviderID
+        let secret = credentialStore.secret(for: providerID)
+        capabilityFetchTask = Task { [weak self] in
+            let caps = await self?.capabilityClient.fetchCapabilities(
+                providerID, modelID, secret, catalogModel, .shared
+            )
+            guard !Task.isCancelled, let self, let caps else { return }
+            state.inputCapabilities = caps
+            state.isLoadingInputCapabilities = false
+            onInputCapabilitiesResolved?(caps)
+        }
     }
 
     private func reconcileModelSelection(allowAutoSelect: Bool) {

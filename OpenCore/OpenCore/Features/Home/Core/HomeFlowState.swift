@@ -15,6 +15,8 @@ nonisolated struct HomeFlowState: Equatable, Sendable {
     var modelSearchQuery = ""
     var appliedSearchQuery = ""
     var modelFilterFreeOnly = false
+    var inputCapabilities: ModelInputCapabilities?
+    var isLoadingInputCapabilities: Bool = false
 
     /// OpenRouter throughput routing when the selected model supports speed modes.
     var activeProviderSortBy: String? {
