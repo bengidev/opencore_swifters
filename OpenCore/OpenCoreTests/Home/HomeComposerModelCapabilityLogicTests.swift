@@ -41,4 +41,20 @@ struct HomeComposerModelCapabilityLogicTests {
         #expect(!HomeComposerModelCapabilityLogic.supportsImageInput(for: textModel))
         #expect(!HomeComposerModelCapabilityLogic.supportsImageInput(for: nil))
     }
+
+    @Test("blocks file attachment when model lacks file input")
+    func blocksFileAttachment() {
+        let model = ChatModel(id: "llama", displayName: "Llama", supportsImageInput: true)
+        let attachment = ChatMessageAttachment(kind: .file, filename: "note.txt", localPath: "/tmp/note.txt")
+        let decision = HomeComposerModelCapabilityLogic.validateNewAttachment(
+            attachment,
+            capabilities: ModelInputCapabilities.from(model),
+            modelName: "Llama"
+        )
+        if case .blocked = decision {
+            // expected
+        } else {
+            Issue.record("Expected blocked for file on image-only model")
+        }
+    }
 }
