@@ -203,10 +203,19 @@ private struct HomeModelPopupRow: View {
                         }
                     }
 
-                    if let contextLength = option.contextLength {
-                        Text(contextLengthLabel(contextLength))
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.textTertiary)
+                    HStack(spacing: 6) {
+                        if let contextLength = option.contextLength {
+                            Text(contextLengthLabel(contextLength))
+                                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.textTertiary)
+                        }
+                        if option.inputCapabilities.supportsAttachments {
+                            if option.contextLength != nil {
+                                Text("·")
+                                    .foregroundStyle(palette.textTertiary)
+                            }
+                            ModelInputCapabilityIconsView(capabilities: option.inputCapabilities)
+                        }
                     }
                 }
 
@@ -222,7 +231,12 @@ private struct HomeModelPopupRow: View {
                 ? palette.accentSoft.opacity(palette.isDark ? 0.08 : 0.06)
                 : Color.clear
         )
-        .accessibilityLabel("\(option.title)\(option.isFree ? ", free" : "")\(isSelected ? ", selected" : "")")
+        .accessibilityLabel("\(option.title)\(option.isFree ? ", free" : "")\(capabilityAccessibility)\(isSelected ? ", selected" : "")")
+    }
+
+    private var capabilityAccessibility: String {
+        let summary = option.inputCapabilities.accessibilitySummary
+        return summary.isEmpty ? "" : ", \(summary)"
     }
 
     private func contextLengthLabel(_ tokens: Int) -> String {
