@@ -63,6 +63,7 @@ final class HomeFlowController {
     }
 
     func handleProviderChanged(_ providerID: String) async {
+        capabilityFetchTask?.cancel()
         state.selectedProviderID = providerID
         providerPreference.setProviderID(providerID)
         providerPreference.setModelID(nil)
@@ -165,13 +166,16 @@ final class HomeFlowController {
 
     private func refreshInputCapabilities() {
         guard let modelID = state.selectedModelID else {
+            capabilityFetchTask?.cancel()
             state.inputCapabilities = nil
             state.isLoadingInputCapabilities = false
             return
         }
         guard state.hasAPIKey else {
-            state.inputCapabilities = ModelInputCapabilities(inputModalities: [.text])
+            let caps = ModelInputCapabilities(inputModalities: [.text])
+            state.inputCapabilities = caps
             state.isLoadingInputCapabilities = false
+            onInputCapabilitiesResolved?(caps)
             return
         }
         let catalogModel = state.catalogModels.first { $0.id == modelID }
