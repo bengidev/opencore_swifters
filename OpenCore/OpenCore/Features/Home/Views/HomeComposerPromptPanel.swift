@@ -56,15 +56,21 @@ struct HomeComposerPromptPanel: View {
         )
     }
 
+    private var catalogCapabilities: ModelInputCapabilities {
+        ModelInputCapabilities.from(selectedModel ?? ChatModel(id: "", displayName: ""))
+    }
+
     private var resolvedCapabilities: ModelInputCapabilities? {
         if case let .available(caps) = plusButtonState { return caps }
-        if case .loading = plusButtonState { return home.state.inputCapabilities }
+        if case .loading = plusButtonState { return catalogCapabilities }
         return nil
     }
 
     private var effectiveCapabilities: ModelInputCapabilities {
-        home.state.inputCapabilities
-            ?? ModelInputCapabilities.from(selectedModel ?? ChatModel(id: "", displayName: ""))
+        if home.state.isLoadingInputCapabilities {
+            return catalogCapabilities
+        }
+        return home.state.inputCapabilities ?? catalogCapabilities
     }
 
     private var photoPickerMatching: PHPickerFilter {

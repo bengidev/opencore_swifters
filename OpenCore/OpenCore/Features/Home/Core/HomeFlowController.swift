@@ -180,6 +180,7 @@ final class HomeFlowController {
         }
         let catalogModel = state.catalogModels.first { $0.id == modelID }
         capabilityFetchTask?.cancel()
+        state.inputCapabilities = nil
         state.isLoadingInputCapabilities = true
         let providerID = state.selectedProviderID
         let secret = credentialStore.secret(for: providerID)
