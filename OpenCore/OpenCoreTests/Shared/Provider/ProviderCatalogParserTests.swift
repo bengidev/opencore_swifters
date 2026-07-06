@@ -73,4 +73,42 @@ struct ProviderCatalogParserTests {
         #expect(model.supportsImageInput)
         #expect(model.supportsVideoInput)
     }
+
+    @Test("input_modalities array enables file and image support")
+    func inputModalitiesArray() throws {
+        let json = Data("""
+        {"id":"openai/gpt-4o","name":"GPT-4o","architecture":{"input_modalities":["text","file","image"]}}
+        """.utf8)
+
+        let model = try ProviderCatalogParser.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsFileInput)
+        #expect(model.supportsImageInput)
+        #expect(!model.supportsVideoInput)
+    }
+
+    @Test("legacy modality string still works when input_modalities absent")
+    func legacyModalityFallback() throws {
+        let json = Data("""
+        {"id":"google/gemini-2.5-flash","name":"Gemini","architecture":{"modality":"text+image+video"}}
+        """.utf8)
+
+        let model = try ProviderCatalogParser.chatModel(fromCatalogEntryJSON: json)
+
+        #expect(model.supportsImageInput)
+        #expect(model.supportsVideoInput)
+        #expect(!model.supportsFileInput)
+    }
+
+    @Test("modelInputCapabilities parses single entry JSON")
+    func capabilitiesFromEntryJSON() throws {
+        let json = Data("""
+        {"id":"openai/gpt-4o","name":"GPT-4o","architecture":{"input_modalities":["text","image"]}}
+        """.utf8)
+
+        let caps = try ProviderCatalogParser.modelInputCapabilities(fromCatalogEntryJSON: json)
+
+        #expect(caps.supportsImageInput)
+        #expect(!caps.supportsFileInput)
+    }
 }
