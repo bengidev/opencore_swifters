@@ -519,6 +519,7 @@ struct HomeComposerStopRecordingButton: View {
 struct HomeComposerIconButton: View {
     let systemImage: String
     let accessibilityLabel: String
+    var isEnabled: Bool = true
     let action: () -> Void
 
     @Environment(\.sharedPalette) private var palette
@@ -528,9 +529,11 @@ struct HomeComposerIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(palette.textSecondary)
+                .opacity(isEnabled ? 1 : 0.35)
                 .frame(width: 30, height: 30)
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)
     }
 }

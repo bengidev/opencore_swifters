@@ -43,6 +43,13 @@ nonisolated struct ProviderDescriptor: Equatable, Sendable {
     var modelsURL: URL {
         baseURL.appendingPathComponent("models")
     }
+
+    func modelDetailURL(author: String, slug: String) -> URL {
+        baseURL
+            .appendingPathComponent("model")
+            .appendingPathComponent(author)
+            .appendingPathComponent(slug)
+    }
 }
 
 extension ProviderDescriptor {

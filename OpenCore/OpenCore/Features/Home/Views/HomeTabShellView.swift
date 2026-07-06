@@ -48,6 +48,11 @@ struct HomeTabShellView: View {
             sidePanel.syncSelectedProviderID(providerID)
         }
 
+        home.onInputCapabilitiesResolved = { capabilities in
+            guard !capabilities.supportsAttachments else { return }
+            chat.clearDraftAttachments()
+        }
+
         sidePanel.onOpenConversation = { conversation in
             home.selectTab(.home)
             Task {

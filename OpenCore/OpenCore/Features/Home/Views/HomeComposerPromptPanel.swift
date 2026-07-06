@@ -49,6 +49,40 @@ struct HomeComposerPromptPanel: View {
             && home.state.hasSelectedModel
     }
 
+    private var plusButtonState: HomeComposerAttachmentMenuLogic.PlusButtonState {
+        HomeComposerAttachmentMenuLogic.plusButtonState(
+            isLoading: home.state.isLoadingInputCapabilities,
+            capabilities: home.state.inputCapabilities
+        )
+    }
+
+    private var catalogCapabilities: ModelInputCapabilities {
+        ModelInputCapabilities.from(selectedModel ?? ChatModel(id: "", displayName: ""))
+    }
+
+    private var resolvedCapabilities: ModelInputCapabilities? {
+        if case let .available(caps) = plusButtonState { return caps }
+        if case .loading = plusButtonState { return catalogCapabilities }
+        return nil
+    }
+
+    private var effectiveCapabilities: ModelInputCapabilities {
+        if home.state.isLoadingInputCapabilities {
+            return catalogCapabilities
+        }
+        return home.state.inputCapabilities ?? catalogCapabilities
+    }
+
+    private var photoPickerMatching: PHPickerFilter {
+        guard let caps = resolvedCapabilities else { return .any(of: [.images, .videos]) }
+        switch (caps.supportsImageInput, caps.supportsVideoInput) {
+        case (true, true): return .any(of: [.images, .videos])
+        case (true, false): return .images
+        case (false, true): return .videos
+        default: return .images
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !home.state.hasAPIKey {
@@ -118,11 +152,23 @@ struct HomeComposerPromptPanel: View {
             }
 
             HStack(spacing: 6) {
-                HomeComposerIconButton(
-                    systemImage: "plus",
-                    accessibilityLabel: "Add attachment",
-                    action: presentAttachmentMenu
-                )
+                switch plusButtonState {
+                case .hidden:
+                    EmptyView()
+                case .loading:
+                    HomeComposerIconButton(
+                        systemImage: "plus",
+                        accessibilityLabel: "Loading attachment options",
+                        isEnabled: false,
+                        action: {}
+                    )
+                case .available:
+                    HomeComposerIconButton(
+                        systemImage: "plus",
+                        accessibilityLabel: "Add attachment",
+                        action: presentAttachmentMenu
+                    )
+                }
 
                 Spacer(minLength: 4)
 
@@ -154,11 +200,17 @@ struct HomeComposerPromptPanel: View {
             isPresented: $isAttachmentMenuPresented,
             titleVisibility: .visible
         ) {
-            Button("Import File") {
-                isFileImporterPresented = true
-            }
-            Button("Photo Library") {
-                isPhotoPickerPresented = true
+            if let caps = resolvedCapabilities {
+                if HomeComposerAttachmentMenuLogic.menuOptions(for: caps).contains(.importFile) {
+                    Button("Import File") {
+                        isFileImporterPresented = true
+                    }
+                }
+                if HomeComposerAttachmentMenuLogic.menuOptions(for: caps).contains(.photoLibrary) {
+                    Button("Photo Library") {
+                        isPhotoPickerPresented = true
+                    }
+                }
             }
         } message: {
             Text("Attach a file or photo to include with your message.")
@@ -173,7 +225,7 @@ struct HomeComposerPromptPanel: View {
         .photosPicker(
             isPresented: $isPhotoPickerPresented,
             selection: $photoPickerItem,
-            matching: .any(of: [.images, .videos]),
+            matching: photoPickerMatching,
             photoLibrary: .shared()
         )
         .onChange(of: photoPickerItem) { _, newItem in
@@ -199,7 +251,7 @@ struct HomeComposerPromptPanel: View {
         guard canSend else { return }
         switch HomeComposerModelCapabilityLogic.validateDraft(
             attachments: chat.state.draftAttachments,
-            model: selectedModel,
+            capabilities: effectiveCapabilities,
             modelName: selectedModelName
         ) {
         case .allowed:
@@ -226,7 +278,7 @@ struct HomeComposerPromptPanel: View {
         dismissKeyboard()
         switch HomeComposerModelCapabilityLogic.validateDraft(
             attachments: chat.state.draftAttachments,
-            model: selectedModel,
+            capabilities: effectiveCapabilities,
             modelName: selectedModelName
         ) {
         case .allowed:
@@ -263,7 +315,21 @@ struct HomeComposerPromptPanel: View {
 
     private func presentAttachmentMenu() {
         dismissKeyboard()
-        isAttachmentMenuPresented = true
+        guard case let .available(caps) = plusButtonState else { return }
+        let options = HomeComposerAttachmentMenuLogic.menuOptions(for: caps)
+        switch options.count {
+        case 0:
+            return
+        case 1:
+            switch options[0] {
+            case .importFile:
+                isFileImporterPresented = true
+            case .photoLibrary:
+                isPhotoPickerPresented = true
+            }
+        default:
+            isAttachmentMenuPresented = true
+        }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -298,7 +364,7 @@ struct HomeComposerPromptPanel: View {
     private func addImportedAttachment(_ attachment: ChatMessageAttachment) {
         switch HomeComposerModelCapabilityLogic.validateNewAttachment(
             attachment,
-            model: selectedModel,
+            capabilities: effectiveCapabilities,
             modelName: selectedModelName
         ) {
         case .allowed:

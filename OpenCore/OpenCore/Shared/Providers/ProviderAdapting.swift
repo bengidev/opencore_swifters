@@ -8,4 +8,5 @@ nonisolated protocol ProviderAdapting: Sendable {
 
     func makeChatCompletionURLRequest(secret: String, chatRequest: ChatRequest) throws -> URLRequest
     func makeModelsListURLRequest(secret: String) -> URLRequest
+    func makeModelDetailURLRequest(modelID: String, secret: String) -> URLRequest?
 }

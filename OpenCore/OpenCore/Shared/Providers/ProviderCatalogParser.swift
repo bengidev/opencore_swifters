@@ -20,6 +20,11 @@ nonisolated enum ProviderCatalogParser {
                 return lhs.displayName.localizedCompare(rhs.displayName) == .orderedAscending
             }
     }
+
+    nonisolated static func modelInputCapabilities(fromCatalogEntryJSON data: Data) throws -> ModelInputCapabilities {
+        let entry = try JSONDecoder().decode(ProviderCatalogEntry.self, from: data)
+        return ModelInputCapabilities(inputModalities: entry.resolvedInputModalities())
+    }
 }
 
 // MARK: - Wire types
@@ -65,6 +70,12 @@ private nonisolated struct ProviderCatalogEntry: Decodable, Sendable {
     nonisolated struct Architecture: Decodable, Sendable {
         let modality: String?
         let tokenizer: String?
+        let inputModalities: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case modality, tokenizer
+            case inputModalities = "input_modalities"
+        }
     }
 
     nonisolated struct Pricing: Decodable, Sendable {
@@ -120,18 +131,22 @@ private nonisolated struct ProviderCatalogEntry: Decodable, Sendable {
         return supportedParameters?.contains("provider") == true
     }
 
-    var supportsImageInput: Bool {
-        guard let modality = architecture?.modality, !modality.isEmpty else { return false }
-        return modality.localizedCaseInsensitiveContains("image")
-    }
-
-    var supportsVideoInput: Bool {
-        guard let modality = architecture?.modality, !modality.isEmpty else { return false }
-        return modality.localizedCaseInsensitiveContains("video")
+    func resolvedInputModalities() -> Set<ModelInputModality> {
+        if let wire = architecture?.inputModalities, !wire.isEmpty {
+            return Set(wire.compactMap(ModelInputModality.init(wireValue:)))
+        }
+        var modalities: Set<ModelInputModality> = [.text]
+        let legacy = architecture?.modality?.lowercased() ?? ""
+        if legacy.contains("file") { modalities.insert(.file) }
+        if legacy.contains("image") { modalities.insert(.image) }
+        if legacy.contains("video") { modalities.insert(.video) }
+        if legacy.contains("audio") { modalities.insert(.audio) }
+        return modalities
     }
 
     func toChatModel() -> ChatModel {
-        ChatModel(
+        let modalities = resolvedInputModalities()
+        return ChatModel(
             id: id,
             displayName: name ?? id,
             isFree: isFree,
@@ -139,8 +154,10 @@ private nonisolated struct ProviderCatalogEntry: Decodable, Sendable {
             supportedReasoningEfforts: resolvedReasoningEfforts,
             reasoningMandatory: reasoningMandatory,
             supportsSpeedModes: supportsSpeedModes,
-            supportsImageInput: supportsImageInput,
-            supportsVideoInput: supportsVideoInput
+            supportsFileInput: modalities.contains(.file),
+            supportsImageInput: modalities.contains(.image),
+            supportsVideoInput: modalities.contains(.video),
+            supportsAudioInput: modalities.contains(.audio)
         )
     }
 

@@ -10,6 +10,9 @@ nonisolated struct HomeModelOption: Equatable, Identifiable, Sendable {
     var isFree: Bool { model.isFree }
     var contextLength: Int? { model.contextLength }
     var supportsReasoning: Bool { !availableReasoningEfforts.isEmpty }
+    var inputCapabilities: ModelInputCapabilities {
+        ModelInputCapabilities.from(model)
+    }
 
     init(model: ChatModel, providerSupportsRouting: Bool = true) {
         self.model = model
