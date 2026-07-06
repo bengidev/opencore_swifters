@@ -12,10 +12,14 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
     let reasoningMandatory: Bool
     /// OpenRouter router models expose provider speed routing (standard vs fast).
     let supportsSpeedModes: Bool
+    /// True when the provider catalog reports file modality support.
+    let supportsFileInput: Bool
     /// True when the provider catalog reports image modality support.
     let supportsImageInput: Bool
     /// True when the provider catalog reports video modality support.
     let supportsVideoInput: Bool
+    /// True when the provider catalog reports audio modality support.
+    let supportsAudioInput: Bool
 
     var supportsReasoning: Bool { !supportedReasoningEfforts.isEmpty }
 
@@ -27,8 +31,10 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
         supportedReasoningEfforts: [String] = [],
         reasoningMandatory: Bool = false,
         supportsSpeedModes: Bool = false,
+        supportsFileInput: Bool = false,
         supportsImageInput: Bool = false,
-        supportsVideoInput: Bool = false
+        supportsVideoInput: Bool = false,
+        supportsAudioInput: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
@@ -37,8 +43,10 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
         self.supportedReasoningEfforts = supportedReasoningEfforts
         self.reasoningMandatory = reasoningMandatory
         self.supportsSpeedModes = supportsSpeedModes
+        self.supportsFileInput = supportsFileInput
         self.supportsImageInput = supportsImageInput
         self.supportsVideoInput = supportsVideoInput
+        self.supportsAudioInput = supportsAudioInput
     }
 
     init(from decoder: Decoder) throws {
@@ -56,8 +64,10 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
         }
         reasoningMandatory = try container.decodeIfPresent(Bool.self, forKey: .reasoningMandatory) ?? false
         supportsSpeedModes = try container.decodeIfPresent(Bool.self, forKey: .supportsSpeedModes) ?? false
+        supportsFileInput = try container.decodeIfPresent(Bool.self, forKey: .supportsFileInput) ?? false
         supportsImageInput = try container.decodeIfPresent(Bool.self, forKey: .supportsImageInput) ?? false
         supportsVideoInput = try container.decodeIfPresent(Bool.self, forKey: .supportsVideoInput) ?? false
+        supportsAudioInput = try container.decodeIfPresent(Bool.self, forKey: .supportsAudioInput) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -69,8 +79,10 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
         try container.encode(supportedReasoningEfforts, forKey: .supportedReasoningEfforts)
         try container.encode(reasoningMandatory, forKey: .reasoningMandatory)
         try container.encode(supportsSpeedModes, forKey: .supportsSpeedModes)
+        try container.encode(supportsFileInput, forKey: .supportsFileInput)
         try container.encode(supportsImageInput, forKey: .supportsImageInput)
         try container.encode(supportsVideoInput, forKey: .supportsVideoInput)
+        try container.encode(supportsAudioInput, forKey: .supportsAudioInput)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -78,8 +90,10 @@ nonisolated struct ChatModel: Equatable, Identifiable, Sendable, Codable {
         case supportedReasoningEfforts
         case reasoningMandatory
         case supportsSpeedModes
+        case supportsFileInput
         case supportsImageInput
         case supportsVideoInput
+        case supportsAudioInput
         case supportsReasoning
     }
 }
