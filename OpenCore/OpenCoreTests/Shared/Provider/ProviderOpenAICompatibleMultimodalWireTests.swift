@@ -55,7 +55,8 @@ struct ProviderOpenAICompatibleMultimodalWireTests {
             UIColor.green.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 24, height: 24))
         }.jpegData(compressionQuality: 0.9) ?? Data()
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("wire-photo.jpg")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-wire-photo.jpg")
         try imageData.write(to: url)
         return url.path
     }

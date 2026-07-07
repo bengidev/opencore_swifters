@@ -146,7 +146,8 @@ struct ChatMultimodalWireLogicTests {
     }
 
     private func writeTemporaryFile(named filename: String, data: Data) throws -> String {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-\(filename)")
         try data.write(to: url)
         return url.path
     }
