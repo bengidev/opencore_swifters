@@ -179,6 +179,64 @@ struct ChatStreamContentMappingTests {
     #expect(events == [.textDelta("Hi")])
   }
 
+  @Test("Maps reasoning_details deltas to thinking")
+  func reasoningDetailsDelta() {
+    let payload = """
+    {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"Step one. "}]}}]}
+    """
+    let events = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload)
+    #expect(events == [.thinkingDelta("Step one. ")])
+  }
+
+  @Test("Maps final message content when delta is empty")
+  func finalMessageContent() {
+    let payload = """
+    {"choices":[{"delta":{},"message":{"role":"assistant","content":"Final answer."}}]}
+    """
+    let events = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload)
+    #expect(events == [.textDelta("Final answer.")])
+  }
+
+  @Test("Reasoning then answer streams end-to-end")
+  @MainActor
+  func reasoningThenAnswerInFlow() async {
+    let payloads = [
+      #"{"choices":[{"delta":{"reasoning":"Analyzing image…"}}]}"#,
+      #"{"choices":[{"delta":{"content":"It shows a cat."}}]}"#,
+    ]
+    let events: [ChatStreamingEvent] = payloads.compactMap {
+      ProviderOpenAICompatibleAdapter.mapStreamPayload($0)
+    }.flatMap { $0 } + [.done]
+
+    let controller = ChatFlowController(
+      streaming: ChatCannedEventClient(events: events).asStreamingClient,
+      providerPreference: SidePanelInMemoryProviderPreferenceStore(
+        preference: SidePanelProviderPreference(
+          providerID: ProviderDescriptor.openRouter.id,
+          modelID: "openrouter/free"
+        )
+      )
+    )
+
+    controller.setDraftMessage("What is in this photo?")
+    await controller.sendMessage()
+
+    let thinking = controller.state.messages.compactMap { message -> ChatThinkingMessage? in
+      if case let .thinking(value) = message { return value }
+      return nil
+    }
+    let answer = controller.state.messages.compactMap { message -> String? in
+      if case let .text(text) = message, text.role == .assistant { return text.content }
+      return nil
+    }.first
+
+    #expect(thinking.count == 1)
+    #expect(thinking.first?.content == "Analyzing image…")
+    #expect(thinking.first?.isComplete == true)
+    #expect(answer == "It shows a cat.")
+    #expect(!controller.state.showsStreamingStatusCapsule)
+  }
+
   @Test("End-to-end content block string is normalized in chat flow")
   @MainActor
   func contentBlockStringInFlow() async {

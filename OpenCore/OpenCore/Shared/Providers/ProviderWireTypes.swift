@@ -123,9 +123,22 @@ nonisolated struct ProviderChatCompletionsRequestBody: Encodable, Sendable {
 
 // MARK: - Stream chunk
 
+nonisolated struct ProviderReasoningDetail: Decodable, Sendable, Equatable {
+    let type: String?
+    let text: String?
+    let summary: String?
+
+    var streamedText: String? {
+        if let text, !text.isEmpty { return text }
+        if let summary, !summary.isEmpty { return summary }
+        return nil
+    }
+}
+
 nonisolated struct ProviderChatCompletionsStreamChunk: Decodable, Sendable {
     nonisolated struct Choice: Decodable, Sendable {
         let delta: Delta?
+        let message: Delta?
     }
 
     nonisolated struct Delta: Decodable, Sendable {
@@ -133,9 +146,16 @@ nonisolated struct ProviderChatCompletionsStreamChunk: Decodable, Sendable {
         let contentParts: [ChatStreamContentPart]?
         let reasoning: String?
         let reasoningContent: String?
+        let reasoningDetails: [ProviderReasoningDetail]?
 
         var reasoningText: String? {
-            reasoning ?? reasoningContent
+            if let reasoningDetails, !reasoningDetails.isEmpty {
+                let joined = reasoningDetails.compactMap(\.streamedText).joined()
+                if !joined.isEmpty { return joined }
+            }
+            if let reasoning, !reasoning.isEmpty { return reasoning }
+            if let reasoningContent, !reasoningContent.isEmpty { return reasoningContent }
+            return nil
         }
 
         var contentText: String? {
@@ -149,16 +169,28 @@ nonisolated struct ProviderChatCompletionsStreamChunk: Decodable, Sendable {
             return nil
         }
 
+        var hasStreamableContent: Bool {
+            if let reasoningText,
+               !reasoningText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+            if let contentText, !contentText.isEmpty { return true }
+            if let contentParts, !contentParts.isEmpty { return true }
+            return false
+        }
+
         enum CodingKeys: String, CodingKey {
             case content
             case reasoning
             case reasoningContent = "reasoning_content"
+            case reasoningDetails = "reasoning_details"
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
             reasoningContent = try container.decodeIfPresent(String.self, forKey: .reasoningContent)
+            reasoningDetails = try container.decodeIfPresent([ProviderReasoningDetail].self, forKey: .reasoningDetails)
 
             if let string = try? container.decode(String.self, forKey: .content) {
                 contentString = string

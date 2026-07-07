@@ -109,6 +109,33 @@ struct ChatMultimodalWireLogicTests {
         }
     }
 
+    @Test("request building fails instead of dropping invalid images")
+    func requestBuildingFailsForInvalidImage() {
+        let attachment = ChatMessageAttachment(
+            kind: .image,
+            filename: "missing.jpg",
+            localPath: "/tmp/does-not-exist-\(UUID().uuidString).jpg"
+        )
+        let message = ChatMessage.text(
+            role: .user,
+            content: "Can you analyze this?",
+            attachments: [attachment]
+        )
+
+        #expect(throws: ChatAttachmentError.self) {
+            _ = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
+                providerID: ProviderDescriptor.openRouter.id,
+                secret: "test-key",
+                chatRequest: ChatRequest(
+                    conversationID: UUID(),
+                    messages: [message],
+                    providerID: ProviderDescriptor.openRouter.id,
+                    modelID: "openrouter/free"
+                )
+            )
+        }
+    }
+
     private func writeTemporaryJPEG() throws -> String {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
         let imageData = renderer.image { context in

@@ -420,6 +420,14 @@ final class ChatFlowController {
                 finalizeActiveOutputStream(status: .completed, exitCode: nil, durationMs: nil)
             }
 
+            let reasoningOnlyFailure = state.streamingAnswerID == nil
+                && state.streamingOutputStreamID == nil
+                && state.streamingThinkingID != nil
+            if reasoningOnlyFailure {
+                state.streamErrorMessage =
+                    "The model finished reasoning but did not return an answer. Try lowering reasoning effort or switching models."
+            }
+
             let conversationID = state.conversation?.id
             let updatedConversation = state.conversation
             let finalizedMessages: [ChatMessage] = [
@@ -439,7 +447,7 @@ final class ChatFlowController {
             state.streamingThinkingID = nil
             state.streamingAnswerID = nil
             state.streamingOutputStreamID = nil
-            state.streamingStatus = .done
+            state.streamingStatus = reasoningOnlyFailure ? .failed : .done
             state.isSending = false
             state.streamingRevision &+= 1
 

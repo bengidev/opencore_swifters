@@ -32,7 +32,7 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
             urlRequest.setValue("Bearer \(secret)", forHTTPHeaderField: "Authorization")
         }
 
-        let payload = Self.makeRequestBody(
+        let payload = try Self.makeRequestBody(
             chatRequest: chatRequest,
             reasoningWireStyle: reasoningWireStyle,
             supportsProviderRouting: supportsProviderRouting
@@ -61,7 +61,7 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         chatRequest: ChatRequest,
         reasoningWireStyle: ProviderReasoningWireStyle,
         supportsProviderRouting: Bool
-    ) -> ProviderChatCompletionsRequestBody {
+    ) throws -> ProviderChatCompletionsRequestBody {
         let effort = chatRequest.reasoningEffort
         let reasoningObject: ProviderChatCompletionsRequestBody.Reasoning?
         let reasoningEffort: String?
@@ -81,7 +81,7 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
 
         return ProviderChatCompletionsRequestBody(
             model: chatRequest.modelID,
-            messages: wireMessages(from: chatRequest.messages),
+            messages: try wireMessages(from: chatRequest.messages),
             stream: true,
             reasoning: reasoningObject,
             reasoningEffort: reasoningEffort,
@@ -91,13 +91,13 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         )
     }
 
-    static func wireMessages(from messages: [ChatMessage]) -> [ProviderChatCompletionsRequestBody.Message] {
-        messages.compactMap { message in
+    static func wireMessages(from messages: [ChatMessage]) throws -> [ProviderChatCompletionsRequestBody.Message] {
+        try messages.compactMap { message in
             switch message {
             case let .text(text):
                 return ProviderChatCompletionsRequestBody.Message(
                     role: text.role.rawValue,
-                    content: wireMessageContent(for: text)
+                    content: try wireMessageContent(for: text)
                 )
             case let .system(system):
                 return ProviderChatCompletionsRequestBody.Message(
@@ -112,8 +112,8 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         }
     }
 
-    static func wireMessageContent(for text: ChatTextMessage) -> ProviderChatMessageContent {
-        if let parts = try? ChatMultimodalWireLogic.makeContentParts(
+    static func wireMessageContent(for text: ChatTextMessage) throws -> ProviderChatMessageContent {
+        if let parts = try ChatMultimodalWireLogic.makeContentParts(
             modelText: text.providerContent,
             attachments: text.attachments
         ) {
@@ -121,6 +121,7 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         }
         return .text(text.providerContent)
     }
+
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
         guard let data = payload.data(using: .utf8) else { return nil }
@@ -138,18 +139,29 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
 
         var events: [ChatStreamingEvent] = []
         for choice in chunk.choices ?? [] {
-            if let reasoning = choice.delta?.reasoningText,
-               !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                events.append(.thinkingDelta(reasoning))
+            if let delta = choice.delta, delta.hasStreamableContent {
+                events.append(contentsOf: mapAssistantPayload(delta))
             }
-            if let contentParts = choice.delta?.contentParts {
-                events.append(contentsOf: ProviderStreamOutputEventMapper.mapContentParts(contentParts))
-            }
-            if let content = choice.delta?.contentText, !content.isEmpty {
-                events.append(.textDelta(content))
+            if let message = choice.message, choice.delta?.hasStreamableContent != true {
+                events.append(contentsOf: mapAssistantPayload(message))
             }
         }
         return events.isEmpty ? nil : events
+    }
+
+    static func mapAssistantPayload(_ payload: ProviderChatCompletionsStreamChunk.Delta) -> [ChatStreamingEvent] {
+        var events: [ChatStreamingEvent] = []
+        if let reasoning = payload.reasoningText,
+           !reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            events.append(.thinkingDelta(reasoning))
+        }
+        if let contentParts = payload.contentParts {
+            events.append(contentsOf: ProviderStreamOutputEventMapper.mapContentParts(contentParts))
+        }
+        if let content = payload.contentText, !content.isEmpty {
+            events.append(.textDelta(content))
+        }
+        return events
     }
 
     static func decodeErrorBody(_ data: Data) -> String? {
