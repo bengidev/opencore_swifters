@@ -28,6 +28,7 @@ struct ChatAttachmentThumbnailView: View {
         Group {
             if let image = resolvedImage {
                 Image(uiImage: image)
+                    .renderingMode(.original)
                     .resizable()
                     .scaledToFill()
             } else {

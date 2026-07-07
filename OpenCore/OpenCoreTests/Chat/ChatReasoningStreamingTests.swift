@@ -80,6 +80,23 @@ struct ChatReasoningStreamingTests {
         #expect((reasoningIndex ?? 0) < (answerIndex ?? 0))
     }
 
+    @Test("Done without answer after reasoning surfaces an error")
+    func reasoningOnlyTurnShowsError() async {
+        let controller = makeController(events: [
+            .thinkingDelta("Only reasoning."),
+            .done
+        ])
+
+        controller.setDraftMessage("Q")
+        await controller.sendMessage()
+
+        #expect(thinkingMessages(controller.state).count == 1)
+        #expect(assistantText(controller.state).isEmpty)
+        #expect(controller.state.streamingStatus == .failed)
+        #expect(controller.state.streamErrorMessage?.contains("did not return an answer") == true)
+        #expect(!controller.state.showsStreamingStatusCapsule)
+    }
+
     @Test("Done finalizes reasoning row")
     func doneFinalizesReasoning() async {
         let controller = makeController(events: [
