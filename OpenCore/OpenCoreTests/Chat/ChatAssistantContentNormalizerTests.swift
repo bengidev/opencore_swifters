@@ -261,7 +261,7 @@ struct ChatStreamContentMappingTests {
       streamedChoiceIndices: Set([0])
     )
 
-    #expect(mapped.events == [.textDelta("second answer")])
+    #expect(mapped.events == [.textDelta("partial"), .textDelta("second answer")])
     #expect(mapped.streamedChoiceIndices == Set([0, 1]))
   }
 
