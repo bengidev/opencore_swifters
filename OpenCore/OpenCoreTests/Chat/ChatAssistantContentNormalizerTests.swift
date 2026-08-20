@@ -220,6 +220,42 @@ struct ChatStreamContentMappingTests {
     #expect(events == [.textDelta("incr1"), .textDelta("incr2")])
   }
 
+  @Test("Final message is preserved after reasoning-only deltas")
+  func finalMessageAfterReasoning() {
+    let payloads = [
+      #"{"choices":[{"delta":{"reasoning":"Planning…"}}]}"#,
+      #"{"choices":[{"delta":{},"message":{"role":"assistant","content":"The answer."}}]}"#,
+    ]
+
+    var hasStreamedContent = false
+    var events: [ChatStreamingEvent] = []
+    for payload in payloads {
+      let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+        payload,
+        hasStreamedContent: hasStreamedContent
+      )
+      hasStreamedContent = mapped.hasStreamedContent
+      events.append(contentsOf: mapped.events)
+    }
+
+    #expect(events == [.thinkingDelta("Planning…"), .textDelta("The answer.")])
+  }
+
+  @Test("Final message is preserved after command output sideband")
+  func finalMessageAfterCommandOutput() {
+    let sideband = #"{"type":"exec_command_begin","command":"git status","cwd":"/repo"}"#
+    let answer = #"{"choices":[{"delta":{},"message":{"role":"assistant","content":"The workspace is clean."}}]}"#
+
+    let output = ProviderOpenAICompatibleAdapter.mapStreamPayload(sideband, hasStreamedContent: false)
+    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+      answer,
+      hasStreamedContent: output.hasStreamedContent
+    )
+
+    #expect(output.events == [.outputStreamBegan(command: "git status", cwd: "/repo")])
+    #expect(mapped.events == [.textDelta("The workspace is clean.")])
+  }
+
   @Test("Final message still maps when it is the first content in the stream")
   func finalMessageWhenNothingStreamed() {
     let payload = """

@@ -143,11 +143,9 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         }
 
         if let sideband = ProviderStreamOutputEventMapper.mapSidebandPayload(data) {
-            let streamed = hasStreamedContent || sideband.contains { event in
-                if case .outputStreamBegan = event { return true }
-                return false
-            }
-            return (sideband, streamed)
+            // Command output is a separate stream from the assistant answer;
+            // it must not suppress a later terminal answer message.
+            return (sideband, hasStreamedContent)
         }
 
         let chunk = try? JSONDecoder().decode(ProviderChatCompletionsStreamChunk.self, from: data)
@@ -163,7 +161,10 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
             if let delta = choice.delta, delta.hasStreamableContent {
                 let mapped = mapAssistantPayload(delta)
                 events.append(contentsOf: mapped)
-                if !mapped.isEmpty {
+                if mapped.contains(where: { event in
+                    if case .textDelta = event { return true }
+                    return false
+                }) {
                     streamed = true
                 }
             }
@@ -176,7 +177,10 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
                !streamed {
                 let mapped = mapAssistantPayload(message)
                 events.append(contentsOf: mapped)
-                if !mapped.isEmpty {
+                if mapped.contains(where: { event in
+                    if case .textDelta = event { return true }
+                    return false
+                }) {
                     streamed = true
                 }
             }
