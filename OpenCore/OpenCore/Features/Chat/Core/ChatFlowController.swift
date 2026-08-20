@@ -20,6 +20,11 @@ final class ChatFlowController {
     private var accumulatedPartialThinking = ""
     private var accumulatedOutputStreamDelta = ""
     private var streamingFlushTask: Task<Void, Never>?
+    /// True once this turn has produced at least one command output stream.
+    /// Survives to `.done` because `finalizeActiveOutputStream` clears the
+    /// streaming ID; lets `.done` tell an agent-style turn (output + thinking,
+    /// no text answer) apart from a genuine reasoning-only failure.
+    private var didProduceOutputStreamThisTurn = false
     private let makeID: () -> UUID
     private let now: () -> Date
 
@@ -243,6 +248,7 @@ final class ChatFlowController {
         state.streamingAnswerID = nil
         state.streamingOutputStreamID = nil
         state.streamingRevision = 0
+        didProduceOutputStreamThisTurn = false
     }
 
     private func resetStreamingBuffers() {
@@ -421,7 +427,7 @@ final class ChatFlowController {
             }
 
             let reasoningOnlyFailure = state.streamingAnswerID == nil
-                && state.streamingOutputStreamID == nil
+                && !didProduceOutputStreamThisTurn
                 && state.streamingThinkingID != nil
             if reasoningOnlyFailure {
                 state.streamErrorMessage =
@@ -488,6 +494,7 @@ final class ChatFlowController {
         }
 
         let newID = makeID()
+        didProduceOutputStreamThisTurn = true
         state.streamingOutputStreamID = newID
         state.messages.append(
             .outputStream(

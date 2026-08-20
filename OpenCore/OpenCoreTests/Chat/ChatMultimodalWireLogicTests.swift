@@ -109,8 +109,8 @@ struct ChatMultimodalWireLogicTests {
         }
     }
 
-    @Test("request building fails instead of dropping invalid images")
-    func requestBuildingFailsForInvalidImage() {
+    @Test("request building degrades to text instead of dropping a stale image")
+    func requestBuildingDegradesForStaleImage() throws {
         let attachment = ChatMessageAttachment(
             kind: .image,
             filename: "missing.jpg",
@@ -122,16 +122,38 @@ struct ChatMultimodalWireLogicTests {
             attachments: [attachment]
         )
 
-        #expect(throws: ChatAttachmentError.self) {
-            _ = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
+        // A stale attachment in history must not abort the whole request; it
+        // degrades to text-only so the rest of the conversation still sends.
+        let request = try ChatOpenAICompatibleStreamingClient.makeURLRequest(
+            providerID: ProviderDescriptor.openRouter.id,
+            secret: "test-key",
+            chatRequest: ChatRequest(
+                conversationID: UUID(),
+                messages: [message],
                 providerID: ProviderDescriptor.openRouter.id,
-                secret: "test-key",
-                chatRequest: ChatRequest(
-                    conversationID: UUID(),
-                    messages: [message],
-                    providerID: ProviderDescriptor.openRouter.id,
-                    modelID: "openrouter/free"
-                )
+                modelID: "openrouter/free"
+            )
+        )
+        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        let messages = body?["messages"] as? [[String: Any]]
+        let content = messages?.first?["content"] as? String
+        #expect(content == "Can you analyze this?")
+    }
+
+    @Test("fresh send with unreadable image still surfaces an error before request")
+    func freshSendFailsForInvalidImage() {
+        let attachment = ChatMessageAttachment(
+            kind: .image,
+            filename: "missing.jpg",
+            localPath: "/tmp/does-not-exist-\(UUID().uuidString).jpg"
+        )
+
+        // The fresh-send path validates attachments up front and throws there,
+        // so the user sees the error before the request is built.
+        #expect(throws: ChatAttachmentError.self) {
+            _ = try ChatMultimodalWireLogic.prepareAttachmentsForSend(
+                attachments: [attachment],
+                modelText: "Can you analyze this?"
             )
         }
     }

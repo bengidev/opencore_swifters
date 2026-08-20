@@ -80,6 +80,33 @@ struct ChatReasoningStreamingTests {
         #expect((reasoningIndex ?? 0) < (answerIndex ?? 0))
     }
 
+    @Test("Output-stream turn with thinking but no text answer is not a failure")
+    func outputStreamTurnWithThinkingIsNotFailure() async {
+        let controller = makeController(events: [
+            .thinkingDelta("Planning the command. "),
+            .outputStreamBegan(command: "git status", cwd: "/repo"),
+            .outputStreamDelta("modified: README.md\n"),
+            .outputStreamEnded(status: .completed, exitCode: 0, durationMs: 200),
+            .done
+        ])
+
+        controller.setDraftMessage("Run git status")
+        await controller.sendMessage()
+
+        // The command ran and produced output; the turn must not be marked failed.
+        #expect(controller.state.streamingStatus == .done)
+        #expect(controller.state.streamErrorMessage == nil)
+
+        // The output stream row exists and completed.
+        let streams = controller.state.messages.compactMap { message -> ChatOutputStreamMessage? in
+            if case let .outputStream(outputStream) = message { return outputStream }
+            return nil
+        }
+        #expect(streams.count == 1)
+        #expect(streams.first?.command == "git status")
+        #expect(streams.first?.detail.status == .completed)
+    }
+
     @Test("Done without answer after reasoning surfaces an error")
     func reasoningOnlyTurnShowsError() async {
         let controller = makeController(events: [

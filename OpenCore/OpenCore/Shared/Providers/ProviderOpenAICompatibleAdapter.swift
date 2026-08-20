@@ -113,40 +113,75 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
     }
 
     static func wireMessageContent(for text: ChatTextMessage) throws -> ProviderChatMessageContent {
-        if let parts = try ChatMultimodalWireLogic.makeContentParts(
-            modelText: text.providerContent,
-            attachments: text.attachments
-        ) {
-            return .parts(parts)
+        do {
+            if let parts = try ChatMultimodalWireLogic.makeContentParts(
+                modelText: text.providerContent,
+                attachments: text.attachments
+            ) {
+                return .parts(parts)
+            }
+        } catch ChatAttachmentError.visualEncodingFailed {
+            // A historical attachment whose backing file is gone (reinstall,
+            // manual cleanup, corruption) should not abort the whole request.
+            // Degrade to text-only, dropping the unreadable visual part.
+            return .text(text.providerContent)
         }
         return .text(text.providerContent)
     }
 
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
-        guard let data = payload.data(using: .utf8) else { return nil }
+        mapStreamPayload(payload, hasStreamedContent: false).events
+    }
+
+    static func mapStreamPayload(
+        _ payload: String,
+        hasStreamedContent: Bool
+    ) -> (events: [ChatStreamingEvent], hasStreamedContent: Bool) {
+        guard let data = payload.data(using: .utf8) else {
+            return ([], hasStreamedContent)
+        }
 
         if let sideband = ProviderStreamOutputEventMapper.mapSidebandPayload(data) {
-            return sideband
+            let streamed = hasStreamedContent || sideband.contains { event in
+                if case .outputStreamBegan = event { return true }
+                return false
+            }
+            return (sideband, streamed)
         }
 
         let chunk = try? JSONDecoder().decode(ProviderChatCompletionsStreamChunk.self, from: data)
-        guard let chunk else { return nil }
+        guard let chunk else { return ([], hasStreamedContent) }
 
         if let error = chunk.error {
-            return [.error(ChatStreamError(message: error.message))]
+            return ([.error(ChatStreamError(message: error.message))], hasStreamedContent)
         }
 
         var events: [ChatStreamingEvent] = []
+        var streamed = hasStreamedContent
         for choice in chunk.choices ?? [] {
             if let delta = choice.delta, delta.hasStreamableContent {
-                events.append(contentsOf: mapAssistantPayload(delta))
+                let mapped = mapAssistantPayload(delta)
+                events.append(contentsOf: mapped)
+                if !mapped.isEmpty {
+                    streamed = true
+                }
             }
-            if let message = choice.message, choice.delta?.hasStreamableContent != true {
-                events.append(contentsOf: mapAssistantPayload(message))
+            // A terminating `message` chunk with an empty delta is a recap of
+            // content already streamed via prior deltas. Re-emitting it would
+            // duplicate the answer/reasoning, so suppress it once this stream
+            // has already emitted content.
+            if let message = choice.message,
+               choice.delta?.hasStreamableContent != true,
+               !streamed {
+                let mapped = mapAssistantPayload(message)
+                events.append(contentsOf: mapped)
+                if !mapped.isEmpty {
+                    streamed = true
+                }
             }
         }
-        return events.isEmpty ? nil : events
+        return (events.isEmpty ? [] : events, streamed)
     }
 
     static func mapAssistantPayload(_ payload: ProviderChatCompletionsStreamChunk.Delta) -> [ChatStreamingEvent] {

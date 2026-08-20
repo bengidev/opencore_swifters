@@ -48,6 +48,7 @@ nonisolated struct ChatOpenAICompatibleStreamingClient: Sendable {
 
                     var decoder = ChatSSEDecoder()
                     var didEmitDone = false
+                    var hasStreamedContent = false
 
                     for try await line in bytes.lines {
                         guard let lineData = (line + "\n").data(using: .utf8) else { continue }
@@ -57,11 +58,14 @@ nonisolated struct ChatOpenAICompatibleStreamingClient: Sendable {
                                 continuation.yield(.done)
                                 didEmitDone = true
                             case let .data(payload):
-                                if let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload) {
-                                    for chatEvent in mapped {
-                                        continuation.yield(chatEvent)
-                                        if case .error = chatEvent { didEmitDone = true }
-                                    }
+                                let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+                                    payload,
+                                    hasStreamedContent: hasStreamedContent
+                                )
+                                hasStreamedContent = mapped.hasStreamedContent
+                                for chatEvent in mapped.events {
+                                    continuation.yield(chatEvent)
+                                    if case .error = chatEvent { didEmitDone = true }
                                 }
                             }
                         }

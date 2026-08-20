@@ -197,6 +197,39 @@ struct ChatStreamContentMappingTests {
     #expect(events == [.textDelta("Final answer.")])
   }
 
+  @Test("Does not duplicate content when final message recaps streamed deltas")
+  func finalMessageRecapNotDuplicated() {
+    let payloads = [
+      #"{"choices":[{"delta":{"content":"incr1"}}]}"#,
+      #"{"choices":[{"delta":{"content":"incr2"}}]}"#,
+      #"{"choices":[{"delta":{},"message":{"role":"assistant","content":"incr1incr2 full answer"}}]}"#,
+    ]
+
+    var hasStreamedContent = false
+    var events: [ChatStreamingEvent] = []
+    for payload in payloads {
+      let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+        payload,
+        hasStreamedContent: hasStreamedContent
+      )
+      hasStreamedContent = mapped.hasStreamedContent
+      events.append(contentsOf: mapped.events)
+    }
+
+    // The final message recap must be suppressed: only the deltas stream.
+    #expect(events == [.textDelta("incr1"), .textDelta("incr2")])
+  }
+
+  @Test("Final message still maps when it is the first content in the stream")
+  func finalMessageWhenNothingStreamed() {
+    let payload = """
+    {"choices":[{"delta":{},"message":{"role":"assistant","content":"Only content."}}]}
+    """
+    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload, hasStreamedContent: false)
+    #expect(mapped.events == [.textDelta("Only content.")])
+    #expect(mapped.hasStreamedContent == true)
+  }
+
   @Test("Reasoning then answer streams end-to-end")
   @MainActor
   func reasoningThenAnswerInFlow() async {
