@@ -210,9 +210,9 @@ struct ChatStreamContentMappingTests {
     for payload in payloads {
       let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
         payload,
-        hasStreamedContent: hasStreamedContent
+        streamedChoiceIndices: hasStreamedContent ? Set([0]) : []
       )
-      hasStreamedContent = mapped.hasStreamedContent
+      hasStreamedContent = !mapped.streamedChoiceIndices.isEmpty
       events.append(contentsOf: mapped.events)
     }
 
@@ -232,13 +232,37 @@ struct ChatStreamContentMappingTests {
     for payload in payloads {
       let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
         payload,
-        hasStreamedContent: hasStreamedContent
+        streamedChoiceIndices: hasStreamedContent ? Set([0]) : []
       )
-      hasStreamedContent = mapped.hasStreamedContent
+      hasStreamedContent = !mapped.streamedChoiceIndices.isEmpty
       events.append(contentsOf: mapped.events)
     }
 
     #expect(events == [.thinkingDelta("Planning…"), .textDelta("The answer.")])
+  }
+
+  @Test("Terminal messages are tracked independently per choice")
+  func terminalMessagesAreTrackedPerChoice() {
+    let payload = #"{"choices":[{"delta":{"content":"partial"}},{"delta":{},"message":{"role":"assistant","content":"second answer"}}]}"#
+    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+      payload,
+      streamedChoiceIndices: []
+    )
+
+    #expect(mapped.events == [.textDelta("partial"), .textDelta("second answer")])
+    #expect(mapped.streamedChoiceIndices == Set([0, 1]))
+  }
+
+  @Test("A terminal message is suppressed only for its streamed choice")
+  func terminalMessageSuppressionIsPerChoice() {
+    let payload = #"{"choices":[{"delta":{"content":"partial"}},{"delta":{},"message":{"role":"assistant","content":"second answer"}}]}"#
+    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
+      payload,
+      streamedChoiceIndices: Set([0])
+    )
+
+    #expect(mapped.events == [.textDelta("second answer")])
+    #expect(mapped.streamedChoiceIndices == Set([0, 1]))
   }
 
   @Test("Final message is preserved after command output sideband")
@@ -246,10 +270,10 @@ struct ChatStreamContentMappingTests {
     let sideband = #"{"type":"exec_command_begin","command":"git status","cwd":"/repo"}"#
     let answer = #"{"choices":[{"delta":{},"message":{"role":"assistant","content":"The workspace is clean."}}]}"#
 
-    let output = ProviderOpenAICompatibleAdapter.mapStreamPayload(sideband, hasStreamedContent: false)
+    let output = ProviderOpenAICompatibleAdapter.mapStreamPayload(sideband, streamedChoiceIndices: [])
     let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(
       answer,
-      hasStreamedContent: output.hasStreamedContent
+      streamedChoiceIndices: output.streamedChoiceIndices
     )
 
     #expect(output.events == [.outputStreamBegan(command: "git status", cwd: "/repo")])
@@ -261,9 +285,9 @@ struct ChatStreamContentMappingTests {
     let payload = """
     {"choices":[{"delta":{},"message":{"role":"assistant","content":"Only content."}}]}
     """
-    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload, hasStreamedContent: false)
+    let mapped = ProviderOpenAICompatibleAdapter.mapStreamPayload(payload, streamedChoiceIndices: [])
     #expect(mapped.events == [.textDelta("Only content.")])
-    #expect(mapped.hasStreamedContent == true)
+    #expect(mapped.streamedChoiceIndices == Set([0]))
   }
 
   @Test("Reasoning then answer streams end-to-end")

@@ -113,51 +113,94 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
     }
 
     static func wireMessageContent(for text: ChatTextMessage) throws -> ProviderChatMessageContent {
-        do {
-            if let parts = try ChatMultimodalWireLogic.makeContentParts(
-                modelText: text.providerContent,
-                attachments: text.attachments
-            ) {
-                return .parts(parts)
-            }
-        } catch ChatAttachmentError.visualEncodingFailed {
-            // A historical attachment whose backing file is gone (reinstall,
-            // manual cleanup, corruption) should not abort the whole request.
-            // Degrade to text-only, dropping the unreadable visual part.
-            return .text(text.providerContent)
+        if let parts = try historicalContentParts(
+            modelText: text.providerContent,
+            attachments: text.attachments
+        ) {
+            return .parts(parts)
         }
         return .text(text.providerContent)
     }
 
+    private static func historicalContentParts(
+        modelText: String,
+        attachments: [ChatMessageAttachment]
+    ) throws -> [ProviderChatContentPart]? {
+        guard ChatMultimodalWireLogic.hasVisualMedia(attachments) else { return nil }
+
+        var parts: [ProviderChatContentPart] = []
+        let trimmedText = modelText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedText.isEmpty {
+            parts.append(.text(trimmedText))
+        }
+
+        for attachment in attachments where attachment.kind == .image {
+            do {
+                let single = try ChatMultimodalWireLogic.makeContentParts(
+                    modelText: "",
+                    attachments: [attachment]
+                )
+                if let imagePart = single?.first(where: { $0.type == "image_url" }) {
+                    parts.append(imagePart)
+                }
+            } catch ChatAttachmentError.visualEncodingFailed {
+                guard attachment.wireImageDataURL == nil,
+                      !FileManager.default.fileExists(atPath: attachment.localPath) else {
+                    throw ChatAttachmentError.visualEncodingFailed(filename: attachment.filename)
+                }
+            }
+        }
+
+        for attachment in attachments where attachment.kind == .video {
+            do {
+                let single = try ChatMultimodalWireLogic.makeContentParts(
+                    modelText: "",
+                    attachments: [attachment]
+                )
+                if let videoPart = single?.first(where: { $0.type == "video_url" }) {
+                    parts.append(videoPart)
+                }
+            } catch ChatAttachmentError.visualEncodingFailed {
+                guard attachment.wireVideoDataURL == nil,
+                      !FileManager.default.fileExists(atPath: attachment.localPath) else {
+                    throw ChatAttachmentError.visualEncodingFailed(filename: attachment.filename)
+                }
+            }
+        }
+
+        let hasVisualPart = parts.contains { part in
+            part.type == "image_url" || part.type == "video_url"
+        }
+        return hasVisualPart ? parts : nil
+    }
+
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
-        mapStreamPayload(payload, hasStreamedContent: false).events
+        mapStreamPayload(payload, streamedChoiceIndices: []).events
     }
 
     static func mapStreamPayload(
         _ payload: String,
-        hasStreamedContent: Bool
-    ) -> (events: [ChatStreamingEvent], hasStreamedContent: Bool) {
+        streamedChoiceIndices: Set<Int>
+    ) -> (events: [ChatStreamingEvent], streamedChoiceIndices: Set<Int>) {
         guard let data = payload.data(using: .utf8) else {
-            return ([], hasStreamedContent)
+            return ([], streamedChoiceIndices)
         }
 
         if let sideband = ProviderStreamOutputEventMapper.mapSidebandPayload(data) {
-            // Command output is a separate stream from the assistant answer;
-            // it must not suppress a later terminal answer message.
-            return (sideband, hasStreamedContent)
+            return (sideband, streamedChoiceIndices)
         }
 
         let chunk = try? JSONDecoder().decode(ProviderChatCompletionsStreamChunk.self, from: data)
-        guard let chunk else { return ([], hasStreamedContent) }
+        guard let chunk else { return ([], streamedChoiceIndices) }
 
         if let error = chunk.error {
-            return ([.error(ChatStreamError(message: error.message))], hasStreamedContent)
+            return ([.error(ChatStreamError(message: error.message))], streamedChoiceIndices)
         }
 
         var events: [ChatStreamingEvent] = []
-        var streamed = hasStreamedContent
-        for choice in chunk.choices ?? [] {
+        var streamed = streamedChoiceIndices
+        for (choiceIndex, choice) in (chunk.choices ?? []).enumerated() {
             if let delta = choice.delta, delta.hasStreamableContent {
                 let mapped = mapAssistantPayload(delta)
                 events.append(contentsOf: mapped)
@@ -165,23 +208,19 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
                     if case .textDelta = event { return true }
                     return false
                 }) {
-                    streamed = true
+                    streamed.insert(choiceIndex)
                 }
             }
-            // A terminating `message` chunk with an empty delta is a recap of
-            // content already streamed via prior deltas. Re-emitting it would
-            // duplicate the answer/reasoning, so suppress it once this stream
-            // has already emitted content.
             if let message = choice.message,
                choice.delta?.hasStreamableContent != true,
-               !streamed {
+               !streamed.contains(choiceIndex) {
                 let mapped = mapAssistantPayload(message)
                 events.append(contentsOf: mapped)
                 if mapped.contains(where: { event in
                     if case .textDelta = event { return true }
                     return false
                 }) {
-                    streamed = true
+                    streamed.insert(choiceIndex)
                 }
             }
         }

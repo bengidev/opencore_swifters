@@ -140,6 +140,36 @@ struct ChatMultimodalWireLogicTests {
         #expect(content == "Can you analyze this?")
     }
 
+    @Test("historical messages preserve valid visuals while dropping stale visuals")
+    func historicalMessageDropsOnlyStaleVisual() throws {
+        let valid = ChatMessageAttachment(
+            kind: .image,
+            filename: "valid.jpg",
+            localPath: "/tmp/missing-valid.jpg",
+            wireImageDataURL: "data:image/jpeg;base64,AAAA"
+        )
+        let stale = ChatMessageAttachment(
+            kind: .image,
+            filename: "stale.jpg",
+            localPath: "/tmp/does-not-exist-\(UUID().uuidString).jpg"
+        )
+
+        let content = try ProviderOpenAICompatibleAdapter.wireMessageContent(
+            for: ChatTextMessage(
+                role: .user,
+                content: "Analyze these",
+                attachments: [valid, stale]
+            )
+        )
+
+        guard case let .parts(parts) = content else {
+            Issue.record("Expected multimodal parts")
+            return
+        }
+        #expect(parts.count == 2)
+        #expect(parts.filter { $0.type == "image_url" }.count == 1)
+    }
+
     @Test("fresh send with unreadable image still surfaces an error before request")
     func freshSendFailsForInvalidImage() {
         let attachment = ChatMessageAttachment(
