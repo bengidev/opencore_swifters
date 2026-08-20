@@ -61,7 +61,7 @@ struct SettingsContextWindowSection: View {
                 .disabled(!isThresholdEditable)
                 .accessibilityIdentifier("settings-compaction-threshold")
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel("Compaction threshold")
             .accessibilityValue("\(thresholdPercent) percent")
             .accessibilityHint(

@@ -114,27 +114,27 @@ struct HomeModelPopupView: View {
             if home.state.filteredModels.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(home.state.filteredModels) { option in
-                            HomeModelPopupRow(
-                                option: option,
-                                isSelected: home.state.selectedModelID == option.id,
-                                palette: palette
-                            ) {
-                                home.selectModel(option.id)
-                                dismiss()
-                            }
-
-                            if option.id != home.state.filteredModels.last?.id {
-                                Divider()
-                                    .overlay(palette.lineSoft.opacity(0.5))
-                                    .padding(.leading, 56)
-                            }
+                List {
+                    ForEach(home.state.filteredModels) { option in
+                        HomeModelPopupRow(
+                            option: option,
+                            isSelected: home.state.selectedModelID == option.id,
+                            palette: palette
+                        ) {
+                            home.selectModel(option.id)
+                            dismiss()
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(
+                            home.state.selectedModelID == option.id
+                                ? palette.accentSoft.opacity(palette.isDark ? 0.08 : 0.06)
+                                : Color.clear
+                        )
                     }
-                    .padding(.vertical, 4)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -226,11 +226,6 @@ private struct HomeModelPopupRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            isSelected
-                ? palette.accentSoft.opacity(palette.isDark ? 0.08 : 0.06)
-                : Color.clear
-        )
         .accessibilityLabel("\(option.title)\(option.isFree ? ", free" : "")\(capabilityAccessibility)\(isSelected ? ", selected" : "")")
     }
 

@@ -43,13 +43,16 @@ struct SidePanelSessionSidebarView: View {
     }
 
     private var scrim: some View {
-        palette.textPrimary
-            .opacity(0.32)
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture { flow.dispatch(SidePanelSessionSidebarDismissCommand()) }
-            .accessibilityLabel("Dismiss sidebar")
-            .accessibilityAddTraits(.isButton)
+        Button {
+            flow.dispatch(SidePanelSessionSidebarDismissCommand())
+        } label: {
+            palette.textPrimary
+                .opacity(0.32)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Dismiss sidebar")
     }
 
     private func drawer(width: CGFloat) -> some View {

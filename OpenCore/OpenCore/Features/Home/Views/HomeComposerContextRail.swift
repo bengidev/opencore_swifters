@@ -390,20 +390,11 @@ private struct HomeComposerContextUsagePopover: View {
     }
 
     private var contextProgressBar: some View {
-        GeometryReader { geometry in
-            let totalWidth = max(geometry.size.width, 1)
-            let clampedProgress = min(max(usage.fractionUsed, 0), 1)
-
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(palette.lineSoft.opacity(palette.isDark ? 0.35 : 0.55))
-
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(palette.accentPrimary.opacity(palette.isDark ? 0.92 : 0.82))
-                    .frame(width: totalWidth * CGFloat(clampedProgress))
-            }
-        }
-        .frame(height: 10)
+        ProgressView(value: usage.fractionUsed)
+            .progressViewStyle(HomeContextProgressBarStyle(palette: palette))
+            .frame(height: 10)
+            .accessibilityLabel("Context usage")
+            .accessibilityValue("\(usage.percentUsed) percent")
     }
 
     private func contextMetricRow(label: String, value: String) -> some View {
@@ -421,6 +412,28 @@ private struct HomeComposerContextUsagePopover: View {
                 .fixedSize(horizontal: true, vertical: false)
         }
         .font(.system(size: 11, weight: .medium, design: .monospaced))
+    }
+}
+
+/// Capsule track/fill matching the previous hand-drawn context usage bar.
+private struct HomeContextProgressBarStyle: ProgressViewStyle {
+    let palette: SharedOpenCorePalette
+
+    func makeBody(configuration: Configuration) -> some View {
+        GeometryReader { geometry in
+            let totalWidth = max(geometry.size.width, 1)
+            let fraction = configuration.fractionCompleted.map { min(max($0, 0), 1) } ?? 0
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(palette.lineSoft.opacity(palette.isDark ? 0.35 : 0.55))
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(palette.accentPrimary.opacity(palette.isDark ? 0.92 : 0.82))
+                    .frame(width: totalWidth * CGFloat(fraction))
+            }
+        }
+        .frame(height: 10)
     }
 }
 

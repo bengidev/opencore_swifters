@@ -113,7 +113,7 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
     }
 
     static func wireMessageContent(for text: ChatTextMessage) throws -> ProviderChatMessageContent {
-        if let parts = try ChatMultimodalWireLogic.makeContentParts(
+        if let parts = try historicalContentParts(
             modelText: text.providerContent,
             attachments: text.attachments
         ) {
@@ -122,31 +122,109 @@ nonisolated struct ProviderOpenAICompatibleAdapter: ProviderAdapting {
         return .text(text.providerContent)
     }
 
+    private static func historicalContentParts(
+        modelText: String,
+        attachments: [ChatMessageAttachment]
+    ) throws -> [ProviderChatContentPart]? {
+        guard ChatMultimodalWireLogic.hasVisualMedia(attachments) else { return nil }
+
+        var parts: [ProviderChatContentPart] = []
+        let trimmedText = modelText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedText.isEmpty {
+            parts.append(.text(trimmedText))
+        }
+
+        for attachment in attachments where attachment.kind == .image {
+            do {
+                let single = try ChatMultimodalWireLogic.makeContentParts(
+                    modelText: "",
+                    attachments: [attachment]
+                )
+                if let imagePart = single?.first(where: { $0.type == "image_url" }) {
+                    parts.append(imagePart)
+                }
+            } catch ChatAttachmentError.visualEncodingFailed {
+                guard attachment.wireImageDataURL == nil,
+                      !FileManager.default.fileExists(atPath: attachment.localPath) else {
+                    throw ChatAttachmentError.visualEncodingFailed(filename: attachment.filename)
+                }
+            }
+        }
+
+        for attachment in attachments where attachment.kind == .video {
+            do {
+                let single = try ChatMultimodalWireLogic.makeContentParts(
+                    modelText: "",
+                    attachments: [attachment]
+                )
+                if let videoPart = single?.first(where: { $0.type == "video_url" }) {
+                    parts.append(videoPart)
+                }
+            } catch ChatAttachmentError.visualEncodingFailed {
+                guard attachment.wireVideoDataURL == nil,
+                      !FileManager.default.fileExists(atPath: attachment.localPath) else {
+                    throw ChatAttachmentError.visualEncodingFailed(filename: attachment.filename)
+                }
+            }
+        }
+
+        let hasVisualPart = parts.contains { part in
+            part.type == "image_url" || part.type == "video_url"
+        }
+        return hasVisualPart ? parts : nil
+    }
+
 
     static func mapStreamPayload(_ payload: String) -> [ChatStreamingEvent]? {
-        guard let data = payload.data(using: .utf8) else { return nil }
+        mapStreamPayload(payload, streamedChoiceIndices: []).events
+    }
+
+    static func mapStreamPayload(
+        _ payload: String,
+        streamedChoiceIndices: Set<Int>
+    ) -> (events: [ChatStreamingEvent], streamedChoiceIndices: Set<Int>) {
+        guard let data = payload.data(using: .utf8) else {
+            return ([], streamedChoiceIndices)
+        }
 
         if let sideband = ProviderStreamOutputEventMapper.mapSidebandPayload(data) {
-            return sideband
+            return (sideband, streamedChoiceIndices)
         }
 
         let chunk = try? JSONDecoder().decode(ProviderChatCompletionsStreamChunk.self, from: data)
-        guard let chunk else { return nil }
+        guard let chunk else { return ([], streamedChoiceIndices) }
 
         if let error = chunk.error {
-            return [.error(ChatStreamError(message: error.message))]
+            return ([.error(ChatStreamError(message: error.message))], streamedChoiceIndices)
         }
 
         var events: [ChatStreamingEvent] = []
-        for choice in chunk.choices ?? [] {
+        var streamed = streamedChoiceIndices
+        for (choiceIndex, choice) in (chunk.choices ?? []).enumerated() {
             if let delta = choice.delta, delta.hasStreamableContent {
-                events.append(contentsOf: mapAssistantPayload(delta))
+                let mapped = mapAssistantPayload(delta)
+                events.append(contentsOf: mapped)
+                if mapped.contains(where: { event in
+                    if case .textDelta = event { return true }
+                    return false
+                }) {
+                    streamed.insert(choiceIndex)
+                }
             }
-            if let message = choice.message, choice.delta?.hasStreamableContent != true {
-                events.append(contentsOf: mapAssistantPayload(message))
+            if let message = choice.message,
+               choice.delta?.hasStreamableContent != true,
+               !streamed.contains(choiceIndex) {
+                let mapped = mapAssistantPayload(message)
+                events.append(contentsOf: mapped)
+                if mapped.contains(where: { event in
+                    if case .textDelta = event { return true }
+                    return false
+                }) {
+                    streamed.insert(choiceIndex)
+                }
             }
         }
-        return events.isEmpty ? nil : events
+        return (events.isEmpty ? [] : events, streamed)
     }
 
     static func mapAssistantPayload(_ payload: ProviderChatCompletionsStreamChunk.Delta) -> [ChatStreamingEvent] {

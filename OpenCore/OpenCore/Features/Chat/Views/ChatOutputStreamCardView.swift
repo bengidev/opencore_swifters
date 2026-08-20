@@ -25,35 +25,38 @@ struct ChatOutputStreamCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                (
-                    Text(display.verb)
-                        .font(SharedOpenCoreTypography.bodyMD)
-                        .foregroundStyle(palette.textSecondary)
-                    +
-                    Text(" " + display.target)
-                        .font(SharedOpenCoreTypography.bodyMD)
-                        .foregroundStyle(palette.textTertiary)
-                )
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-                Spacer(minLength: 6)
-
-                Text(statusLabel)
-                    .font(SharedOpenCoreTypography.bodyMD)
-                    .foregroundStyle(statusColor.opacity(message.detail.status == .failed ? 1 : 0.5))
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(palette.textTertiary.opacity(0.6))
-                    .padding(.leading, 4)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
+            Button {
                 isShowingDetailSheet = true
+            } label: {
+                HStack(spacing: 0) {
+                    (
+                        Text(display.verb)
+                            .font(SharedOpenCoreTypography.bodyMD)
+                            .foregroundStyle(palette.textSecondary)
+                        +
+                        Text(" " + display.target)
+                            .font(SharedOpenCoreTypography.bodyMD)
+                            .foregroundStyle(palette.textTertiary)
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                    Spacer(minLength: 6)
+
+                    Text(statusLabel)
+                        .font(SharedOpenCoreTypography.bodyMD)
+                        .foregroundStyle(statusColor.opacity(message.detail.status == .failed ? 1 : 0.5))
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(palette.textTertiary.opacity(0.6))
+                        .padding(.leading, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(display.verb) \(display.target), \(statusLabel)")
             .transaction { transaction in
                 transaction.animation = nil
             }
