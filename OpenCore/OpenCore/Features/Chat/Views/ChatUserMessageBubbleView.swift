@@ -69,18 +69,19 @@ private struct ChatUserImageAttachmentBubbleView: View {
     @State private var isPreviewPresented = false
 
     var body: some View {
-        ChatAttachmentThumbnailView(
-            thumbnailJPEGData: attachment.thumbnailJPEGData,
-            localPath: attachment.localPath,
-            side: 148,
-            cornerRadius: 16
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onTapGesture {
+        Button {
             isPreviewPresented = true
+        } label: {
+            ChatAttachmentThumbnailView(
+                thumbnailJPEGData: attachment.thumbnailJPEGData,
+                localPath: attachment.localPath,
+                side: 148,
+                cornerRadius: 16
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("Image attachment \(attachment.filename)")
-        .accessibilityAddTraits(.isButton)
         .sheet(isPresented: $isPreviewPresented) {
             if let image = UIImage(contentsOfFile: attachment.localPath)
                 ?? attachment.thumbnailJPEGData.flatMap({ UIImage(data: $0) }) {

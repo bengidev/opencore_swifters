@@ -53,11 +53,25 @@ struct OnboardingReasoningLevelSliderView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Reasoning level")
         .accessibilityValue("\(Int((value * 100).rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                setValue(value + 0.05)
+            case .decrement:
+                setValue(value - 0.05)
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func setValue(_ newValue: Double) {
+        value = min(max(newValue, 0), 1)
     }
 
     private func updateValue(at locationX: CGFloat, travel: CGFloat) {
         let centered = locationX - thumbWidth / 2
         let clamped = min(max(centered, 0), travel)
-        value = Double(clamped / travel)
+        setValue(Double(clamped / travel))
     }
 }

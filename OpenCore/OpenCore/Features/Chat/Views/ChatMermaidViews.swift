@@ -126,15 +126,19 @@ struct ChatMermaidSnapshotView: View {
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, minHeight: 80)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture { isExpanded = true }
-                    .accessibilityLabel(source)
-                    .accessibilityHint("Double tap to expand diagram.")
+                Button {
+                    isExpanded = true
+                } label: {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(source)
+                .accessibilityHint("Opens the diagram full screen.")
             } else if failed {
                 ChatMermaidFailureCard(source: source, palette: palette)
             } else {

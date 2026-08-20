@@ -32,8 +32,11 @@ struct HomeContextUsageDismissScrim: View {
     @Environment(\.sharedPalette) private var palette
 
     var body: some View {
-        palette.scrimOverlay(opacity: reduceMotion ? 0.001 : 0.06)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onDismiss)
+        Button(action: onDismiss) {
+            palette.scrimOverlay(opacity: reduceMotion ? 0.001 : 0.06)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Dismiss context usage")
     }
 }

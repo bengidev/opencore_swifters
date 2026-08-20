@@ -32,29 +32,32 @@ struct ChatReasoningCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-
-            if showsStreamingBody {
-                streamingBody
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.surfaceRaised.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(palette.textTertiary.opacity(0.12), lineWidth: 0.5)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             guard showsStreamingBody else { return }
             withAnimation(.easeInOut(duration: 0.22)) {
                 isExpanded.toggle()
             }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+
+                if showsStreamingBody {
+                    streamingBody
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.surfaceRaised.opacity(0.55))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(palette.textTertiary.opacity(0.12), lineWidth: 0.5)
+            )
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!showsStreamingBody)
         .animation(.easeInOut(duration: 0.22), value: isExpanded)
         .onChange(of: isStreaming) { _, streaming in
             guard !streaming else { return }
