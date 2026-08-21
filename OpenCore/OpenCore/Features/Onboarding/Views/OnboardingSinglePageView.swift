@@ -21,14 +21,13 @@ struct OnboardingSinglePageView: View {
                     .ignoresSafeArea()
 
                 // The concept is a single centered hero, not a paged onboarding shell.
+                // Construction reveal is the entrance — no separate opacity fade.
                 OnboardingCubeView(appeared: appeared)
                     .frame(
                         width: min(size.width * 0.36, 150),
                         height: min(size.height * 0.21, 180)
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(.easeOut(duration: 0.3), value: appeared)
             }
             .sensoryFeedback(.selection, trigger: appeared)
         }
@@ -47,9 +46,7 @@ struct OnboardingSinglePageView: View {
             return
         }
         try? await Task.sleep(nanoseconds: 70_000_000)
-        withAnimation(.easeOut(duration: 0.3)) {
-            appeared = true
-        }
+        appeared = true
     }
 
 }

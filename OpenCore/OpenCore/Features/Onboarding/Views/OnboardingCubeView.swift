@@ -3,9 +3,10 @@ import UIKit
 
 /// UIKit-backed wireframe cube hero.
 ///
-/// Vertices fade/pop in first, then edges reveal from vertex to vertex. The
-/// renderer avoids per-frame SwiftUI body updates and uses a display link only
-/// during construction.
+/// Vertices fade/pop in first, then edges reveal from vertex to vertex with
+/// slight overlap. After construction, the cube slowly morphs through random
+/// 3D orientations while staying centered. The renderer avoids per-frame
+/// SwiftUI body updates and uses a display link during construction and idle morph.
 struct OnboardingCubeView: View {
     let appeared: Bool
 
@@ -73,9 +74,37 @@ private final class CubeRendererView: UIView {
     private var isAppeared = false
     private var reduceMotion: Bool
     private var lastBounds: CGRect = .zero
+    private var constructionGeometryBounds: CGRect = .zero
+
+    private enum Phase {
+        case construction
+        case morph
+    }
+
+    private var phase: Phase = .construction
+
+    /// Starting orientation used during construction and for reduced-motion fallback.
+    private let baseYaw: CGFloat = 0.6
+    private let basePitch: CGFloat = 0.52
+    private let baseRoll: CGFloat = 0
+
+    private var morphFromYaw = CGFloat(0.6)
+    private var morphFromPitch = CGFloat(0.52)
+    private var morphFromRoll = CGFloat(0)
+    private var morphToYaw = CGFloat(0.6)
+    private var morphToPitch = CGFloat(0.52)
+    private var morphToRoll = CGFloat(0)
+    private var morphSegmentStart: CFTimeInterval?
+    private var morphSegmentDuration: CFTimeInterval = 4
 
     /// Duration of the vertex + edge construction reveal, in seconds.
     private let constructionDuration: CFTimeInterval = 0.75
+
+    /// Vertices finish popping by this fraction of master progress.
+    private let vertexPhaseEnd: CGFloat = 0.35
+
+    /// Edges begin drawing at this fraction — overlaps the tail of vertex pop.
+    private let edgePhaseStart: CGFloat = 0.2
 
     init(reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
@@ -106,6 +135,7 @@ private final class CubeRendererView: UIView {
         super.layoutSubviews()
         guard bounds != lastBounds else { return }
         lastBounds = bounds
+        invalidateConstructionGeometry()
         let progress: CGFloat
         if isAppeared && reduceMotion {
             progress = 1
@@ -114,7 +144,7 @@ private final class CubeRendererView: UIView {
         } else {
             progress = 0
         }
-        render(progress: progress)
+        render(progress: progress, timestamp: CACurrentMediaTime())
     }
 
     func setReduceMotion(_ value: Bool) {
@@ -122,7 +152,8 @@ private final class CubeRendererView: UIView {
         reduceMotion = value
         if value {
             stopDisplayLink()
-            render(progress: isAppeared ? 1 : 0)
+            resetMorphState()
+            render(progress: isAppeared ? 1 : 0, timestamp: nil)
         } else if isAppeared {
             startAnimationIfNeeded()
         }
@@ -133,33 +164,39 @@ private final class CubeRendererView: UIView {
         isAppeared = value
         if value {
             if reduceMotion {
-                render(progress: 1)
+                resetMorphState()
+                render(progress: 1, timestamp: nil)
             } else {
                 animationStart = nil
+                resetMorphState()
                 startAnimationIfNeeded()
             }
         } else {
             stopDisplayLink()
             animationStart = nil
-            render(progress: 0)
+            resetMorphState()
+            render(progress: 0, timestamp: nil)
         }
     }
 
     private func configureLayers() {
         let ink = UIColor.label.cgColor
-        for layer in edgeLayers {
+        for (index, layer) in edgeLayers.enumerated() {
             layer.fillColor = UIColor.clear.cgColor
             layer.strokeColor = ink
             layer.lineWidth = 2
             layer.lineCap = .round
             layer.strokeStart = 0
             layer.strokeEnd = 0
+            if dashedEdges.contains(index) {
+                layer.lineDashPattern = [4, 3]
+            }
             self.layer.addSublayer(layer)
         }
-        for (index, layer) in vertexLayers.enumerated() {
+        for layer in vertexLayers {
             layer.fillColor = ink
             layer.opacity = 0
-            layer.path = circlePath(at: .zero, radius: index == 0 ? 3.5 : 3.5)
+            layer.path = circlePath(at: .zero, radius: 3.5)
             self.layer.addSublayer(layer)
         }
     }
@@ -167,7 +204,7 @@ private final class CubeRendererView: UIView {
     private func startAnimationIfNeeded() {
         guard displayLink == nil else { return }
         displayLink = CADisplayLink(target: displayLinkProxy, selector: #selector(DisplayLinkProxy.tick(_:)))
-        displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+        updateDisplayLinkFrameRate()
         displayLink?.add(to: .main, forMode: .common)
     }
 
@@ -176,68 +213,222 @@ private final class CubeRendererView: UIView {
         displayLink = nil
     }
 
+    private func updateDisplayLinkFrameRate() {
+        switch phase {
+        case .construction:
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+        case .morph:
+            displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+        }
+    }
+
     fileprivate func tick(_ timestamp: CFTimeInterval) {
         guard isAppeared, !reduceMotion else { return }
         if animationStart == nil { animationStart = timestamp }
         let progress = currentProgress(at: timestamp)
-        render(progress: progress)
-        if progress >= 1 {
-            stopDisplayLink()
+
+        if progress >= 1, phase == .construction {
+            phase = .morph
+            updateDisplayLinkFrameRate()
+            beginMorphSegment(at: timestamp)
+        } else if phase == .morph {
+            advanceMorphIfNeeded(at: timestamp)
         }
+
+        render(progress: progress, timestamp: timestamp)
     }
 
     private func currentProgress(at timestamp: CFTimeInterval) -> CGFloat {
-        guard let animationStart else { return isAppeared ? 0 : 0 }
+        guard let animationStart else { return 0 }
         return min(max(CGFloat((timestamp - animationStart) / constructionDuration), 0), 1)
     }
 
-    private func render(progress: CGFloat) {
+    private func resetMorphState() {
+        phase = .construction
+        morphFromYaw = baseYaw
+        morphFromPitch = basePitch
+        morphFromRoll = baseRoll
+        morphToYaw = baseYaw
+        morphToPitch = basePitch
+        morphToRoll = baseRoll
+        morphSegmentStart = nil
+        morphSegmentDuration = 4
+        invalidateConstructionGeometry()
+        updateDisplayLinkFrameRate()
+    }
+
+    private func invalidateConstructionGeometry() {
+        constructionGeometryBounds = .zero
+    }
+
+    private func beginMorphSegment(at timestamp: CFTimeInterval) {
+        let (yaw, pitch, roll) = currentOrientation(at: timestamp)
+        morphFromYaw = yaw
+        morphFromPitch = pitch
+        morphFromRoll = roll
+        let target = randomMorphTarget()
+        morphToYaw = target.yaw
+        morphToPitch = target.pitch
+        morphToRoll = target.roll
+        morphSegmentDuration = Double.random(in: 3.5...5.5)
+        morphSegmentStart = timestamp
+    }
+
+    private func advanceMorphIfNeeded(at timestamp: CFTimeInterval) {
+        guard let morphSegmentStart else {
+            beginMorphSegment(at: timestamp)
+            return
+        }
+        let elapsed = timestamp - morphSegmentStart
+        if elapsed >= morphSegmentDuration {
+            beginMorphSegment(at: timestamp)
+        }
+    }
+
+    private func randomMorphTarget() -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+        (
+            CGFloat.random(in: 0.2...1.4),
+            CGFloat.random(in: 0.22...0.78),
+            CGFloat.random(in: -0.32...0.32)
+        )
+    }
+
+    /// Cubic ease-out for enter animations — fast start, gentle settle.
+    private func easeOut(_ t: CGFloat) -> CGFloat {
+        let clamped = min(max(t, 0), 1)
+        return 1 - pow(1 - clamped, 3)
+    }
+
+    /// Strong ease-in-out for on-screen morphing — starts and ends gently, moves decisively in the middle.
+    private func strongEaseInOut(_ t: CGFloat) -> CGFloat {
+        let clamped = min(max(t, 0), 1)
+        return clamped < 0.5
+            ? 4 * clamped * clamped * clamped
+            : 1 - pow(-2 * clamped + 2, 3) / 2
+    }
+
+    private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+        guard phase == .morph, let timestamp, let morphSegmentStart else {
+            return (baseYaw, basePitch, baseRoll)
+        }
+        let t = strongEaseInOut(CGFloat((timestamp - morphSegmentStart) / morphSegmentDuration))
+        return (
+            morphFromYaw + (morphToYaw - morphFromYaw) * t,
+            morphFromPitch + (morphToPitch - morphFromPitch) * t,
+            morphFromRoll + (morphToRoll - morphFromRoll) * t
+        )
+    }
+
+    private func project(vertex: Vertex, center: CGPoint, half: CGFloat, yaw: CGFloat, pitch: CGFloat, roll: CGFloat) -> CGPoint {
+        let x1 = vertex.x * cos(yaw) + vertex.z * sin(yaw)
+        let z1 = -vertex.x * sin(yaw) + vertex.z * cos(yaw)
+        let y2 = vertex.y * cos(pitch) - z1 * sin(pitch)
+        let x3 = x1 * cos(roll) - y2 * sin(roll)
+        let y3 = x1 * sin(roll) + y2 * cos(roll)
+        return CGPoint(x: center.x + x3 * half, y: center.y + y3 * half)
+    }
+
+    private func ensureConstructionGeometry(center: CGPoint, half: CGFloat) {
+        guard constructionGeometryBounds != bounds else { return }
+        constructionGeometryBounds = bounds
+
+        let projected = vertices.map { vertex in
+            project(
+                vertex: vertex,
+                center: center,
+                half: half,
+                yaw: baseYaw,
+                pitch: basePitch,
+                roll: baseRoll
+            )
+        }
+
+        for (index, point) in projected.enumerated() {
+            vertexLayers[index].position = point
+            vertexLayers[index].path = circlePath(at: .zero, radius: 3.5)
+        }
+
+        for (index, edge) in edges.enumerated() {
+            let path = UIBezierPath()
+            path.move(to: projected[edge.start])
+            path.addLine(to: projected[edge.end])
+            edgeLayers[index].path = path.cgPath
+            edgeLayers[index].opacity = 1
+            edgeLayers[index].strokeEnd = 0
+        }
+    }
+
+    private func render(progress: CGFloat, timestamp: CFTimeInterval?) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let half = min(bounds.width, bounds.height) * 0.34
-        let yaw: CGFloat = 0.6
-        let pitch: CGFloat = 0.52
-        let projected = vertices.map { vertex -> CGPoint in
-            let x1 = vertex.x * cos(yaw) + vertex.z * sin(yaw)
-            let z1 = -vertex.x * sin(yaw) + vertex.z * cos(yaw)
-            let y1 = vertex.y * cos(pitch) - z1 * sin(pitch)
-            return CGPoint(x: center.x + x1 * half, y: center.y + y1 * half)
+
+        if phase == .construction || progress < 1 {
+            renderConstruction(progress: progress, center: center, half: half)
+        } else {
+            renderMorph(timestamp: timestamp, center: center, half: half)
         }
 
-        let vertexProgress = min(progress / 0.3, 1)
-        let edgeProgress = min(max((progress - 0.3) / 0.7, 0), 1)
-        let ink = UIColor.label.cgColor
+        CATransaction.commit()
+    }
+
+    private func renderConstruction(progress: CGFloat, center: CGPoint, half: CGFloat) {
+        ensureConstructionGeometry(center: center, half: half)
+
+        let vertexProgress = min(progress / vertexPhaseEnd, 1)
+        let edgeSpan = max(1 - edgePhaseStart, 0.001)
+        let edgeProgress = min(max((progress - edgePhaseStart) / edgeSpan, 0), 1)
+
+        for index in vertexLayers.indices {
+            let delay = CGFloat(index) * 0.025
+            let normalizedDelay = delay / vertexPhaseEnd
+            let linear = min(max((vertexProgress - normalizedDelay) / (1 - normalizedDelay), 0), 1)
+            let eased = easeOut(linear)
+            let scale = 0.85 + 0.15 * eased
+            vertexLayers[index].opacity = Float(eased)
+            vertexLayers[index].setAffineTransform(CGAffineTransform(scaleX: scale, y: scale))
+        }
+
+        for (index, _) in edges.enumerated() {
+            let linear: CGFloat
+            if dashedEdges.contains(index) {
+                linear = min(max((edgeProgress - 0.35) / 0.65, 0), 1)
+            } else {
+                let delay = CGFloat(index) * 0.05
+                linear = min(max((edgeProgress - delay) / (1 - delay), 0), 1)
+            }
+            edgeLayers[index].strokeEnd = easeOut(linear)
+        }
+    }
+
+    private func renderMorph(timestamp: CFTimeInterval?, center: CGPoint, half: CGFloat) {
+        let orientation = currentOrientation(at: timestamp)
+        let projected = vertices.map { vertex in
+            project(
+                vertex: vertex,
+                center: center,
+                half: half,
+                yaw: orientation.yaw,
+                pitch: orientation.pitch,
+                roll: orientation.roll
+            )
+        }
 
         for (index, point) in projected.enumerated() {
-            let delay = CGFloat(index) * 0.03
-            let local = min(max((vertexProgress - delay / 0.3) / (1 - delay / 0.3), 0), 1)
             vertexLayers[index].position = point
-            vertexLayers[index].path = circlePath(at: .zero, radius: 3.5 * (0.5 + 0.5 * local))
-            vertexLayers[index].opacity = Float(local)
-            vertexLayers[index].fillColor = ink
+            vertexLayers[index].opacity = 1
+            vertexLayers[index].setAffineTransform(.identity)
         }
 
         for (index, edge) in edges.enumerated() {
-            let local: CGFloat
-            if dashedEdges.contains(index) {
-                local = min(max((edgeProgress - 0.5) / 0.5, 0), 1)
-            } else {
-                let delay = CGFloat(index) * 0.06
-                local = min(max((edgeProgress - delay) / (1 - delay), 0), 1)
-            }
             let path = UIBezierPath()
             path.move(to: projected[edge.start])
             path.addLine(to: projected[edge.end])
             edgeLayers[index].path = path.cgPath
-            edgeLayers[index].strokeColor = ink
-            edgeLayers[index].opacity = 1
-            edgeLayers[index].lineDashPattern = dashedEdges.contains(index) ? [4, 3] : nil
-            edgeLayers[index].strokeEnd = local
+            edgeLayers[index].strokeEnd = 1
         }
-
-        CATransaction.commit()
     }
 
     private func circlePath(at center: CGPoint, radius: CGFloat) -> CGPath {
