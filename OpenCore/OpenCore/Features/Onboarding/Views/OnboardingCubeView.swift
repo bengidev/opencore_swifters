@@ -75,7 +75,7 @@ private final class CubeRendererView: UIView {
     private var lastBounds: CGRect = .zero
 
     /// Duration of the vertex + edge construction reveal, in seconds.
-    private let constructionDuration: CFTimeInterval = 1.0
+    private let constructionDuration: CFTimeInterval = 0.75
 
     init(reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
