@@ -109,7 +109,15 @@ private final class CubeRendererView: UIView {
         super.layoutSubviews()
         guard bounds != lastBounds else { return }
         lastBounds = bounds
-        render(progress: isAppeared && reduceMotion ? 1 : currentProgress(at: CACurrentMediaTime()), bob: 0)
+        let progress: CGFloat
+        if isAppeared && reduceMotion {
+            progress = 1
+        } else if animationStart != nil {
+            progress = currentProgress(at: CACurrentMediaTime())
+        } else {
+            progress = 0
+        }
+        render(progress: progress, bob: 0)
     }
 
     func setReduceMotion(_ value: Bool) {
@@ -189,6 +197,9 @@ private final class CubeRendererView: UIView {
     }
 
     private func render(progress: CGFloat, bob: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
         let center = CGPoint(x: bounds.midX, y: bounds.midY + bob)
         let half = min(bounds.width, bounds.height) * 0.34
         let yaw: CGFloat = 0.6
@@ -230,6 +241,8 @@ private final class CubeRendererView: UIView {
             edgeLayers[index].lineDashPattern = dashedEdges.contains(index) ? [4, 3] : nil
             edgeLayers[index].strokeEnd = local
         }
+
+        CATransaction.commit()
     }
 
     private func circlePath(at center: CGPoint, radius: CGFloat) -> CGPath {
