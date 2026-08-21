@@ -106,8 +106,11 @@ private final class CubeRendererView: UIView {
     /// Edges begin drawing at this fraction — overlaps the tail of vertex pop.
     private let edgePhaseStart: CGFloat = 0.2
 
-    /// Morph begins while the last edges are still drawing so there is no dead frame.
-    private let morphOverlapStart: CGFloat = 0.9
+    /// Morph begins while edges are still drawing so there is no dead frame.
+    private let morphOverlapStart: CGFloat = 0.72
+
+    /// Begin the next pose before the current segment finishes to avoid settle pauses.
+    private let morphSegmentOverlap: CGFloat = 0.82
 
     init(reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
@@ -276,7 +279,9 @@ private final class CubeRendererView: UIView {
         morphToYaw = target.yaw
         morphToPitch = target.pitch
         morphToRoll = target.roll
-        morphSegmentDuration = Double.random(in: 1.0...1.6)
+        morphSegmentDuration = immediate
+            ? Double.random(in: 0.6...0.85)
+            : Double.random(in: 0.65...0.95)
         morphSegmentStart = timestamp
     }
 
@@ -286,7 +291,7 @@ private final class CubeRendererView: UIView {
             return
         }
         let elapsed = timestamp - morphSegmentStart
-        if elapsed >= morphSegmentDuration {
+        if elapsed >= morphSegmentDuration * morphSegmentOverlap {
             beginMorphSegment(at: timestamp)
         }
     }
@@ -324,11 +329,19 @@ private final class CubeRendererView: UIView {
         return 1 - pow(1 - clamped, 3)
     }
 
+    /// Ease-in-out keeps morph segments flowing into each other without dead frames.
+    private func easeInOut(_ t: CGFloat) -> CGFloat {
+        let clamped = min(max(t, 0), 1)
+        return clamped < 0.5
+            ? 4 * clamped * clamped * clamped
+            : 1 - pow(-2 * clamped + 2, 3) / 2
+    }
+
     private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
         guard phase == .morph, let timestamp, let morphSegmentStart else {
             return (baseYaw, basePitch, baseRoll)
         }
-        let t = easeOut(CGFloat((timestamp - morphSegmentStart) / morphSegmentDuration))
+        let t = easeInOut(CGFloat((timestamp - morphSegmentStart) / morphSegmentDuration))
         return (
             morphFromYaw + (morphToYaw - morphFromYaw) * t,
             morphFromPitch + (morphToPitch - morphFromPitch) * t,
