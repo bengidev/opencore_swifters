@@ -5,7 +5,7 @@ import UIKit
 ///
 /// Vertices fade/pop in first, then edges reveal from vertex to vertex. The
 /// renderer avoids per-frame SwiftUI body updates and uses a display link only
-/// during construction and the subtle idle float.
+/// during construction.
 struct OnboardingCubeView: View {
     let appeared: Bool
 
@@ -77,9 +77,6 @@ private final class CubeRendererView: UIView {
     /// Duration of the vertex + edge construction reveal, in seconds.
     private let constructionDuration: CFTimeInterval = 1.0
 
-    /// Idle float frequency (radians/sec); larger = faster bobbing.
-    private let bobFrequency: CGFloat = 0.9
-
     init(reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
         self.edgeLayers = edges.map { _ in CAShapeLayer() }
@@ -117,7 +114,7 @@ private final class CubeRendererView: UIView {
         } else {
             progress = 0
         }
-        render(progress: progress, bob: 0)
+        render(progress: progress)
     }
 
     func setReduceMotion(_ value: Bool) {
@@ -125,7 +122,7 @@ private final class CubeRendererView: UIView {
         reduceMotion = value
         if value {
             stopDisplayLink()
-            render(progress: isAppeared ? 1 : 0, bob: 0)
+            render(progress: isAppeared ? 1 : 0)
         } else if isAppeared {
             startAnimationIfNeeded()
         }
@@ -136,7 +133,7 @@ private final class CubeRendererView: UIView {
         isAppeared = value
         if value {
             if reduceMotion {
-                render(progress: 1, bob: 0)
+                render(progress: 1)
             } else {
                 animationStart = nil
                 startAnimationIfNeeded()
@@ -144,7 +141,7 @@ private final class CubeRendererView: UIView {
         } else {
             stopDisplayLink()
             animationStart = nil
-            render(progress: 0, bob: 0)
+            render(progress: 0)
         }
     }
 
@@ -183,11 +180,9 @@ private final class CubeRendererView: UIView {
         guard isAppeared, !reduceMotion else { return }
         if animationStart == nil { animationStart = timestamp }
         let progress = currentProgress(at: timestamp)
-        let bob = progress >= 1 ? CGFloat(sin(timestamp * bobFrequency) * 3.5) : 0
-        render(progress: progress, bob: bob)
+        render(progress: progress)
         if progress >= 1 {
-            // Keep the display link for the low-cost idle float.
-            _ = constructionDuration
+            stopDisplayLink()
         }
     }
 
@@ -196,11 +191,11 @@ private final class CubeRendererView: UIView {
         return min(max(CGFloat((timestamp - animationStart) / constructionDuration), 0), 1)
     }
 
-    private func render(progress: CGFloat, bob: CGFloat) {
+    private func render(progress: CGFloat) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        let center = CGPoint(x: bounds.midX, y: bounds.midY + bob)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
         let half = min(bounds.width, bounds.height) * 0.34
         let yaw: CGFloat = 0.6
         let pitch: CGFloat = 0.52
