@@ -2,7 +2,7 @@
 
 OpenCore uses feature-oriented folders inside the app target. The folders are intentionally shaped like modules so they can be promoted to internal Swift Package or Xcode framework targets later without rewriting feature boundaries.
 
-Onboarding flow state is owned by `OnboardingFlowController` and mutated through explicit commands — not TCA.
+Onboarding flow state is owned by `OnboardingFlowController` and mutated through explicit commands — not TCA. The onboarding screen is a single page (no pager) built around a wireframe cube hero (`OnboardingCubeView`), the "OPENCORE" wordmark, italic value-prop copy, and a swipe/tap pill CTA ("Swipe to Get Started").
 
 ## Module map
 

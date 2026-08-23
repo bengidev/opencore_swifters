@@ -12,7 +12,9 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 
 - **Flow controller**: `OnboardingFlowController`
 - **Persistence**: `OnboardingPersistenceClient` + `OnboardingProgressEntity` (SwiftData)
+- **Screen**: single-page scene (`OnboardingView` → `OnboardingSinglePageView`) with a wireframe cube hero, "OPENCORE" wordmark, italic value-prop copy, and a swipe/tap pill CTA ("Swipe to Get Started")
 - **Completion**: `AppRootView` routes to `HomeTabShellView` when `isFinished` is true
+- **Motion**: `OnboardingCubeView` (isometric wireframe cube: vertex pop-in → edge line-reveal → dashed back edges → internal dust drift → idle float), per the `docs/animation-motion-replication.md` spec and the cube concept
 
 ## Home
 

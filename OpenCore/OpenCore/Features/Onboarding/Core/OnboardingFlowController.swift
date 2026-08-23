@@ -33,7 +33,7 @@ final class OnboardingFlowController {
     func finish() async -> Bool {
         do {
             try await persistence.complete()
-            state.isFinished = true
+            dispatch(OnboardingFinishCommand())
             return true
         } catch {
             return false

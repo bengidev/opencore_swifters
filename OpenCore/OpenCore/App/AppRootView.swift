@@ -22,7 +22,7 @@ struct AppRootView: View {
                     vision: vision
                 )
             } else {
-                OnboardingView(flow: onboardingFlow)
+                OnboardingView(onboardingFlow: onboardingFlow)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: onboardingFlow.state.isFinished)

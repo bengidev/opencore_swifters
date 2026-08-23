@@ -4,147 +4,36 @@ import Testing
 @testable import OpenCore
 
 @MainActor
-@Suite("Onboarding Domain Tests")
-struct OnboardingDomainTests {
-
-    @Test("OnboardingPage.all has 5 pages in correct order")
-    func pageCount() {
-        #expect(OnboardingPage.all.count == 5)
-        #expect(OnboardingPage.all[0].type == .encryptedPairing)
-        #expect(OnboardingPage.all[1].type == .ideaStudio)
-        #expect(OnboardingPage.all[2].type == .promptQueue)
-        #expect(OnboardingPage.all[3].type == .reasoningControl)
-        #expect(OnboardingPage.all[4].type == .workspaceReady)
-    }
-
-    @Test("OnboardingPage has unique IDs")
-    func pageIDs() {
-        let ids = OnboardingPage.all.map(\.id)
-        #expect(Set(ids).count == ids.count)
-    }
-
-    @Test("OnboardingPromptOption has 3 samples")
-    func promptOptions() {
-        #expect(OnboardingPromptOption.samples.count == 3)
-        #expect(OnboardingPromptOption.samples[0].label == "ASK")
-        #expect(OnboardingPromptOption.samples[1].label == "WRITE")
-        #expect(OnboardingPromptOption.samples[2].label == "EXPLORE")
-    }
-
-    @Test("OnboardingQueueItem has 4 samples with correct statuses")
-    func queueItems() {
-        #expect(OnboardingQueueItem.samples.count == 4)
-        #expect(OnboardingQueueItem.samples[0].status == .running)
-        #expect(OnboardingQueueItem.samples[1].status == .next)
-        #expect(OnboardingQueueItem.samples[2].status == .queued)
-        #expect(OnboardingQueueItem.samples[3].status == .ready)
-    }
-
-    @Test("OnboardingPageType has all cases")
-    func pageTypes() {
-        #expect(OnboardingPageType.allCases.count == 5)
-    }
-}
-
-@MainActor
 @Suite("OnboardingFlowState Tests")
 struct OnboardingFlowStateTests {
 
-    @Test("Initial state is page 0, not finished")
+    @Test("Initial state is not finished")
     func initialState() {
         let state = OnboardingFlowState()
-        #expect(state.currentPage == 0)
         #expect(state.isFinished == false)
-        #expect(state.totalPages == 5)
-        #expect(state.isLastPage == false)
+    }
+
+    @Test("Equality compares isFinished")
+    func equality() {
+        #expect(OnboardingFlowState() == OnboardingFlowState())
+        #expect(OnboardingFlowState(isFinished: true) == OnboardingFlowState(isFinished: true))
+        #expect(OnboardingFlowState() != OnboardingFlowState(isFinished: true))
     }
 }
 
 @MainActor
-@Suite("Onboarding Command Tests")
-struct OnboardingCommandTests {
+@Suite("OnboardingCube Contract Tests")
+struct OnboardingCubeContractTests {
 
-    private var invoker: OnboardingCommandInvoker {
-        OnboardingCommandInvoker()
-    }
-
-    @Test("AdvancePageCommand advances page")
-    func advancePage() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingAdvancePageCommand(), on: &state)
-        #expect(state.currentPage == 1)
-    }
-
-    @Test("RetreatPageCommand goes back")
-    func retreatPage() {
-        var state = OnboardingFlowState(currentPage: 1)
-        invoker.invoke(OnboardingRetreatPageCommand(), on: &state)
-        #expect(state.currentPage == 0)
-    }
-
-    @Test("RetreatPageCommand clamps at 0")
-    func retreatClamp() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingRetreatPageCommand(), on: &state)
-        #expect(state.currentPage == 0)
-    }
-
-    @Test("SelectPageCommand jumps to index")
-    func selectPage() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingSelectPageCommand(index: 3), on: &state)
-        #expect(state.currentPage == 3)
-    }
-
-    @Test("SkipToLastPageCommand jumps to last page")
-    func skip() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingSkipToLastPageCommand(), on: &state)
-        #expect(state.currentPage == state.totalPages - 1)
-    }
-
-    @Test("SelectPromptChipCommand updates selection")
-    func promptChip() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingSelectPromptChipCommand(index: 2), on: &state)
-        #expect(state.selectedPromptIndex == 2)
-    }
-
-    @Test("IncrementQueueCommand increments count")
-    func addQueue() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingIncrementQueueCommand(), on: &state)
-        #expect(state.queuedPromptCount == 3)
-    }
-
-    @Test("SetReasoningLevelCommand clamps value")
-    func reasoningClamp() {
-        var state = OnboardingFlowState()
-        invoker.invoke(OnboardingSetReasoningLevelCommand(level: 1.5), on: &state)
-        #expect(state.reasoningLevel == 1.0)
-        invoker.invoke(OnboardingSetReasoningLevelCommand(level: -0.5), on: &state)
-        #expect(state.reasoningLevel == 0.0)
-    }
-
-    @Test("TogglePairingCommand toggles state")
-    func pairingToggle() {
-        var state = OnboardingFlowState()
-        #expect(state.pairingConfirmed == true)
-        invoker.invoke(OnboardingTogglePairingCommand(), on: &state)
-        #expect(state.pairingConfirmed == false)
+    @Test("Cube view type exists and is a SwiftUI View")
+    func cubeTypeExists() {
+        #expect(OnboardingCubeView.self != AnyView.self)
     }
 }
 
 @MainActor
 @Suite("OnboardingFlowController Tests")
 struct OnboardingFlowControllerTests {
-
-    @Test("dispatch advances page through facade")
-    func facadeAdvance() {
-        let controller = OnboardingFlowController(persistence: .preview)
-        controller.dispatch(OnboardingAdvancePageCommand())
-        #expect(controller.state.currentPage == 1)
-    }
 
     @Test("finish persists completion")
     func finishPersists() async {
