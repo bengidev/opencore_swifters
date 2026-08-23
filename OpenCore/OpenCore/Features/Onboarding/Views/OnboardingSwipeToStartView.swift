@@ -4,13 +4,14 @@ import UIKit
 /// Swipe-to-unlock CTA — knob must reach the trailing edge; otherwise springs back with haptic feedback.
 struct OnboardingSwipeToStartView: View {
     @Binding var isUnlocked: Bool
-    var onComplete: () -> Void
+    var onComplete: () async -> Bool
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
+    @State private var isCompleting = false
 
     private let trackHeight: CGFloat = 58
     private let knobSize: CGFloat = 46
@@ -66,14 +67,16 @@ struct OnboardingSwipeToStartView: View {
         .accessibilityLabel("Swipe to get started")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
-            completeUnlock()
+            Task {
+                await attemptUnlock(maxDrag: nil)
+            }
         }
     }
 
     private func dragGesture(maxDrag: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 4)
             .onChanged { value in
-                guard !isUnlocked else { return }
+                guard !isUnlocked, !isCompleting else { return }
 
                 if !isDragging {
                     isDragging = true
@@ -84,18 +87,15 @@ struct OnboardingSwipeToStartView: View {
                 dragOffset = min(max(0, value.translation.width), maxDrag)
             }
             .onEnded { _ in
-                guard !isUnlocked else { return }
+                guard !isUnlocked, !isCompleting else { return }
                 isDragging = false
 
                 let reachedTrailing = dragOffset >= maxDrag * trailingUnlockThreshold
 
                 if reachedTrailing {
-                    withAnimation(unlockAnimation) {
-                        dragOffset = maxDrag
-                        isUnlocked = true
+                    Task {
+                        await attemptUnlock(maxDrag: maxDrag)
                     }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    onComplete()
                 } else {
                     withAnimation(reboundAnimation) {
                         dragOffset = 0
@@ -103,6 +103,32 @@ struct OnboardingSwipeToStartView: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
             }
+    }
+
+    @MainActor
+    private func attemptUnlock(maxDrag: CGFloat?) async {
+        guard !isUnlocked, !isCompleting else { return }
+        isCompleting = true
+
+        if let maxDrag {
+            withAnimation(unlockAnimation) {
+                dragOffset = maxDrag
+            }
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        let succeeded = await onComplete()
+
+        if succeeded {
+            isUnlocked = true
+        } else {
+            withAnimation(reboundAnimation) {
+                dragOffset = 0
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+
+        isCompleting = false
     }
 
     private func prepareHaptics() {
@@ -121,12 +147,5 @@ struct OnboardingSwipeToStartView: View {
         reduceMotion
             ? .easeOut(duration: 0.18)
             : .spring(response: 0.42, dampingFraction: 0.68)
-    }
-
-    private func completeUnlock() {
-        guard !isUnlocked else { return }
-        isUnlocked = true
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        onComplete()
     }
 }

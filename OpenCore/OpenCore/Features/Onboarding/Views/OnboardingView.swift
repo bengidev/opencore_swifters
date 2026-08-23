@@ -6,9 +6,7 @@ struct OnboardingView: View {
 
     var body: some View {
         OnboardingSinglePageView {
-            Task {
-                await onboardingFlow.finish()
-            }
+            await onboardingFlow.finish()
         }
     }
 }

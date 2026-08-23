@@ -46,18 +46,25 @@ private struct Golden: Decodable {
 
 final class OrbGoldenTests: XCTestCase {
     private func loadGolden() throws -> Golden {
-        // Tests run from the package directory; the spec lives at the repo root.
         let here = URL(fileURLWithPath: #filePath)
-        let repoRoot = here
+        let packageRoot = here
             .deletingLastPathComponent()  // OrbGoldenTests.swift -> ThinkingOrbsKitTests
             .deletingLastPathComponent()  // Tests
             .deletingLastPathComponent()  // ThinkingOrbsKit
-            .deletingLastPathComponent()  // ios
-            .deletingLastPathComponent()  // ports
-            .deletingLastPathComponent()  // thinking-orbs
-        let url = repoRoot.appendingPathComponent("spec/orbs-golden.json")
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(Golden.self, from: data)
+        let candidates = [
+            packageRoot.appendingPathComponent("spec/orbs-golden.json"),
+            packageRoot
+                .deletingLastPathComponent()  // Packages
+                .deletingLastPathComponent()  // OpenCore
+                .appendingPathComponent("spec/orbs-golden.json")
+        ]
+
+        for url in candidates where FileManager.default.fileExists(atPath: url.path) {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode(Golden.self, from: data)
+        }
+
+        throw XCTSkip("spec/orbs-golden.json is not vendored in this repository")
     }
 
     func testMatchesGoldenVectors() throws {

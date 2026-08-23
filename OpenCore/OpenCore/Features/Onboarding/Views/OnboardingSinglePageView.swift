@@ -4,7 +4,7 @@ import SwiftUI
 /// then feature cards and the swipe CTA stagger in. Uses explicit frame interpolation because
 /// `matchedGeometryEffect` does not reliably morph `UIViewRepresentable` content.
 struct OnboardingSinglePageView: View {
-    var onComplete: () -> Void = {}
+    var onComplete: () async -> Bool = { true }
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -36,7 +36,7 @@ struct OnboardingSinglePageView: View {
                     )
                 }
 
-                HeroCubeLayer(
+                heroCube(
                     morph: heroMorph,
                     appeared: cubeAppeared,
                     containerSize: proxy.size,
@@ -156,13 +156,37 @@ struct OnboardingSinglePageView: View {
     private func scheduleHeroTransformation() {
         transitionTask?.cancel()
         transitionTask = Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
+            if !reduceMotion {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard !Task.isCancelled else { return }
+            }
 
             await MainActor.run {
                 triggerHeroTransformation()
             }
         }
+    }
+
+    @ViewBuilder
+    private func heroCube(
+        morph: CGFloat,
+        appeared: Bool,
+        containerSize: CGSize,
+        safeTop: CGFloat
+    ) -> some View {
+        let layout = Self.heroCubeLayout(
+            morph: morph,
+            in: containerSize,
+            largeSize: heroLargeSize,
+            smallSize: heroSmallSize,
+            headerTopPadding: headerTopPadding,
+            headerHorizontalPadding: headerHorizontalPadding,
+            safeTop: safeTop
+        )
+
+        OnboardingCubeView(appeared: appeared)
+            .frame(width: layout.size, height: layout.size)
+            .position(x: layout.center.x, y: layout.center.y)
     }
 
     @MainActor
@@ -187,33 +211,3 @@ struct OnboardingSinglePageView: View {
     }
 }
 
-// MARK: - Animatable Hero Cube
-
-/// Interpolates position and scale frame-by-frame during the hero spring.
-private struct HeroCubeLayer: View, Animatable {
-    var morph: CGFloat
-    let appeared: Bool
-    let containerSize: CGSize
-    let safeTop: CGFloat
-
-    var animatableData: CGFloat {
-        get { morph }
-        set { morph = newValue }
-    }
-
-    var body: some View {
-        let layout = OnboardingSinglePageView.heroCubeLayout(
-            morph: morph,
-            in: containerSize,
-            largeSize: 220,
-            smallSize: 36,
-            headerTopPadding: 6,
-            headerHorizontalPadding: 24,
-            safeTop: safeTop
-        )
-
-        OnboardingCubeView(appeared: appeared)
-            .frame(width: layout.size, height: layout.size)
-            .position(x: layout.center.x, y: layout.center.y)
-    }
-}

@@ -106,12 +106,16 @@ struct OnboardingFeatureChatFeedView: View {
     // MARK: - Reduced Motion Fallback
 
     private var staticConversation: some View {
-        VStack(spacing: messageSpacing) {
-            ForEach(OnboardingFeature.catalog) { feature in
-                OnboardingChatBubbleView(message: .user(prompt: feature.userPrompt, feature: feature))
-                OnboardingChatBubbleView(message: .assistant(feature: feature))
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: messageSpacing) {
+                ForEach(OnboardingFeature.catalog) { feature in
+                    OnboardingChatBubbleView(message: .user(prompt: feature.userPrompt, feature: feature))
+                    OnboardingChatBubbleView(message: .assistant(feature: feature))
+                }
             }
+            .padding(.vertical, 6)
         }
+        .mask(feedEdgeFade)
     }
 
     // MARK: - Feed Loop
