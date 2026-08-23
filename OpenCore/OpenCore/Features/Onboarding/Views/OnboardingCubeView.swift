@@ -503,6 +503,10 @@ private final class DisplayLinkProxy: NSObject {
     weak var owner: CubeRendererView?
 
     @objc func tick(_ displayLink: CADisplayLink) {
-        owner?.tick(displayLink.timestamp)
+        guard let owner else { return }
+        let timestamp = displayLink.timestamp
+        MainActor.assumeIsolated {
+            owner.tick(timestamp)
+        }
     }
 }
