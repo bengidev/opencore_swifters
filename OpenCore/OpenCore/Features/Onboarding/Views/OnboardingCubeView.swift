@@ -72,6 +72,7 @@ private final class CubeRendererView: UIView {
     private let dashedEdges: Set<Int> = [6, 7, 11]
     private let edgeLayers: [CAShapeLayer]
     private let vertexLayers: [CAShapeLayer]
+    private let morphEdgePaths: [UIBezierPath]
     private let displayLinkProxy: DisplayLinkProxy
     private var displayLink: CADisplayLink?
     private var animationStart: CFTimeInterval?
@@ -123,6 +124,7 @@ private final class CubeRendererView: UIView {
         self.inkCGColor = inkColor.cgColor
         self.edgeLayers = edges.map { _ in CAShapeLayer() }
         self.vertexLayers = vertices.map { _ in CAShapeLayer() }
+        self.morphEdgePaths = edges.map { _ in UIBezierPath() }
         self.displayLinkProxy = DisplayLinkProxy()
         super.init(frame: .zero)
         displayLinkProxy.owner = self
@@ -149,6 +151,9 @@ private final class CubeRendererView: UIView {
         guard bounds != lastBounds else { return }
         lastBounds = bounds
         invalidateConstructionGeometry()
+        if displayLink != nil, phase == .morph {
+            return
+        }
         let progress: CGFloat
         if isAppeared && reduceMotion {
             progress = 1
@@ -499,7 +504,8 @@ private final class CubeRendererView: UIView {
         }
 
         for (index, edge) in edges.enumerated() {
-            let path = UIBezierPath()
+            let path = morphEdgePaths[index]
+            path.removeAllPoints()
             path.move(to: projected[edge.start])
             path.addLine(to: projected[edge.end])
             edgeLayers[index].path = path.cgPath
