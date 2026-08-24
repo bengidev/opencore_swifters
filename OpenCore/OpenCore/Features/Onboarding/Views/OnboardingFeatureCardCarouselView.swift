@@ -5,6 +5,7 @@ import SwiftUI
 /// Users can also drag horizontally to browse cards; auto-advance pauses during interaction.
 struct OnboardingFeatureCardCarouselView: View {
     let isActive: Bool
+    var initialAdvanceDelay: Duration = .milliseconds(900)
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -24,7 +25,6 @@ struct OnboardingFeatureCardCarouselView: View {
     /// Clear space between adjacent card edges when centred.
     private let cardInterCardGap: CGFloat = 14
     private let holdDuration: Duration = .seconds(4.4)
-    private let firstAdvanceDelay: Duration = .milliseconds(900)
 
     var body: some View {
         Group {
@@ -330,7 +330,7 @@ struct OnboardingFeatureCardCarouselView: View {
         guard !reduceMotion, features.count > 1 else { return }
 
         loopTask = Task {
-            try? await Task.sleep(for: firstAdvanceDelay)
+            try? await Task.sleep(for: initialAdvanceDelay)
             guard !Task.isCancelled, isActive else { return }
 
             while !Task.isCancelled, isActive {
