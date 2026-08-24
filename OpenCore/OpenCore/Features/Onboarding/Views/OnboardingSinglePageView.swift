@@ -12,54 +12,47 @@ struct OnboardingSinglePageView: View {
     /// 0 = large centered hero, 1 = docked header icon. Interpolated by the hero spring.
     @State private var heroMorph: CGFloat = 0
     @State private var isTransformed = false
+    @State private var showCarousel = false
+    @State private var carouselRevealed = false
     @State private var swipeCompleted = false
     @State private var transitionTask: Task<Void, Never>?
+    @State private var carouselMountTask: Task<Void, Never>?
 
     private let heroLargeSize: CGFloat = 220
     private let heroSmallSize: CGFloat = 36
     private let headerTopPadding: CGFloat = 18
     private let headerHorizontalPadding: CGFloat = 24
     private let footerBottomPadding: CGFloat = 2
+    private let carouselFadeDelay: Duration = .milliseconds(220)
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                VStack(spacing: 0) {
-                    if isTransformed {
-                        headerSection
-                            .padding(.top, headerTopPadding)
-                            .padding(.bottom, 2)
-                    }
+                OnboardingTransformedLayout(
+                    isTransformed: isTransformed,
+                    showCarousel: showCarousel,
+                    carouselRevealed: carouselRevealed,
+                    swipeCompleted: $swipeCompleted,
+                    heroSmallSize: heroSmallSize,
+                    headerTopPadding: headerTopPadding,
+                    headerHorizontalPadding: headerHorizontalPadding,
+                    footerBottomPadding: footerBottomPadding,
+                    reduceMotion: reduceMotion,
+                    headerTitleAnimation: headerTitleAnimation,
+                    swipeSectionAnimation: swipeSectionAnimation,
+                    carouselFadeAnimation: carouselFadeAnimation,
+                    onComplete: onComplete
+                )
 
-                    if isTransformed {
-                        OnboardingFeatureCardCarouselView(isActive: isTransformed)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .layoutPriority(1)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 14)
-                            .opacity(isTransformed ? 1 : 0)
-                            .animation(
-                                reduceMotion
-                                    ? .easeOut(duration: 0.2)
-                                    : .spring(response: 0.58, dampingFraction: 0.78).delay(0.22),
-                                value: isTransformed
-                            )
-                    } else {
-                        Spacer(minLength: 0)
-                    }
-
-                    if isTransformed {
-                        swipeToStartSection
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, footerBottomPadding)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                heroCube(
+                OnboardingHeroCubeOverlay(
                     morph: heroMorph,
                     appeared: cubeAppeared,
                     containerSize: proxy.size,
+                    inkColor: palette.textPrimary,
+                    largeSize: heroLargeSize,
+                    smallSize: heroSmallSize,
+                    headerTopPadding: headerTopPadding,
+                    headerHorizontalPadding: headerHorizontalPadding,
                     safeTop: 0
                 )
 
@@ -78,37 +71,9 @@ struct OnboardingSinglePageView: View {
         .onDisappear {
             transitionTask?.cancel()
             transitionTask = nil
+            carouselMountTask?.cancel()
+            carouselMountTask = nil
         }
-    }
-
-    // MARK: - Transformed Layout
-
-    private var headerSection: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Color.clear
-                .frame(width: heroSmallSize, height: heroSmallSize)
-
-            Text("OPENCORE")
-                .font(.system(size: 28, weight: .bold, design: .monospaced))
-                .monoTracking()
-                .tracking(6)
-                .foregroundStyle(palette.textPrimary)
-                .opacity(isTransformed ? 1 : 0)
-                .offset(x: isTransformed ? 0 : -14)
-                .blur(radius: isTransformed || reduceMotion ? 0 : 4)
-                .animation(headerTitleAnimation, value: isTransformed)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, headerHorizontalPadding)
-    }
-
-    private var swipeToStartSection: some View {
-        OnboardingSwipeToStartView(isUnlocked: $swipeCompleted, onComplete: onComplete)
-            .opacity(isTransformed ? 1 : 0)
-            .offset(y: isTransformed ? 0 : 28)
-            .blur(radius: isTransformed || reduceMotion ? 0 : 4)
-            .animation(swipeSectionAnimation, value: isTransformed)
     }
 
     private var themeToggleSection: some View {
@@ -168,6 +133,12 @@ struct OnboardingSinglePageView: View {
             : .spring(response: 0.6, dampingFraction: 0.8).delay(0.62)
     }
 
+    private var carouselFadeAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.2)
+            : .spring(response: 0.58, dampingFraction: 0.78)
+    }
+
     // MARK: - Orchestration
 
     private func scheduleHeroTransformation() {
@@ -182,28 +153,6 @@ struct OnboardingSinglePageView: View {
                 triggerHeroTransformation()
             }
         }
-    }
-
-    @ViewBuilder
-    private func heroCube(
-        morph: CGFloat,
-        appeared: Bool,
-        containerSize: CGSize,
-        safeTop: CGFloat
-    ) -> some View {
-        let layout = Self.heroCubeLayout(
-            morph: morph,
-            in: containerSize,
-            largeSize: heroLargeSize,
-            smallSize: heroSmallSize,
-            headerTopPadding: headerTopPadding,
-            headerHorizontalPadding: headerHorizontalPadding,
-            safeTop: safeTop
-        )
-
-        OnboardingCubeView(appeared: appeared, inkColor: palette.textPrimary)
-            .frame(width: layout.size, height: layout.size)
-            .position(x: layout.center.x, y: layout.center.y)
     }
 
     @MainActor
@@ -225,6 +174,141 @@ struct OnboardingSinglePageView: View {
                 isTransformed = true
             }
         }
+
+        scheduleCarouselAppearance()
+    }
+
+    @MainActor
+    private func scheduleCarouselAppearance() {
+        carouselMountTask?.cancel()
+        carouselMountTask = Task {
+            try? await Task.sleep(for: carouselFadeDelay)
+            guard !Task.isCancelled, isTransformed else { return }
+
+            showCarousel = true
+            withAnimation(carouselFadeAnimation) {
+                carouselRevealed = true
+            }
+        }
     }
 }
 
+// MARK: - Transformed Layout (no heroMorph dependency)
+
+private struct OnboardingTransformedLayout: View {
+    let isTransformed: Bool
+    let showCarousel: Bool
+    let carouselRevealed: Bool
+    @Binding var swipeCompleted: Bool
+    let heroSmallSize: CGFloat
+    let headerTopPadding: CGFloat
+    let headerHorizontalPadding: CGFloat
+    let footerBottomPadding: CGFloat
+    let reduceMotion: Bool
+    let headerTitleAnimation: Animation
+    let swipeSectionAnimation: Animation
+    let carouselFadeAnimation: Animation
+    var onComplete: () async -> Bool
+
+    @Environment(\.sharedPalette) private var palette
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isTransformed {
+                headerSection
+                    .padding(.top, headerTopPadding)
+                    .padding(.bottom, 2)
+            }
+
+            if isTransformed {
+                if showCarousel {
+                    OnboardingFeatureCardCarouselView(
+                        isActive: true,
+                        initialAdvanceDelay: .milliseconds(680)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .layoutPriority(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 14)
+                    .opacity(carouselRevealed ? 1 : 0)
+                    .animation(carouselFadeAnimation, value: carouselRevealed)
+                } else {
+                    Spacer(minLength: 0)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .layoutPriority(1)
+                }
+            } else {
+                Spacer(minLength: 0)
+            }
+
+            if isTransformed {
+                swipeToStartSection
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, footerBottomPadding)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var headerSection: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Color.clear
+                .frame(width: heroSmallSize, height: heroSmallSize)
+
+            Text("OPENCORE")
+                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .monoTracking()
+                .tracking(6)
+                .foregroundStyle(palette.textPrimary)
+                .opacity(isTransformed ? 1 : 0)
+                .offset(x: isTransformed ? 0 : -14)
+                .blur(radius: isTransformed || reduceMotion ? 0 : 4)
+                .animation(headerTitleAnimation, value: isTransformed)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, headerHorizontalPadding)
+    }
+
+    private var swipeToStartSection: some View {
+        OnboardingSwipeToStartView(isUnlocked: $swipeCompleted, onComplete: onComplete)
+            .opacity(isTransformed ? 1 : 0)
+            .offset(y: isTransformed ? 0 : 28)
+            .blur(radius: isTransformed || reduceMotion ? 0 : 4)
+            .animation(swipeSectionAnimation, value: isTransformed)
+    }
+}
+
+// MARK: - Hero Cube Overlay (isolates heroMorph-driven layout)
+
+private struct OnboardingHeroCubeOverlay: View, Animatable {
+    var morph: CGFloat
+    let appeared: Bool
+    let containerSize: CGSize
+    let inkColor: Color
+    let largeSize: CGFloat
+    let smallSize: CGFloat
+    let headerTopPadding: CGFloat
+    let headerHorizontalPadding: CGFloat
+    let safeTop: CGFloat
+
+    var animatableData: CGFloat {
+        morph
+    }
+
+    var body: some View {
+        let layout = OnboardingSinglePageView.heroCubeLayout(
+            morph: morph,
+            in: containerSize,
+            largeSize: largeSize,
+            smallSize: smallSize,
+            headerTopPadding: headerTopPadding,
+            headerHorizontalPadding: headerHorizontalPadding,
+            safeTop: safeTop
+        )
+
+        OnboardingCubeView(appeared: appeared, inkColor: inkColor)
+            .frame(width: layout.size, height: layout.size)
+            .position(x: layout.center.x, y: layout.center.y)
+    }
+}
