@@ -25,6 +25,8 @@ struct OnboardingFeatureCardCarouselView: View {
     /// Clear space between adjacent card edges when centred.
     private let cardInterCardGap: CGFloat = 14
     private let holdDuration: Duration = .seconds(4.4)
+    /// How far from center a card may sit on-screen (includes mid-swipe travel room).
+    private let viewportRelativeLimit: CGFloat = 2.0
 
     var body: some View {
         Group {
@@ -71,24 +73,25 @@ struct OnboardingFeatureCardCarouselView: View {
                     ForEach(features.indices, id: \.self) { index in
                         let relative = modularRelative(featureIndex: index, scroll: scrollIndex)
                         let isFocused = abs(relative) < 0.05
-                        let isNearViewport = abs(relative) <= 1.35
+                        let isNearViewport = abs(relative) <= viewportRelativeLimit
+                        let isRevealed = isFocused && isImageRevealed
 
                         OnboardingFeatureCarouselCardView(
                             feature: features[index],
                             relativePosition: relative,
                             cardWidth: cardWidth,
                             cardHeight: cardHeight,
-                            ambientOffset: isFocused && !isImageRevealed && !isUserDragging ? ambient : .zero,
+                            ambientOffset: isFocused && !isRevealed && !isUserDragging ? ambient : .zero,
                             isFocused: isFocused,
-                            isRevealed: isFocused && isImageRevealed,
+                            isRevealed: isRevealed,
                             onRevealChanged: setImageRevealed
                         )
                         .frame(width: cardWidth, height: cardHeight)
-                        .scaleEffect(cardScale(for: relative, isRevealed: isFocused && isImageRevealed))
-                        .blur(radius: cardBlur(for: relative, isRevealed: isFocused && isImageRevealed))
-                        .opacity(isNearViewport ? cardOpacity(for: relative) : 0)
+                        .scaleEffect(cardScale(for: relative, isRevealed: isRevealed))
+                        .blur(radius: cardBlur(for: relative, isRevealed: isRevealed))
+                        .opacity(cardVisibilityOpacity(for: relative))
                         .offset(x: cardXOffset(for: relative, cardWidth: cardWidth))
-                        .zIndex(cardZIndex(for: relative, isRevealed: isFocused && isImageRevealed))
+                        .zIndex(cardZIndex(for: relative, isRevealed: isRevealed))
                         .allowsHitTesting(isNearViewport)
                     }
                 }
@@ -139,12 +142,17 @@ struct OnboardingFeatureCardCarouselView: View {
 
     private func modularRelative(featureIndex: Int, scroll: CGFloat) -> CGFloat {
         let count = CGFloat(features.count)
-        guard count > 0 else { return 0 }
+        guard count > 1 else { return CGFloat(featureIndex) - scroll }
 
-        var diff = CGFloat(featureIndex) - scroll
-        while diff > count / 2 { diff -= count }
-        while diff < -count / 2 { diff += count }
-        return diff
+        let base = CGFloat(featureIndex) - scroll
+        var best = base
+        for shift in [-count, 0, count] {
+            let candidate = base + shift
+            if abs(candidate) < abs(best) {
+                best = candidate
+            }
+        }
+        return best
     }
 
     private func wrappedIndex(_ index: Int) -> Int {
@@ -172,6 +180,12 @@ struct OnboardingFeatureCardCarouselView: View {
     private func cardOpacity(for relative: CGFloat) -> Double {
         let distance = min(abs(relative), 1)
         return 1 - (Double(distance) * 0.22)
+    }
+
+    private func cardVisibilityOpacity(for relative: CGFloat) -> Double {
+        let distance = abs(relative)
+        if distance > viewportRelativeLimit { return 0 }
+        return cardOpacity(for: relative)
     }
 
     private func cardDimensions(in size: CGSize) -> CGSize {
@@ -206,6 +220,7 @@ struct OnboardingFeatureCardCarouselView: View {
                     var snapTransaction = Transaction()
                     snapTransaction.disablesAnimations = true
                     withTransaction(snapTransaction) {
+                        normalizeScrollIndexIfNeeded()
                         dragOriginScrollIndex = scrollIndex
                     }
                 }
