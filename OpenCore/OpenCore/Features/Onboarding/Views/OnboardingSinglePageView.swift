@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Single-page onboarding — one persistent cube hero animates from center to the header slot,
-/// then feature cards and the swipe CTA stagger in. Uses explicit frame interpolation because
-/// `matchedGeometryEffect` does not reliably morph `UIViewRepresentable` content.
+/// then feature cards auto-swipe in a loop and the swipe CTA staggers in.
 struct OnboardingSinglePageView: View {
     var onComplete: () async -> Bool = { true }
 
@@ -18,56 +17,59 @@ struct OnboardingSinglePageView: View {
 
     private let heroLargeSize: CGFloat = 220
     private let heroSmallSize: CGFloat = 36
-    private let headerTopPadding: CGFloat = 30
+    private let headerTopPadding: CGFloat = 18
     private let headerHorizontalPadding: CGFloat = 24
-    private let chatVerticalInset: CGFloat = 44
-    private let footerBottomPadding: CGFloat = 6
+    private let footerBottomPadding: CGFloat = 2
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
-                if isTransformed {
-                    headerSection
-                        .padding(.top, headerTopPadding)
-                        .padding(.bottom, 10)
-                }
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 0) {
+                    if isTransformed {
+                        headerSection
+                            .padding(.top, headerTopPadding)
+                            .padding(.bottom, 2)
+                    }
 
-                if isTransformed {
-                    OnboardingFeatureChatFeedView(isActive: isTransformed)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, chatVerticalInset)
-                        .opacity(isTransformed ? 1 : 0)
-                        .animation(
-                            reduceMotion
-                                ? .easeOut(duration: 0.2)
-                                : .spring(response: 0.58, dampingFraction: 0.78).delay(0.22),
-                            value: isTransformed
-                        )
-                } else {
-                    Spacer(minLength: 0)
-                }
+                    if isTransformed {
+                        OnboardingFeatureCardCarouselView(isActive: isTransformed)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .layoutPriority(1)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 14)
+                            .opacity(isTransformed ? 1 : 0)
+                            .animation(
+                                reduceMotion
+                                    ? .easeOut(duration: 0.2)
+                                    : .spring(response: 0.58, dampingFraction: 0.78).delay(0.22),
+                                value: isTransformed
+                            )
+                    } else {
+                        Spacer(minLength: 0)
+                    }
 
-                if isTransformed {
-                    swipeToStartSection
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, footerBottomPadding)
+                    if isTransformed {
+                        swipeToStartSection
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, footerBottomPadding)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            GeometryReader { proxy in
                 heroCube(
                     morph: heroMorph,
                     appeared: cubeAppeared,
                     containerSize: proxy.size,
                     safeTop: 0
                 )
+
+                themeToggleSection
             }
         }
         .background {
             palette.surfaceBase
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.28), value: palette.isDark)
         }
         .onAppear {
             cubeAppeared = true
@@ -107,6 +109,16 @@ struct OnboardingSinglePageView: View {
             .offset(y: isTransformed ? 0 : 28)
             .blur(radius: isTransformed || reduceMotion ? 0 : 4)
             .animation(swipeSectionAnimation, value: isTransformed)
+    }
+
+    private var themeToggleSection: some View {
+        HStack {
+            Spacer(minLength: 0)
+            SharedThemeToggleButton()
+                .accessibilityIdentifier("onboarding-theme-toggle")
+        }
+        .padding(.top, headerTopPadding)
+        .padding(.horizontal, headerHorizontalPadding)
     }
 
     // MARK: - Hero Layout Math
@@ -189,7 +201,7 @@ struct OnboardingSinglePageView: View {
             safeTop: safeTop
         )
 
-        OnboardingCubeView(appeared: appeared)
+        OnboardingCubeView(appeared: appeared, inkColor: palette.textPrimary)
             .frame(width: layout.size, height: layout.size)
             .position(x: layout.center.x, y: layout.center.y)
     }
