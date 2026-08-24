@@ -210,17 +210,23 @@ struct OnboardingFeatureCardCarouselView: View {
                     }
                 }
 
+                let anchor = dragOriginScrollIndex
+                let rawScroll = anchor - (value.translation.width / step)
+                let clampedScroll = min(max(rawScroll, anchor - 1), anchor + 1)
+
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
-                    scrollIndex = dragOriginScrollIndex - (value.translation.width / step)
+                    scrollIndex = clampedScroll
                 }
             }
             .onEnded { value in
                 isUserDragging = false
 
+                let anchor = dragOriginScrollIndex
                 let flickDistance = value.predictedEndTranslation.width - value.translation.width
-                let target = round(scrollIndex - (flickDistance / step))
+                let projected = scrollIndex - (flickDistance / step)
+                let target = min(max(round(projected), round(anchor) - 1), round(anchor) + 1)
 
                 if animated {
                     withAnimation(carouselSpring) {
