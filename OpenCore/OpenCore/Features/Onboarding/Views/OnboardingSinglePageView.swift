@@ -18,31 +18,56 @@ struct OnboardingSinglePageView: View {
 
     private let heroLargeSize: CGFloat = 220
     private let heroSmallSize: CGFloat = 36
-    private let headerTopPadding: CGFloat = 6
+    private let headerTopPadding: CGFloat = 30
     private let headerHorizontalPadding: CGFloat = 24
     private let chatVerticalInset: CGFloat = 44
     private let footerBottomPadding: CGFloat = 6
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                palette.surfaceBase
-                    .ignoresSafeArea()
-
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
                 if isTransformed {
-                    transformedContent(
-                        safeTop: proxy.safeAreaInsets.top,
-                        safeBottom: proxy.safeAreaInsets.bottom
-                    )
+                    headerSection
+                        .padding(.top, headerTopPadding)
+                        .padding(.bottom, 10)
                 }
 
+                if isTransformed {
+                    OnboardingFeatureChatFeedView(isActive: isTransformed)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, chatVerticalInset)
+                        .opacity(isTransformed ? 1 : 0)
+                        .animation(
+                            reduceMotion
+                                ? .easeOut(duration: 0.2)
+                                : .spring(response: 0.58, dampingFraction: 0.78).delay(0.22),
+                            value: isTransformed
+                        )
+                } else {
+                    Spacer(minLength: 0)
+                }
+
+                if isTransformed {
+                    swipeToStartSection
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, footerBottomPadding)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            GeometryReader { proxy in
                 heroCube(
                     morph: heroMorph,
                     appeared: cubeAppeared,
                     containerSize: proxy.size,
-                    safeTop: proxy.safeAreaInsets.top
+                    safeTop: 0
                 )
             }
+        }
+        .background {
+            palette.surfaceBase
+                .ignoresSafeArea()
         }
         .onAppear {
             cubeAppeared = true
@@ -56,44 +81,24 @@ struct OnboardingSinglePageView: View {
 
     // MARK: - Transformed Layout
 
-    private func transformedContent(safeTop: CGFloat, safeBottom: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                Color.clear
-                    .frame(width: heroSmallSize, height: heroSmallSize)
+    private var headerSection: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Color.clear
+                .frame(width: heroSmallSize, height: heroSmallSize)
 
-                Text("OPENCORE")
-                    .font(.system(size: 28, weight: .bold, design: .monospaced))
-                    .monoTracking()
-                    .tracking(6)
-                    .foregroundStyle(palette.textPrimary)
-                    .opacity(isTransformed ? 1 : 0)
-                    .offset(x: isTransformed ? 0 : -14)
-                    .blur(radius: isTransformed || reduceMotion ? 0 : 4)
-                    .animation(headerTitleAnimation, value: isTransformed)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, headerHorizontalPadding)
-            .padding(.top, safeTop + headerTopPadding)
-            .padding(.bottom, 10)
-
-            OnboardingFeatureChatFeedView(isActive: isTransformed)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.vertical, chatVerticalInset)
+            Text("OPENCORE")
+                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .monoTracking()
+                .tracking(6)
+                .foregroundStyle(palette.textPrimary)
                 .opacity(isTransformed ? 1 : 0)
-                .animation(
-                    reduceMotion
-                        ? .easeOut(duration: 0.2)
-                        : .spring(response: 0.58, dampingFraction: 0.78).delay(0.22),
-                    value: isTransformed
-                )
+                .offset(x: isTransformed ? 0 : -14)
+                .blur(radius: isTransformed || reduceMotion ? 0 : 4)
+                .animation(headerTitleAnimation, value: isTransformed)
 
-            swipeToStartSection
-                .padding(.horizontal, 20)
-                .padding(.bottom, safeBottom + footerBottomPadding)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, headerHorizontalPadding)
     }
 
     private var swipeToStartSection: some View {
