@@ -9,13 +9,15 @@ import UIKit
 /// SwiftUI body updates and uses a display link during construction and idle morph.
 struct OnboardingCubeView: View {
     let appeared: Bool
+    let inkColor: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         OnboardingCubeUIKitView(
             appeared: appeared,
-            reduceMotion: reduceMotion
+            reduceMotion: reduceMotion,
+            inkColor: inkColor
         )
         .accessibilityHidden(true)
     }
@@ -24,12 +26,14 @@ struct OnboardingCubeView: View {
 private struct OnboardingCubeUIKitView: UIViewRepresentable {
     let appeared: Bool
     let reduceMotion: Bool
+    let inkColor: Color
 
     func makeUIView(context: Context) -> CubeRendererView {
-        CubeRendererView(reduceMotion: reduceMotion)
+        CubeRendererView(inkColor: UIColor(inkColor), reduceMotion: reduceMotion)
     }
 
     func updateUIView(_ view: CubeRendererView, context: Context) {
+        view.setInkColor(UIColor(inkColor))
         view.setReduceMotion(reduceMotion)
         view.setAppeared(appeared)
     }
@@ -97,6 +101,8 @@ private final class CubeRendererView: UIView {
     private var morphSegmentStart: CFTimeInterval?
     private var morphSegmentDuration: CFTimeInterval = 4
 
+    private var inkCGColor: CGColor
+
     /// Duration of the vertex + edge construction reveal, in seconds.
     private let constructionDuration: CFTimeInterval = 0.75
 
@@ -112,8 +118,9 @@ private final class CubeRendererView: UIView {
     /// Begin the next pose before the current segment finishes to avoid settle pauses.
     private let morphSegmentOverlap: CGFloat = 0.82
 
-    init(reduceMotion: Bool) {
+    init(inkColor: UIColor, reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
+        self.inkCGColor = inkColor.cgColor
         self.edgeLayers = edges.map { _ in CAShapeLayer() }
         self.vertexLayers = vertices.map { _ in CAShapeLayer() }
         self.displayLinkProxy = DisplayLinkProxy()
@@ -153,6 +160,13 @@ private final class CubeRendererView: UIView {
         render(progress: progress, timestamp: CACurrentMediaTime())
     }
 
+    func setInkColor(_ color: UIColor) {
+        let cgColor = color.cgColor
+        guard inkCGColor != cgColor else { return }
+        inkCGColor = cgColor
+        applyInkColor()
+    }
+
     func setReduceMotion(_ value: Bool) {
         guard reduceMotion != value else { return }
         reduceMotion = value
@@ -186,10 +200,9 @@ private final class CubeRendererView: UIView {
     }
 
     private func configureLayers() {
-        let ink = UIColor.label.cgColor
         for (index, layer) in edgeLayers.enumerated() {
             layer.fillColor = UIColor.clear.cgColor
-            layer.strokeColor = ink
+            layer.strokeColor = inkCGColor
             layer.lineWidth = 2
             layer.lineCap = .round
             layer.strokeStart = 0
@@ -200,10 +213,19 @@ private final class CubeRendererView: UIView {
             self.layer.addSublayer(layer)
         }
         for layer in vertexLayers {
-            layer.fillColor = ink
+            layer.fillColor = inkCGColor
             layer.opacity = 0
             layer.path = circlePath(at: .zero, radius: 3.5)
             self.layer.addSublayer(layer)
+        }
+    }
+
+    private func applyInkColor() {
+        for layer in edgeLayers {
+            layer.strokeColor = inkCGColor
+        }
+        for layer in vertexLayers {
+            layer.fillColor = inkCGColor
         }
     }
 
