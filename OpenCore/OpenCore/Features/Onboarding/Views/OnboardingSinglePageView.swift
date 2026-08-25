@@ -9,10 +9,8 @@ struct OnboardingSinglePageView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var cubeAppeared = false
-    /// 0 = large centered hero, 1 = docked header icon. Interpolated by the hero spring.
-    @State private var heroMorph: CGFloat = 0
-    /// 0 = idle cube morph, 1 = locked to the header isometric wireframe pose.
-    @State private var heroRotation: CGFloat = 0
+    /// 0 = large centered hero, 1 = docked header icon with isometric pose locked.
+    @State private var heroTransition: CGFloat = 0
     @State private var isTransformed = false
     @State private var showCarousel = false
     @State private var carouselRevealed = false
@@ -28,8 +26,6 @@ struct OnboardingSinglePageView: View {
     private let carouselFadeDelay: Duration = .milliseconds(780)
     /// Time the large centered cube stays on screen before the header transition begins.
     private let heroShowoffDelay: Duration = .milliseconds(1750)
-    private let heroRotationSettleDelay: Duration = .milliseconds(500)
-    private let heroShrinkPauseDelay: Duration = .milliseconds(320)
 
     var body: some View {
         GeometryReader { proxy in
@@ -51,8 +47,7 @@ struct OnboardingSinglePageView: View {
                 )
 
                 OnboardingHeroCubeOverlay(
-                    morph: heroMorph,
-                    rotationProgress: heroRotation,
+                    transition: heroTransition,
                     appeared: cubeAppeared,
                     morphPaused: showCarousel && carouselRevealed,
                     containerSize: proxy.size,
@@ -101,6 +96,37 @@ struct OnboardingSinglePageView: View {
         let center: CGPoint
     }
 
+    static func heroRotationProgress(from transition: CGFloat) -> CGFloat {
+        let raw = min(max(transition / 0.48, 0), 1)
+        return 1 - pow(1 - raw, 2)
+    }
+
+    static func heroMorphProgress(from transition: CGFloat) -> CGFloat {
+        let raw = (transition - 0.28) / 0.72
+        let clamped = min(max(raw, 0), 1)
+        return 1 - pow(1 - clamped, 3)
+    }
+
+    static func heroCubeLayout(
+        transition: CGFloat,
+        in size: CGSize,
+        largeSize: CGFloat,
+        smallSize: CGFloat,
+        headerTopPadding: CGFloat,
+        headerHorizontalPadding: CGFloat,
+        safeTop: CGFloat
+    ) -> HeroCubeLayout {
+        heroCubeLayout(
+            morph: heroMorphProgress(from: transition),
+            in: size,
+            largeSize: largeSize,
+            smallSize: smallSize,
+            headerTopPadding: headerTopPadding,
+            headerHorizontalPadding: headerHorizontalPadding,
+            safeTop: safeTop
+        )
+    }
+
     static func heroCubeLayout(
         morph: CGFloat,
         in size: CGSize,
@@ -110,7 +136,8 @@ struct OnboardingSinglePageView: View {
         headerHorizontalPadding: CGFloat,
         safeTop: CGFloat
     ) -> HeroCubeLayout {
-        let cubeSize = largeSize + (smallSize - largeSize) * morph
+        let clampedMorph = min(max(morph, 0), 1)
+        let cubeSize = largeSize + (smallSize - largeSize) * clampedMorph
 
         let largeCenter = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
         let smallCenter = CGPoint(
@@ -121,10 +148,16 @@ struct OnboardingSinglePageView: View {
         return HeroCubeLayout(
             size: cubeSize,
             center: CGPoint(
-                x: largeCenter.x + (smallCenter.x - largeCenter.x) * morph,
-                y: largeCenter.y + (smallCenter.y - largeCenter.y) * morph
+                x: largeCenter.x + (smallCenter.x - largeCenter.x) * clampedMorph,
+                y: largeCenter.y + (smallCenter.y - largeCenter.y) * clampedMorph
             )
         )
+    }
+
+    private var heroTransitionAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.35)
+            : .smooth(duration: 0.92, extraBounce: 0)
     }
 
     // MARK: - Animation Curves
@@ -165,42 +198,18 @@ struct OnboardingSinglePageView: View {
 
     @MainActor
     private func triggerHeroTransformation() {
-        let rotationSpring = Animation.spring(response: 0.52, dampingFraction: 0.84)
-        let transformationSpring = Animation.spring(
-            response: 0.75,
-            dampingFraction: 0.82,
-            blendDuration: 0.2
-        )
-
         if reduceMotion {
-            heroRotation = 1
-            withAnimation(.easeInOut(duration: 0.35)) {
-                heroMorph = 1
-                isTransformed = true
-            }
+            heroTransition = 1
+            isTransformed = true
             scheduleCarouselAppearance()
             return
         }
 
-        withAnimation(rotationSpring) {
-            heroRotation = 1
+        withAnimation(heroTransitionAnimation) {
+            heroTransition = 1
+            isTransformed = true
         }
-
-        transitionTask?.cancel()
-        transitionTask = Task {
-            try? await Task.sleep(for: heroRotationSettleDelay)
-            guard !Task.isCancelled else { return }
-            try? await Task.sleep(for: heroShrinkPauseDelay)
-            guard !Task.isCancelled else { return }
-
-            await MainActor.run {
-                withAnimation(transformationSpring) {
-                    heroMorph = 1
-                    isTransformed = true
-                }
-                scheduleCarouselAppearance()
-            }
-        }
+        scheduleCarouselAppearance()
     }
 
     @MainActor
@@ -304,11 +313,10 @@ private struct OnboardingTransformedLayout: View {
     }
 }
 
-// MARK: - Hero Cube Overlay (isolates heroMorph-driven layout)
+// MARK: - Hero Cube Overlay (isolates heroTransition-driven layout)
 
 private struct OnboardingHeroCubeOverlay: View, Animatable {
-    var morph: CGFloat
-    var rotationProgress: CGFloat
+    var transition: CGFloat
     let appeared: Bool
     let morphPaused: Bool
     let containerSize: CGSize
@@ -319,17 +327,14 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
     let headerHorizontalPadding: CGFloat
     let safeTop: CGFloat
 
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(morph, rotationProgress) }
-        set {
-            morph = newValue.first
-            rotationProgress = newValue.second
-        }
+    var animatableData: CGFloat {
+        get { transition }
+        set { transition = newValue }
     }
 
     var body: some View {
         let layout = OnboardingSinglePageView.heroCubeLayout(
-            morph: morph,
+            transition: transition,
             in: containerSize,
             largeSize: largeSize,
             smallSize: smallSize,
@@ -342,7 +347,7 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
             appeared: appeared,
             inkColor: inkColor,
             morphPaused: morphPaused,
-            rotationProgress: rotationProgress
+            rotationProgress: OnboardingSinglePageView.heroRotationProgress(from: transition)
         )
             .frame(width: layout.size, height: layout.size)
             .position(x: layout.center.x, y: layout.center.y)
