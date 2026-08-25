@@ -573,7 +573,7 @@ private struct OnboardingFeatureCarouselCardView: View {
                 .frame(height: layout.copyHeight, alignment: .top)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .padding(.top, layout.heroHeight + layout.copySectionOffset)
-                .opacity(1 - pressCharge * 0.42)
+                .opacity(1.0 - Double(pressCharge) * 0.42)
                 .blur(radius: pressCharge * 1.6)
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .top)
