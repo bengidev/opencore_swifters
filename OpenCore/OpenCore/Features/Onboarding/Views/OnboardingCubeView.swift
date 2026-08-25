@@ -12,6 +12,8 @@ struct OnboardingCubeView: View {
     let inkColor: Color
     /// When true, construction may still run but idle morph pauses to yield GPU time to the carousel.
     var morphPaused: Bool = false
+    /// Hero rotation progress — settles the cube into the header isometric pose before shrink.
+    var rotationProgress: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -19,6 +21,7 @@ struct OnboardingCubeView: View {
         OnboardingCubeUIKitView(
             appeared: appeared,
             morphPaused: morphPaused,
+            rotationProgress: rotationProgress,
             reduceMotion: reduceMotion,
             inkColor: inkColor
         )
@@ -29,6 +32,7 @@ struct OnboardingCubeView: View {
 private struct OnboardingCubeUIKitView: UIViewRepresentable {
     let appeared: Bool
     let morphPaused: Bool
+    let rotationProgress: CGFloat
     let reduceMotion: Bool
     let inkColor: Color
 
@@ -40,6 +44,7 @@ private struct OnboardingCubeUIKitView: UIViewRepresentable {
         view.setInkColor(UIColor(inkColor))
         view.setReduceMotion(reduceMotion)
         view.setMorphPaused(morphPaused)
+        view.setRotationProgress(rotationProgress)
         view.setAppeared(appeared)
     }
 }
@@ -107,6 +112,16 @@ private final class CubeRendererView: UIView {
     private var morphToRoll = CGFloat(0)
     private var morphSegmentStart: CFTimeInterval?
     private var morphSegmentDuration: CFTimeInterval = 4
+
+    /// Isometric corner view — six outer vertices plus one merged center (matches header icon).
+    private let headerIconYaw: CGFloat = .pi / 4
+    private let headerIconPitch: CGFloat = CGFloat(atan(1 / sqrt(2)))
+    private let headerIconRoll: CGFloat = 0
+
+    private var rotationProgress: CGFloat = 0
+    private var rotationFromYaw: CGFloat?
+    private var rotationFromPitch: CGFloat?
+    private var rotationFromRoll: CGFloat?
 
     private var inkCGColor: CGColor
 
@@ -201,6 +216,39 @@ private final class CubeRendererView: UIView {
         }
     }
 
+    func setRotationProgress(_ value: CGFloat) {
+        let clamped = min(max(value, 0), 1)
+        guard rotationProgress != clamped else { return }
+
+        if rotationProgress == 0, clamped > 0 {
+            let orientation = currentFreeOrientation(at: CACurrentMediaTime())
+            rotationFromYaw = orientation.yaw
+            rotationFromPitch = orientation.pitch
+            rotationFromRoll = orientation.roll
+            phase = .morph
+        }
+
+        rotationProgress = clamped
+
+        if clamped >= 1 {
+            morphFromYaw = headerIconYaw
+            morphFromPitch = headerIconPitch
+            morphFromRoll = headerIconRoll
+            morphToYaw = headerIconYaw
+            morphToPitch = headerIconPitch
+            morphToRoll = headerIconRoll
+            morphSegmentStart = nil
+        }
+
+        if clamped > 0, displayLink == nil {
+            startAnimationIfNeeded()
+        } else if clamped >= 1 {
+            stopDisplayLink()
+        }
+
+        render(progress: 1, timestamp: CACurrentMediaTime())
+    }
+
     func setAppeared(_ value: Bool) {
         guard isAppeared != value else { return }
         isAppeared = value
@@ -276,6 +324,10 @@ private final class CubeRendererView: UIView {
 
     fileprivate func tick(_ timestamp: CFTimeInterval) {
         guard isAppeared, !reduceMotion, !isMorphPaused else { return }
+        if rotationProgress > 0 {
+            render(progress: 1, timestamp: timestamp)
+            return
+        }
         if animationStart == nil { animationStart = timestamp }
         let progress = currentProgress(at: timestamp)
 
@@ -305,6 +357,10 @@ private final class CubeRendererView: UIView {
         morphToRoll = baseRoll
         morphSegmentStart = nil
         morphSegmentDuration = 4
+        rotationProgress = 0
+        rotationFromYaw = nil
+        rotationFromPitch = nil
+        rotationFromRoll = nil
         invalidateConstructionGeometry()
         updateDisplayLinkFrameRate()
     }
@@ -383,7 +439,7 @@ private final class CubeRendererView: UIView {
             : 1 - pow(-2 * clamped + 2, 3) / 2
     }
 
-    private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+    private func currentFreeOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
         guard phase == .morph, let timestamp, let morphSegmentStart else {
             return (baseYaw, basePitch, baseRoll)
         }
@@ -393,6 +449,21 @@ private final class CubeRendererView: UIView {
             morphFromPitch + (morphToPitch - morphFromPitch) * t,
             morphFromRoll + (morphToRoll - morphFromRoll) * t
         )
+    }
+
+    private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+        if rotationProgress > 0 {
+            let fromYaw = rotationFromYaw ?? morphFromYaw
+            let fromPitch = rotationFromPitch ?? morphFromPitch
+            let fromRoll = rotationFromRoll ?? morphFromRoll
+            let t = rotationProgress
+            return (
+                fromYaw + (headerIconYaw - fromYaw) * t,
+                fromPitch + (headerIconPitch - fromPitch) * t,
+                fromRoll + (headerIconRoll - fromRoll) * t
+            )
+        }
+        return currentFreeOrientation(at: timestamp)
     }
 
     private func project(vertex: Vertex, center: CGPoint, half: CGFloat, yaw: CGFloat, pitch: CGFloat, roll: CGFloat) -> CGPoint {
