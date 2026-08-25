@@ -4,7 +4,7 @@ import UIKit
 /// UIKit-backed wireframe cube hero.
 ///
 /// Vertices fade/pop in first, then edges reveal from vertex to vertex with
-/// slight overlap. After construction, the cube slowly morphs through random
+/// slight overlap. After construction, the cube drifts through subtle random
 /// 3D orientations while staying centered. The renderer avoids per-frame
 /// SwiftUI body updates and uses a display link during construction and idle morph.
 struct OnboardingCubeView: View {
@@ -111,7 +111,7 @@ private final class CubeRendererView: UIView {
     private var morphToPitch = CGFloat(0.52)
     private var morphToRoll = CGFloat(0)
     private var morphSegmentStart: CFTimeInterval?
-    private var morphSegmentDuration: CFTimeInterval = 4
+    private var morphSegmentDuration: CFTimeInterval = 0.52
 
     /// Isometric corner view — six outer vertices plus one merged center (matches header icon).
     private let headerIconYaw: CGFloat = .pi / 4
@@ -138,7 +138,11 @@ private final class CubeRendererView: UIView {
     private let morphOverlapStart: CGFloat = 0.72
 
     /// Begin the next pose before the current segment finishes to avoid settle pauses.
-    private let morphSegmentOverlap: CGFloat = 0.82
+    private let morphSegmentOverlap: CGFloat = 0.88
+
+    /// Shorter segments keep idle motion quick and ambient instead of attention-grabbing.
+    private let morphSegmentDurationRange: ClosedRange<Double> = 0.38...0.52
+    private let morphSegmentImmediateDurationRange: ClosedRange<Double> = 0.34...0.46
 
     init(inkColor: UIColor, reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
@@ -356,7 +360,7 @@ private final class CubeRendererView: UIView {
         morphToPitch = basePitch
         morphToRoll = baseRoll
         morphSegmentStart = nil
-        morphSegmentDuration = 4
+        morphSegmentDuration = morphSegmentDurationRange.upperBound
         rotationProgress = 0
         rotationFromYaw = nil
         rotationFromPitch = nil
@@ -382,8 +386,8 @@ private final class CubeRendererView: UIView {
         morphToPitch = target.pitch
         morphToRoll = target.roll
         morphSegmentDuration = immediate
-            ? Double.random(in: 0.6...0.85)
-            : Double.random(in: 0.65...0.95)
+            ? Double.random(in: morphSegmentImmediateDurationRange)
+            : Double.random(in: morphSegmentDurationRange)
         morphSegmentStart = timestamp
     }
 
@@ -402,12 +406,12 @@ private final class CubeRendererView: UIView {
         from current: (yaw: CGFloat, pitch: CGFloat, roll: CGFloat)? = nil,
         preferNoticeableChange: Bool = false
     ) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
-        let minimumDelta: CGFloat = preferNoticeableChange ? 0.18 : 0.08
+        let minimumDelta: CGFloat = preferNoticeableChange ? 0.1 : 0.045
         for _ in 0..<8 {
             let candidate = (
-                CGFloat.random(in: 0.2...1.4),
-                CGFloat.random(in: 0.22...0.78),
-                CGFloat.random(in: -0.32...0.32)
+                CGFloat.random(in: 0.35...1.05),
+                CGFloat.random(in: 0.28...0.62),
+                CGFloat.random(in: -0.16...0.16)
             )
             if let current {
                 let delta = abs(candidate.0 - current.yaw)
@@ -419,9 +423,9 @@ private final class CubeRendererView: UIView {
             }
         }
         return (
-            (current?.yaw ?? baseYaw) + 0.35,
-            (current?.pitch ?? basePitch) + 0.2,
-            (current?.roll ?? baseRoll) + 0.15
+            (current?.yaw ?? baseYaw) + 0.22,
+            (current?.pitch ?? basePitch) + 0.12,
+            (current?.roll ?? baseRoll) + 0.08
         )
     }
 
