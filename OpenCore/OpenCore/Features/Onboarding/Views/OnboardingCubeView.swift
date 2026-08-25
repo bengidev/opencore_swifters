@@ -176,7 +176,7 @@ private final class CubeRendererView: UIView {
         guard bounds != lastBounds else { return }
         lastBounds = bounds
         invalidateConstructionGeometry()
-        if displayLink != nil, phase == .morph {
+        if displayLink != nil, phase == .morph, rotationProgress < 1 {
             return
         }
         let progress: CGFloat
@@ -245,9 +245,10 @@ private final class CubeRendererView: UIView {
             morphToPitch = headerIconPitch
             morphToRoll = headerIconRoll
             morphSegmentStart = nil
+            stopDisplayLink()
         }
 
-        if clamped > 0, displayLink == nil {
+        if clamped > 0, clamped < 1, displayLink == nil {
             startAnimationIfNeeded()
         }
 
@@ -331,6 +332,9 @@ private final class CubeRendererView: UIView {
         guard isAppeared, !reduceMotion, !isMorphPaused else { return }
         if rotationProgress > 0 {
             render(progress: 1, timestamp: timestamp)
+            if rotationProgress >= 1 {
+                stopDisplayLink()
+            }
             return
         }
         if animationStart == nil { animationStart = timestamp }

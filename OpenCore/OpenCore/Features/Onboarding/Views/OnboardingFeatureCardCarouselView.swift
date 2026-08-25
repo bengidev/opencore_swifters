@@ -16,6 +16,7 @@ struct OnboardingFeatureCardCarouselView: View {
     @State private var isUserDragging = false
     @State private var dragOriginScrollIndex: CGFloat = 0
     @State private var isImageRevealed = false
+    @State private var isUserPressing = false
     @State private var isScrollAnimating = false
     @State private var settleTask: Task<Void, Never>?
 
@@ -77,7 +78,7 @@ struct OnboardingFeatureCardCarouselView: View {
                     let relative = modularRelative(featureIndex: index, scroll: scrollIndex)
                     let isFocused = abs(relative) < 0.05
                     let isRevealed = isFocused && isImageRevealed
-                    let shouldAmbientBob = isFocused && !isRevealed && !isUserDragging && !isScrollAnimating
+                    let shouldAmbientBob = isFocused && !isRevealed && !isUserDragging && !isScrollAnimating && !isUserPressing
 
                     OnboardingFeatureCarouselCardView(
                         feature: features[index],
@@ -87,7 +88,8 @@ struct OnboardingFeatureCardCarouselView: View {
                         shouldAmbientBob: shouldAmbientBob,
                         isFocused: isFocused,
                         isRevealed: isRevealed,
-                        onRevealChanged: setImageRevealed
+                        onRevealChanged: setImageRevealed,
+                        onPressChanged: setUserPressing
                     )
                     .frame(width: cardWidth, height: cardHeight)
                     .scaleEffect(cardScale(for: relative, isRevealed: isRevealed))
@@ -126,7 +128,8 @@ struct OnboardingFeatureCardCarouselView: View {
                 shouldAmbientBob: false,
                 isFocused: true,
                 isRevealed: isImageRevealed,
-                onRevealChanged: setImageRevealed
+                onRevealChanged: setImageRevealed,
+                onPressChanged: setUserPressing
             )
             .frame(width: cardWidth, height: cardHeight)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -288,7 +291,7 @@ struct OnboardingFeatureCardCarouselView: View {
         resumeLoopTask?.cancel()
         resumeLoopTask = Task {
             try? await Task.sleep(for: holdDuration)
-            guard !Task.isCancelled, isActive, !isUserDragging else { return }
+            guard !Task.isCancelled, isActive, !isUserDragging, !isUserPressing else { return }
             startLoop()
         }
     }
@@ -324,6 +327,17 @@ struct OnboardingFeatureCardCarouselView: View {
     private func cardZIndex(for relative: CGFloat, isRevealed: Bool = false) -> Double {
         if isRevealed { return 100 }
         return 10 - Double(abs(relative)) * 5
+    }
+
+    private func setUserPressing(_ pressing: Bool) {
+        guard pressing != isUserPressing else { return }
+        isUserPressing = pressing
+
+        if pressing {
+            pauseLoopForUserInteraction()
+        } else if !isImageRevealed {
+            scheduleLoopResume()
+        }
     }
 
     private func setImageRevealed(_ revealed: Bool) {
@@ -366,7 +380,7 @@ struct OnboardingFeatureCardCarouselView: View {
 
     @MainActor
     private func advanceCarousel() {
-        guard features.count > 1, !isUserDragging, !isImageRevealed else { return }
+        guard features.count > 1, !isUserDragging, !isImageRevealed, !isUserPressing else { return }
 
         isScrollAnimating = true
         let nextIndex = scrollIndex + 1
@@ -401,6 +415,7 @@ private struct OnboardingFeatureCarouselCardView: View {
     let isFocused: Bool
     let isRevealed: Bool
     let onRevealChanged: (Bool) -> Void
+    let onPressChanged: (Bool) -> Void
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -508,6 +523,7 @@ private struct OnboardingFeatureCarouselCardView: View {
         guard pressing != isPressing else { return }
 
         isPressing = pressing
+        onPressChanged(pressing)
         holdRevealTask?.cancel()
         holdRevealTask = nil
 

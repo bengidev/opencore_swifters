@@ -321,7 +321,7 @@ private struct OnboardingTransformedLayout: View {
 
 // MARK: - Hero Cube Overlay (isolates heroTransition-driven layout)
 
-private struct OnboardingHeroCubeOverlay: View, Animatable {
+private struct OnboardingHeroCubeOverlay: View, @preconcurrency Animatable {
     var transition: CGFloat
     let appeared: Bool
     let morphPaused: Bool
@@ -333,7 +333,7 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
     let headerHorizontalPadding: CGFloat
     let safeTop: CGFloat
 
-    var animatableData: CGFloat {
+    nonisolated var animatableData: CGFloat {
         get { transition }
         set { transition = newValue }
     }
