@@ -4,18 +4,26 @@ import UIKit
 /// UIKit-backed wireframe cube hero.
 ///
 /// Vertices fade/pop in first, then edges reveal from vertex to vertex with
-/// slight overlap. After construction, the cube slowly morphs through random
+/// slight overlap. After construction, the cube drifts through subtle random
 /// 3D orientations while staying centered. The renderer avoids per-frame
 /// SwiftUI body updates and uses a display link during construction and idle morph.
 struct OnboardingCubeView: View {
     let appeared: Bool
+    let inkColor: Color
+    /// When true, construction may still run but idle morph pauses to yield GPU time to the carousel.
+    var morphPaused: Bool = false
+    /// Hero rotation progress — settles the cube into the header isometric pose before shrink.
+    var rotationProgress: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         OnboardingCubeUIKitView(
             appeared: appeared,
-            reduceMotion: reduceMotion
+            morphPaused: morphPaused,
+            rotationProgress: rotationProgress,
+            reduceMotion: reduceMotion,
+            inkColor: inkColor
         )
         .accessibilityHidden(true)
     }
@@ -23,14 +31,20 @@ struct OnboardingCubeView: View {
 
 private struct OnboardingCubeUIKitView: UIViewRepresentable {
     let appeared: Bool
+    let morphPaused: Bool
+    let rotationProgress: CGFloat
     let reduceMotion: Bool
+    let inkColor: Color
 
     func makeUIView(context: Context) -> CubeRendererView {
-        CubeRendererView(reduceMotion: reduceMotion)
+        CubeRendererView(inkColor: UIColor(inkColor), reduceMotion: reduceMotion)
     }
 
     func updateUIView(_ view: CubeRendererView, context: Context) {
+        view.setInkColor(UIColor(inkColor))
         view.setReduceMotion(reduceMotion)
+        view.setMorphPaused(morphPaused)
+        view.setRotationProgress(rotationProgress)
         view.setAppeared(appeared)
     }
 }
@@ -68,10 +82,12 @@ private final class CubeRendererView: UIView {
     private let dashedEdges: Set<Int> = [6, 7, 11]
     private let edgeLayers: [CAShapeLayer]
     private let vertexLayers: [CAShapeLayer]
+    private let morphEdgePaths: [UIBezierPath]
     private let displayLinkProxy: DisplayLinkProxy
     private var displayLink: CADisplayLink?
     private var animationStart: CFTimeInterval?
     private var isAppeared = false
+    private var isMorphPaused = false
     private var reduceMotion: Bool
     private var lastBounds: CGRect = .zero
     private var constructionGeometryBounds: CGRect = .zero
@@ -95,7 +111,19 @@ private final class CubeRendererView: UIView {
     private var morphToPitch = CGFloat(0.52)
     private var morphToRoll = CGFloat(0)
     private var morphSegmentStart: CFTimeInterval?
-    private var morphSegmentDuration: CFTimeInterval = 4
+    private var morphSegmentDuration: CFTimeInterval = 0.52
+
+    /// Isometric corner view — six outer vertices plus one merged center (matches header icon).
+    private let headerIconYaw: CGFloat = .pi / 4
+    private let headerIconPitch: CGFloat = CGFloat(atan(1 / sqrt(2)))
+    private let headerIconRoll: CGFloat = 0
+
+    private var rotationProgress: CGFloat = 0
+    private var rotationFromYaw: CGFloat?
+    private var rotationFromPitch: CGFloat?
+    private var rotationFromRoll: CGFloat?
+
+    private var inkCGColor: CGColor
 
     /// Duration of the vertex + edge construction reveal, in seconds.
     private let constructionDuration: CFTimeInterval = 0.75
@@ -110,12 +138,18 @@ private final class CubeRendererView: UIView {
     private let morphOverlapStart: CGFloat = 0.72
 
     /// Begin the next pose before the current segment finishes to avoid settle pauses.
-    private let morphSegmentOverlap: CGFloat = 0.82
+    private let morphSegmentOverlap: CGFloat = 0.88
 
-    init(reduceMotion: Bool) {
+    /// Shorter segments keep idle motion quick and ambient instead of attention-grabbing.
+    private let morphSegmentDurationRange: ClosedRange<Double> = 0.38...0.52
+    private let morphSegmentImmediateDurationRange: ClosedRange<Double> = 0.34...0.46
+
+    init(inkColor: UIColor, reduceMotion: Bool) {
         self.reduceMotion = reduceMotion
+        self.inkCGColor = inkColor.cgColor
         self.edgeLayers = edges.map { _ in CAShapeLayer() }
         self.vertexLayers = vertices.map { _ in CAShapeLayer() }
+        self.morphEdgePaths = edges.map { _ in UIBezierPath() }
         self.displayLinkProxy = DisplayLinkProxy()
         super.init(frame: .zero)
         displayLinkProxy.owner = self
@@ -132,7 +166,7 @@ private final class CubeRendererView: UIView {
         super.didMoveToWindow()
         if window == nil {
             stopDisplayLink()
-        } else if isAppeared && !reduceMotion {
+        } else if isAppeared && !reduceMotion && !isMorphPaused {
             startAnimationIfNeeded()
         }
     }
@@ -142,6 +176,9 @@ private final class CubeRendererView: UIView {
         guard bounds != lastBounds else { return }
         lastBounds = bounds
         invalidateConstructionGeometry()
+        if displayLink != nil, phase == .morph, rotationProgress < 1 {
+            return
+        }
         let progress: CGFloat
         if isAppeared && reduceMotion {
             progress = 1
@@ -153,6 +190,13 @@ private final class CubeRendererView: UIView {
         render(progress: progress, timestamp: CACurrentMediaTime())
     }
 
+    func setInkColor(_ color: UIColor) {
+        let cgColor = color.cgColor
+        guard inkCGColor != cgColor else { return }
+        inkCGColor = cgColor
+        applyInkColor()
+    }
+
     func setReduceMotion(_ value: Bool) {
         guard reduceMotion != value else { return }
         reduceMotion = value
@@ -160,9 +204,55 @@ private final class CubeRendererView: UIView {
             stopDisplayLink()
             resetMorphState()
             render(progress: isAppeared ? 1 : 0, timestamp: nil)
-        } else if isAppeared {
+        } else if isAppeared, !isMorphPaused {
             startAnimationIfNeeded()
         }
+    }
+
+    func setMorphPaused(_ value: Bool) {
+        guard isMorphPaused != value else { return }
+        isMorphPaused = value
+        if value {
+            stopDisplayLink()
+            render(progress: 1, timestamp: CACurrentMediaTime())
+        } else if isAppeared, !reduceMotion, rotationProgress > 0 {
+            startAnimationIfNeeded()
+            render(progress: 1, timestamp: CACurrentMediaTime())
+        } else if isAppeared, !reduceMotion {
+            startAnimationIfNeeded()
+        }
+    }
+
+    func setRotationProgress(_ value: CGFloat) {
+        let clamped = min(max(value, 0), 1)
+        guard rotationProgress != clamped else { return }
+
+        if rotationProgress == 0, clamped > 0 {
+            let orientation = currentFreeOrientation(at: CACurrentMediaTime())
+            rotationFromYaw = orientation.yaw
+            rotationFromPitch = orientation.pitch
+            rotationFromRoll = orientation.roll
+            phase = .morph
+        }
+
+        rotationProgress = clamped
+
+        if clamped >= 1 {
+            morphFromYaw = headerIconYaw
+            morphFromPitch = headerIconPitch
+            morphFromRoll = headerIconRoll
+            morphToYaw = headerIconYaw
+            morphToPitch = headerIconPitch
+            morphToRoll = headerIconRoll
+            morphSegmentStart = nil
+            stopDisplayLink()
+        }
+
+        if clamped > 0, clamped < 1, displayLink == nil {
+            startAnimationIfNeeded()
+        }
+
+        render(progress: 1, timestamp: CACurrentMediaTime())
     }
 
     func setAppeared(_ value: Bool) {
@@ -175,7 +265,9 @@ private final class CubeRendererView: UIView {
             } else {
                 animationStart = nil
                 resetMorphState()
-                startAnimationIfNeeded()
+                if !isMorphPaused {
+                    startAnimationIfNeeded()
+                }
             }
         } else {
             stopDisplayLink()
@@ -186,10 +278,9 @@ private final class CubeRendererView: UIView {
     }
 
     private func configureLayers() {
-        let ink = UIColor.label.cgColor
         for (index, layer) in edgeLayers.enumerated() {
             layer.fillColor = UIColor.clear.cgColor
-            layer.strokeColor = ink
+            layer.strokeColor = inkCGColor
             layer.lineWidth = 2
             layer.lineCap = .round
             layer.strokeStart = 0
@@ -200,15 +291,24 @@ private final class CubeRendererView: UIView {
             self.layer.addSublayer(layer)
         }
         for layer in vertexLayers {
-            layer.fillColor = ink
+            layer.fillColor = inkCGColor
             layer.opacity = 0
             layer.path = circlePath(at: .zero, radius: 3.5)
             self.layer.addSublayer(layer)
         }
     }
 
+    private func applyInkColor() {
+        for layer in edgeLayers {
+            layer.strokeColor = inkCGColor
+        }
+        for layer in vertexLayers {
+            layer.fillColor = inkCGColor
+        }
+    }
+
     private func startAnimationIfNeeded() {
-        guard displayLink == nil else { return }
+        guard displayLink == nil, !isMorphPaused else { return }
         displayLink = CADisplayLink(target: displayLinkProxy, selector: #selector(DisplayLinkProxy.tick(_:)))
         updateDisplayLinkFrameRate()
         displayLink?.add(to: .main, forMode: .common)
@@ -229,7 +329,14 @@ private final class CubeRendererView: UIView {
     }
 
     fileprivate func tick(_ timestamp: CFTimeInterval) {
-        guard isAppeared, !reduceMotion else { return }
+        guard isAppeared, !reduceMotion, !isMorphPaused else { return }
+        if rotationProgress > 0 {
+            render(progress: 1, timestamp: timestamp)
+            if rotationProgress >= 1 {
+                stopDisplayLink()
+            }
+            return
+        }
         if animationStart == nil { animationStart = timestamp }
         let progress = currentProgress(at: timestamp)
 
@@ -258,7 +365,11 @@ private final class CubeRendererView: UIView {
         morphToPitch = basePitch
         morphToRoll = baseRoll
         morphSegmentStart = nil
-        morphSegmentDuration = 4
+        morphSegmentDuration = morphSegmentDurationRange.upperBound
+        rotationProgress = 0
+        rotationFromYaw = nil
+        rotationFromPitch = nil
+        rotationFromRoll = nil
         invalidateConstructionGeometry()
         updateDisplayLinkFrameRate()
     }
@@ -280,8 +391,8 @@ private final class CubeRendererView: UIView {
         morphToPitch = target.pitch
         morphToRoll = target.roll
         morphSegmentDuration = immediate
-            ? Double.random(in: 0.6...0.85)
-            : Double.random(in: 0.65...0.95)
+            ? Double.random(in: morphSegmentImmediateDurationRange)
+            : Double.random(in: morphSegmentDurationRange)
         morphSegmentStart = timestamp
     }
 
@@ -300,12 +411,12 @@ private final class CubeRendererView: UIView {
         from current: (yaw: CGFloat, pitch: CGFloat, roll: CGFloat)? = nil,
         preferNoticeableChange: Bool = false
     ) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
-        let minimumDelta: CGFloat = preferNoticeableChange ? 0.18 : 0.08
+        let minimumDelta: CGFloat = preferNoticeableChange ? 0.1 : 0.045
         for _ in 0..<8 {
             let candidate = (
-                CGFloat.random(in: 0.2...1.4),
-                CGFloat.random(in: 0.22...0.78),
-                CGFloat.random(in: -0.32...0.32)
+                CGFloat.random(in: 0.35...1.05),
+                CGFloat.random(in: 0.28...0.62),
+                CGFloat.random(in: -0.16...0.16)
             )
             if let current {
                 let delta = abs(candidate.0 - current.yaw)
@@ -317,9 +428,9 @@ private final class CubeRendererView: UIView {
             }
         }
         return (
-            (current?.yaw ?? baseYaw) + 0.35,
-            (current?.pitch ?? basePitch) + 0.2,
-            (current?.roll ?? baseRoll) + 0.15
+            (current?.yaw ?? baseYaw) + 0.22,
+            (current?.pitch ?? basePitch) + 0.12,
+            (current?.roll ?? baseRoll) + 0.08
         )
     }
 
@@ -337,7 +448,7 @@ private final class CubeRendererView: UIView {
             : 1 - pow(-2 * clamped + 2, 3) / 2
     }
 
-    private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+    private func currentFreeOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
         guard phase == .morph, let timestamp, let morphSegmentStart else {
             return (baseYaw, basePitch, baseRoll)
         }
@@ -347,6 +458,21 @@ private final class CubeRendererView: UIView {
             morphFromPitch + (morphToPitch - morphFromPitch) * t,
             morphFromRoll + (morphToRoll - morphFromRoll) * t
         )
+    }
+
+    private func currentOrientation(at timestamp: CFTimeInterval?) -> (yaw: CGFloat, pitch: CGFloat, roll: CGFloat) {
+        if rotationProgress > 0 {
+            let fromYaw = rotationFromYaw ?? morphFromYaw
+            let fromPitch = rotationFromPitch ?? morphFromPitch
+            let fromRoll = rotationFromRoll ?? morphFromRoll
+            let t = rotationProgress
+            return (
+                fromYaw + (headerIconYaw - fromYaw) * t,
+                fromPitch + (headerIconPitch - fromPitch) * t,
+                fromRoll + (headerIconRoll - fromRoll) * t
+            )
+        }
+        return currentFreeOrientation(at: timestamp)
     }
 
     private func project(vertex: Vertex, center: CGPoint, half: CGFloat, yaw: CGFloat, pitch: CGFloat, roll: CGFloat) -> CGPoint {
@@ -477,7 +603,8 @@ private final class CubeRendererView: UIView {
         }
 
         for (index, edge) in edges.enumerated() {
-            let path = UIBezierPath()
+            let path = morphEdgePaths[index]
+            path.removeAllPoints()
             path.move(to: projected[edge.start])
             path.addLine(to: projected[edge.end])
             edgeLayers[index].path = path.cgPath
