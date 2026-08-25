@@ -215,6 +215,9 @@ private final class CubeRendererView: UIView {
         if value {
             stopDisplayLink()
             render(progress: 1, timestamp: CACurrentMediaTime())
+        } else if isAppeared, !reduceMotion, rotationProgress > 0 {
+            startAnimationIfNeeded()
+            render(progress: 1, timestamp: CACurrentMediaTime())
         } else if isAppeared, !reduceMotion {
             startAnimationIfNeeded()
         }
@@ -246,8 +249,6 @@ private final class CubeRendererView: UIView {
 
         if clamped > 0, displayLink == nil {
             startAnimationIfNeeded()
-        } else if clamped >= 1 {
-            stopDisplayLink()
         }
 
         render(progress: 1, timestamp: CACurrentMediaTime())
