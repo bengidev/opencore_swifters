@@ -335,7 +335,7 @@ struct OnboardingFeatureCardCarouselView: View {
                 isImageRevealed = true
             }
         } else {
-            withAnimation(revealSpring) {
+            withAnimation(revealDismissSpring) {
                 isImageRevealed = false
             }
             scheduleLoopResume()
@@ -383,6 +383,10 @@ struct OnboardingFeatureCardCarouselView: View {
 
     private var revealSpring: Animation {
         .spring(response: 0.44, dampingFraction: 0.86)
+    }
+
+    private var revealDismissSpring: Animation {
+        .spring(response: 0.28, dampingFraction: 0.88)
     }
 }
 
