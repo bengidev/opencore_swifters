@@ -403,9 +403,11 @@ private struct OnboardingFeatureCarouselCardView: View {
     let onRevealChanged: (Bool) -> Void
 
     @Environment(\.sharedPalette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ambientOffset: CGSize = .zero
     @State private var ambientTask: Task<Void, Never>?
     @State private var isPressing = false
+    @State private var pressCharge: CGFloat = 0
     @State private var holdRevealTask: Task<Void, Never>?
 
     private let revealHoldDuration: Duration = .milliseconds(380)
@@ -421,6 +423,12 @@ private struct OnboardingFeatureCarouselCardView: View {
 
     private var pressFeedbackSpring: Animation {
         .spring(response: 0.22, dampingFraction: 0.78)
+    }
+
+    private var pressChargeAnimation: Animation {
+        reduceMotion
+            ? .linear(duration: 0.12)
+            : .timingCurve(0.23, 1, 0.32, 1, duration: 0.38)
     }
 
     private var showsShadow: Bool {
@@ -504,6 +512,10 @@ private struct OnboardingFeatureCarouselCardView: View {
         holdRevealTask = nil
 
         if pressing {
+            withAnimation(pressChargeAnimation) {
+                pressCharge = 1
+            }
+
             holdRevealTask = Task {
                 try? await Task.sleep(for: revealHoldDuration)
                 guard !Task.isCancelled, isPressing else { return }
@@ -522,6 +534,10 @@ private struct OnboardingFeatureCarouselCardView: View {
         isPressing = false
         holdRevealTask?.cancel()
         holdRevealTask = nil
+
+        withAnimation(pressFeedbackSpring) {
+            pressCharge = 0
+        }
     }
 
     // MARK: - Card Layout
@@ -541,13 +557,27 @@ private struct OnboardingFeatureCarouselCardView: View {
                 .frame(height: layout.copyHeight, alignment: .top)
                 .frame(maxWidth: .infinity, alignment: .top)
                 .padding(.top, layout.heroHeight + layout.copySectionOffset)
+                .opacity(1 - pressCharge * 0.42)
+                .blur(radius: pressCharge * 1.6)
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .top)
         .clipped()
+        .overlay {
+            if pressCharge > 0, !isRevealed {
+                RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        palette.textPrimary.opacity(0.08 + Double(pressCharge) * 0.14),
+                        lineWidth: 1 + pressCharge * 0.6
+                    )
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private func heroImageStack(totalHeight: CGFloat, parallaxScale: CGFloat = 1) -> some View {
         heroImage(height: totalHeight, parallaxScale: parallaxScale)
+            .scaleEffect(1 + pressCharge * 0.05)
+            .animation(pressChargeAnimation, value: pressCharge)
             .overlay(alignment: .bottom) {
                 LinearGradient(
                     stops: [
