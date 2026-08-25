@@ -10,12 +10,15 @@ import UIKit
 struct OnboardingCubeView: View {
     let appeared: Bool
     let inkColor: Color
+    /// When true, construction may still run but idle morph pauses to yield GPU time to the carousel.
+    var morphPaused: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         OnboardingCubeUIKitView(
             appeared: appeared,
+            morphPaused: morphPaused,
             reduceMotion: reduceMotion,
             inkColor: inkColor
         )
@@ -25,6 +28,7 @@ struct OnboardingCubeView: View {
 
 private struct OnboardingCubeUIKitView: UIViewRepresentable {
     let appeared: Bool
+    let morphPaused: Bool
     let reduceMotion: Bool
     let inkColor: Color
 
@@ -35,6 +39,7 @@ private struct OnboardingCubeUIKitView: UIViewRepresentable {
     func updateUIView(_ view: CubeRendererView, context: Context) {
         view.setInkColor(UIColor(inkColor))
         view.setReduceMotion(reduceMotion)
+        view.setMorphPaused(morphPaused)
         view.setAppeared(appeared)
     }
 }
@@ -77,6 +82,7 @@ private final class CubeRendererView: UIView {
     private var displayLink: CADisplayLink?
     private var animationStart: CFTimeInterval?
     private var isAppeared = false
+    private var isMorphPaused = false
     private var reduceMotion: Bool
     private var lastBounds: CGRect = .zero
     private var constructionGeometryBounds: CGRect = .zero
@@ -141,7 +147,7 @@ private final class CubeRendererView: UIView {
         super.didMoveToWindow()
         if window == nil {
             stopDisplayLink()
-        } else if isAppeared && !reduceMotion {
+        } else if isAppeared && !reduceMotion && !isMorphPaused {
             startAnimationIfNeeded()
         }
     }
@@ -179,7 +185,18 @@ private final class CubeRendererView: UIView {
             stopDisplayLink()
             resetMorphState()
             render(progress: isAppeared ? 1 : 0, timestamp: nil)
-        } else if isAppeared {
+        } else if isAppeared, !isMorphPaused {
+            startAnimationIfNeeded()
+        }
+    }
+
+    func setMorphPaused(_ value: Bool) {
+        guard isMorphPaused != value else { return }
+        isMorphPaused = value
+        if value {
+            stopDisplayLink()
+            render(progress: 1, timestamp: CACurrentMediaTime())
+        } else if isAppeared, !reduceMotion {
             startAnimationIfNeeded()
         }
     }
@@ -194,7 +211,9 @@ private final class CubeRendererView: UIView {
             } else {
                 animationStart = nil
                 resetMorphState()
-                startAnimationIfNeeded()
+                if !isMorphPaused {
+                    startAnimationIfNeeded()
+                }
             }
         } else {
             stopDisplayLink()
@@ -235,7 +254,7 @@ private final class CubeRendererView: UIView {
     }
 
     private func startAnimationIfNeeded() {
-        guard displayLink == nil else { return }
+        guard displayLink == nil, !isMorphPaused else { return }
         displayLink = CADisplayLink(target: displayLinkProxy, selector: #selector(DisplayLinkProxy.tick(_:)))
         updateDisplayLinkFrameRate()
         displayLink?.add(to: .main, forMode: .common)
@@ -256,7 +275,7 @@ private final class CubeRendererView: UIView {
     }
 
     fileprivate func tick(_ timestamp: CFTimeInterval) {
-        guard isAppeared, !reduceMotion else { return }
+        guard isAppeared, !reduceMotion, !isMorphPaused else { return }
         if animationStart == nil { animationStart = timestamp }
         let progress = currentProgress(at: timestamp)
 
