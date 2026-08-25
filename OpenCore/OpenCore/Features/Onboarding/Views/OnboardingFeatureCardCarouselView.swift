@@ -16,6 +16,7 @@ struct OnboardingFeatureCardCarouselView: View {
     @State private var isUserDragging = false
     @State private var dragOriginScrollIndex: CGFloat = 0
     @State private var isImageRevealed = false
+    @State private var isScrollAnimating = false
     @State private var settleTask: Task<Void, Never>?
 
     private let features = OnboardingFeature.catalog
@@ -25,8 +26,12 @@ struct OnboardingFeatureCardCarouselView: View {
     /// Clear space between adjacent card edges when centred.
     private let cardInterCardGap: CGFloat = 14
     private let holdDuration: Duration = .seconds(4.4)
-    /// How far from center a card may sit on-screen (includes mid-swipe travel room).
-    private let viewportRelativeLimit: CGFloat = 2.0
+    /// Only mount cards within one step of center (focused ± 1).
+    private let viewportWindow: CGFloat = 1.05
+
+    private var isCarouselMoving: Bool {
+        isUserDragging || isScrollAnimating
+    }
 
     var body: some View {
         Group {
@@ -65,40 +70,37 @@ struct OnboardingFeatureCardCarouselView: View {
             let cardSize = cardDimensions(in: proxy.size)
             let cardWidth = cardSize.width
             let cardHeight = cardSize.height
+            let visibleIndices = visibleFeatureIndices(scroll: scrollIndex)
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                let ambient = ambientOffset(at: timeline.date)
+            ZStack {
+                ForEach(visibleIndices, id: \.self) { index in
+                    let relative = modularRelative(featureIndex: index, scroll: scrollIndex)
+                    let isFocused = abs(relative) < 0.05
+                    let isRevealed = isFocused && isImageRevealed
+                    let shouldAmbientBob = isFocused && !isRevealed && !isUserDragging && !isScrollAnimating
 
-                ZStack {
-                    ForEach(features.indices, id: \.self) { index in
-                        let relative = modularRelative(featureIndex: index, scroll: scrollIndex)
-                        let isFocused = abs(relative) < 0.05
-                        let isNearViewport = abs(relative) <= viewportRelativeLimit
-                        let isRevealed = isFocused && isImageRevealed
-
-                        OnboardingFeatureCarouselCardView(
-                            feature: features[index],
-                            relativePosition: relative,
-                            cardWidth: cardWidth,
-                            cardHeight: cardHeight,
-                            ambientOffset: isFocused && !isRevealed && !isUserDragging ? ambient : .zero,
-                            isFocused: isFocused,
-                            isRevealed: isRevealed,
-                            onRevealChanged: setImageRevealed
-                        )
-                        .frame(width: cardWidth, height: cardHeight)
-                        .scaleEffect(cardScale(for: relative, isRevealed: isRevealed))
-                        .blur(radius: cardBlur(for: relative, isRevealed: isRevealed))
-                        .opacity(cardVisibilityOpacity(for: relative))
-                        .offset(x: cardXOffset(for: relative, cardWidth: cardWidth))
-                        .zIndex(cardZIndex(for: relative, isRevealed: isRevealed))
-                        .allowsHitTesting(isNearViewport)
-                    }
+                    OnboardingFeatureCarouselCardView(
+                        feature: features[index],
+                        relativePosition: relative,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        shouldAmbientBob: shouldAmbientBob,
+                        isFocused: isFocused,
+                        isRevealed: isRevealed,
+                        onRevealChanged: setImageRevealed
+                    )
+                    .frame(width: cardWidth, height: cardHeight)
+                    .scaleEffect(cardScale(for: relative, isRevealed: isRevealed))
+                    .blur(radius: cardBlur(for: relative, isRevealed: isRevealed))
+                    .opacity(cardOpacity(for: relative))
+                    .offset(x: cardXOffset(for: relative, cardWidth: cardWidth))
+                    .zIndex(cardZIndex(for: relative, isRevealed: isRevealed))
+                    .allowsHitTesting(abs(relative) <= 1)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .gesture(isImageRevealed ? nil : carouselDragGesture(cardWidth: cardWidth))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(isImageRevealed ? nil : carouselDragGesture(cardWidth: cardWidth))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(currentFeatureAccessibilityLabel)
@@ -121,7 +123,7 @@ struct OnboardingFeatureCardCarouselView: View {
                 relativePosition: 0,
                 cardWidth: cardWidth,
                 cardHeight: cardHeight,
-                ambientOffset: .zero,
+                shouldAmbientBob: false,
                 isFocused: true,
                 isRevealed: isImageRevealed,
                 onRevealChanged: setImageRevealed
@@ -168,24 +170,23 @@ struct OnboardingFeatureCardCarouselView: View {
     private func cardScale(for relative: CGFloat, isRevealed: Bool = false) -> CGFloat {
         if isRevealed { return 1.05 }
         let distance = min(abs(relative), 1)
-        return 1 - (distance * 0.06)
+        return 1 - (distance * 0.08)
     }
 
-    private func cardBlur(for relative: CGFloat, isRevealed: Bool = false) -> CGFloat {
+    private func cardBlur(for relative: CGFloat, isRevealed: Bool) -> CGFloat {
         if isRevealed { return 0 }
         let distance = min(abs(relative), 1)
-        return distance * 4.5
+        return distance * 1.5
     }
 
     private func cardOpacity(for relative: CGFloat) -> Double {
         let distance = min(abs(relative), 1)
-        return 1 - (Double(distance) * 0.22)
+        return 1 - (Double(distance) * 0.28)
     }
 
-    private func cardVisibilityOpacity(for relative: CGFloat) -> Double {
-        let distance = abs(relative)
-        if distance > viewportRelativeLimit { return 0 }
-        return cardOpacity(for: relative)
+    private func visibleFeatureIndices(scroll: CGFloat) -> [Int] {
+        let window = isCarouselMoving ? 1.2 : viewportWindow
+        return features.indices.filter { abs(modularRelative(featureIndex: $0, scroll: scroll)) <= window }
     }
 
     private func cardDimensions(in size: CGSize) -> CGSize {
@@ -214,6 +215,7 @@ struct OnboardingFeatureCardCarouselView: View {
 
                 if !isUserDragging {
                     isUserDragging = true
+                    isScrollAnimating = true
                     settleTask?.cancel()
                     settleTask = nil
 
@@ -237,6 +239,7 @@ struct OnboardingFeatureCardCarouselView: View {
             }
             .onEnded { value in
                 isUserDragging = false
+                isScrollAnimating = true
 
                 let anchor = dragOriginScrollIndex
                 let flickDistance = value.predictedEndTranslation.width - value.translation.width
@@ -258,6 +261,7 @@ struct OnboardingFeatureCardCarouselView: View {
 
     private func nudgeCarousel(by delta: Int, animated: Bool) {
         pauseLoopForUserInteraction()
+        isScrollAnimating = true
 
         if animated {
             withAnimation(carouselSpring) {
@@ -300,6 +304,7 @@ struct OnboardingFeatureCardCarouselView: View {
             withTransaction(transaction) {
                 normalizeScrollIndexIfNeeded()
             }
+            isScrollAnimating = false
         }
     }
 
@@ -336,14 +341,6 @@ struct OnboardingFeatureCardCarouselView: View {
         }
     }
 
-    private func ambientOffset(at date: Date) -> CGSize {
-        let t = date.timeIntervalSinceReferenceDate
-        return CGSize(
-            width: sin(t * 0.55) * 2.5,
-            height: sin(t * 0.72 + 0.6) * 4
-        )
-    }
-
     // MARK: - Loop
 
     private func startLoop() {
@@ -370,6 +367,7 @@ struct OnboardingFeatureCardCarouselView: View {
     private func advanceCarousel() {
         guard features.count > 1, !isUserDragging, !isImageRevealed else { return }
 
+        isScrollAnimating = true
         let nextIndex = scrollIndex + 1
         withAnimation(carouselSpring) {
             scrollIndex = nextIndex
@@ -394,12 +392,14 @@ private struct OnboardingFeatureCarouselCardView: View {
     let relativePosition: CGFloat
     let cardWidth: CGFloat
     let cardHeight: CGFloat
-    let ambientOffset: CGSize
+    let shouldAmbientBob: Bool
     let isFocused: Bool
     let isRevealed: Bool
     let onRevealChanged: (Bool) -> Void
 
     @Environment(\.sharedPalette) private var palette
+    @State private var ambientOffset: CGSize = .zero
+    @State private var ambientTask: Task<Void, Never>?
 
     private var layout: CardLayoutMetrics {
         CardLayoutMetrics(cardWidth: cardWidth, cardHeight: cardHeight)
@@ -407,6 +407,10 @@ private struct OnboardingFeatureCarouselCardView: View {
 
     private var revealSpring: Animation {
         .spring(response: 0.44, dampingFraction: 0.86)
+    }
+
+    private var showsShadow: Bool {
+        isRevealed || abs(relativePosition) < 0.05
     }
 
     var body: some View {
@@ -430,17 +434,20 @@ private struct OnboardingFeatureCarouselCardView: View {
                 .strokeBorder(palette.lineSoft.opacity(palette.isDark ? 0.45 : 0.85), lineWidth: 1)
         )
         .shadow(
-            color: palette.elevation(.popover),
+            color: showsShadow ? palette.elevation(.popover) : .clear,
             radius: isRevealed
                 ? layout.focusedShadowRadius * 1.15
-                : (abs(relativePosition) < 0.05 ? layout.focusedShadowRadius : layout.sideShadowRadius),
+                : layout.focusedShadowRadius,
             y: isRevealed
                 ? layout.focusedShadowY * 1.2
-                : (abs(relativePosition) < 0.05 ? layout.focusedShadowY : layout.sideShadowY)
+                : layout.focusedShadowY
         )
         .offset(ambientOffset)
         .animation(revealSpring, value: isRevealed)
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous))
+        .onAppear { syncAmbientBob() }
+        .onChange(of: shouldAmbientBob) { _, _ in syncAmbientBob() }
+        .onDisappear { stopAmbientBob() }
         .onLongPressGesture(
             minimumDuration: 0.38,
             maximumDistance: 14,
@@ -484,28 +491,44 @@ private struct OnboardingFeatureCarouselCardView: View {
     }
 
     private func heroImageStack(totalHeight: CGFloat, parallaxScale: CGFloat = 1) -> some View {
-        ZStack(alignment: .bottom) {
-            heroImage(height: totalHeight, parallaxScale: parallaxScale)
-                .frame(width: cardWidth, height: totalHeight, alignment: .top)
-
-            heroImage(height: totalHeight, parallaxScale: parallaxScale)
-                .frame(width: cardWidth, height: totalHeight, alignment: .top)
-                .drawingGroup(opaque: false)
-                .blur(radius: 26)
-                .frame(width: cardWidth, height: layout.transitionBlendHeight, alignment: .bottom)
-                .clipped()
-                .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .white.opacity(0.55), location: 0.35),
-                            .init(color: .white, location: 1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        heroImage(height: totalHeight, parallaxScale: parallaxScale)
+            .overlay(alignment: .bottom) {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: palette.surfacePaper.opacity(palette.isDark ? 0.22 : 0.28), location: 0.45),
+                        .init(color: palette.surfacePaper.opacity(palette.isDark ? 0.55 : 0.62), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
+                .frame(height: layout.transitionBlendHeight * 1.6)
+                .allowsHitTesting(false)
+            }
+    }
+
+    private func syncAmbientBob() {
+        stopAmbientBob()
+        guard shouldAmbientBob else {
+            ambientOffset = .zero
+            return
         }
+
+        ambientTask = Task {
+            while !Task.isCancelled {
+                let t = Date().timeIntervalSinceReferenceDate
+                ambientOffset = CGSize(
+                    width: sin(t * 0.55) * 2.5,
+                    height: sin(t * 0.72 + 0.6) * 4
+                )
+                try? await Task.sleep(for: .milliseconds(66))
+            }
+        }
+    }
+
+    private func stopAmbientBob() {
+        ambientTask?.cancel()
+        ambientTask = nil
     }
 
     private func heroFadeMask(totalHeight: CGFloat) -> LinearGradient {
