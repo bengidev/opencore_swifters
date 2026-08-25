@@ -175,8 +175,9 @@ struct OnboardingFeatureCardCarouselView: View {
 
     private func cardBlur(for relative: CGFloat, isRevealed: Bool) -> CGFloat {
         if isRevealed { return 0 }
-        let distance = min(abs(relative), 1)
-        return distance * 1.5
+        // Dead zone near center so spring overshoot doesn't pulse blur on the settling card.
+        let distance = min(max(abs(relative) - 0.12, 0) / 0.88, 1)
+        return distance * distance * 2.2
     }
 
     private func cardOpacity(for relative: CGFloat) -> Double {
@@ -293,7 +294,7 @@ struct OnboardingFeatureCardCarouselView: View {
     }
 
     @MainActor
-    private func settleScrollIndex(after delay: Duration = .milliseconds(620)) {
+    private func settleScrollIndex(after delay: Duration = .milliseconds(920)) {
         settleTask?.cancel()
         settleTask = Task {
             try? await Task.sleep(for: delay)
@@ -377,7 +378,7 @@ struct OnboardingFeatureCardCarouselView: View {
     }
 
     private var carouselSpring: Animation {
-        .spring(response: 0.58, dampingFraction: 0.84)
+        .spring(response: 0.58, dampingFraction: 0.90)
     }
 
     private var revealSpring: Animation {
@@ -510,20 +511,63 @@ private struct OnboardingFeatureCarouselCardView: View {
     private func syncAmbientBob() {
         stopAmbientBob()
         guard shouldAmbientBob else {
-            ambientOffset = .zero
+            easeAmbientBob(to: .zero)
             return
         }
 
         ambientTask = Task {
-            while !Task.isCancelled {
-                let t = Date().timeIntervalSinceReferenceDate
-                ambientOffset = CGSize(
-                    width: sin(t * 0.55) * 2.5,
-                    height: sin(t * 0.72 + 0.6) * 4
-                )
+            let rampFrames = 9
+            for frame in 1...rampFrames {
+                guard !Task.isCancelled, shouldAmbientBob else { return }
+                let progress = easeInCubic(CGFloat(frame) / CGFloat(rampFrames))
+                applyAmbientOffset(amplitude: progress)
+                try? await Task.sleep(for: .milliseconds(66))
+            }
+
+            while !Task.isCancelled, shouldAmbientBob {
+                applyAmbientOffset(amplitude: 1)
                 try? await Task.sleep(for: .milliseconds(66))
             }
         }
+    }
+
+    private func easeAmbientBob(to target: CGSize) {
+        let start = ambientOffset
+        guard start != target else {
+            ambientOffset = target
+            return
+        }
+
+        ambientTask = Task {
+            let rampFrames = 6
+            for frame in 1...rampFrames {
+                guard !Task.isCancelled, !shouldAmbientBob else { return }
+                let progress = easeOutCubic(CGFloat(frame) / CGFloat(rampFrames))
+                ambientOffset = CGSize(
+                    width: start.width + (target.width - start.width) * progress,
+                    height: start.height + (target.height - start.height) * progress
+                )
+                try? await Task.sleep(for: .milliseconds(66))
+            }
+            ambientOffset = target
+        }
+    }
+
+    private func applyAmbientOffset(amplitude: CGFloat) {
+        let t = Date().timeIntervalSinceReferenceDate
+        ambientOffset = CGSize(
+            width: sin(t * 0.55) * 2.5 * amplitude,
+            height: sin(t * 0.72 + 0.6) * 4 * amplitude
+        )
+    }
+
+    private func easeInCubic(_ value: CGFloat) -> CGFloat {
+        value * value * value
+    }
+
+    private func easeOutCubic(_ value: CGFloat) -> CGFloat {
+        let inverse = 1 - value
+        return 1 - (inverse * inverse * inverse)
     }
 
     private func stopAmbientBob() {
