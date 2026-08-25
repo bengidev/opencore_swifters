@@ -23,7 +23,7 @@ struct OnboardingSinglePageView: View {
     private let headerTopPadding: CGFloat = 18
     private let headerHorizontalPadding: CGFloat = 24
     private let footerBottomPadding: CGFloat = 2
-    private let carouselFadeDelay: Duration = .milliseconds(220)
+    private let carouselFadeDelay: Duration = .milliseconds(780)
 
     var body: some View {
         GeometryReader { proxy in
@@ -47,6 +47,7 @@ struct OnboardingSinglePageView: View {
                 OnboardingHeroCubeOverlay(
                     morph: heroMorph,
                     appeared: cubeAppeared,
+                    morphPaused: showCarousel && carouselRevealed,
                     containerSize: proxy.size,
                     inkColor: palette.textPrimary,
                     largeSize: heroLargeSize,
@@ -284,6 +285,7 @@ private struct OnboardingTransformedLayout: View {
 private struct OnboardingHeroCubeOverlay: View, Animatable {
     var morph: CGFloat
     let appeared: Bool
+    let morphPaused: Bool
     let containerSize: CGSize
     let inkColor: Color
     let largeSize: CGFloat
@@ -307,7 +309,7 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
             safeTop: safeTop
         )
 
-        OnboardingCubeView(appeared: appeared, inkColor: inkColor)
+        OnboardingCubeView(appeared: appeared, inkColor: inkColor, morphPaused: morphPaused)
             .frame(width: layout.size, height: layout.size)
             .position(x: layout.center.x, y: layout.center.y)
     }
