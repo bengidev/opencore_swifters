@@ -26,6 +26,8 @@ struct OnboardingSinglePageView: View {
     private let headerHorizontalPadding: CGFloat = 24
     private let footerBottomPadding: CGFloat = 2
     private let carouselFadeDelay: Duration = .milliseconds(780)
+    /// Time the large centered cube stays on screen before the header transition begins.
+    private let heroShowoffDelay: Duration = .milliseconds(1750)
     private let heroRotationSettleDelay: Duration = .milliseconds(500)
     private let heroShrinkPauseDelay: Duration = .milliseconds(320)
 
@@ -151,7 +153,7 @@ struct OnboardingSinglePageView: View {
         transitionTask?.cancel()
         transitionTask = Task {
             if !reduceMotion {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                try? await Task.sleep(for: heroShowoffDelay)
                 guard !Task.isCancelled else { return }
             }
 
