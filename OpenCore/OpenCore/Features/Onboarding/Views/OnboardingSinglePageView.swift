@@ -96,13 +96,19 @@ struct OnboardingSinglePageView: View {
         let center: CGPoint
     }
 
+    /// Fraction of `heroTransition` where the big cube finishes rotating into the isometric pose.
+    private static let heroRotationEndTransition: CGFloat = 0.38
+    /// Fraction where shrink to the header begins — the gap before this is the isometric settle beat.
+    private static let heroMorphStartTransition: CGFloat = 0.54
+
     static func heroRotationProgress(from transition: CGFloat) -> CGFloat {
-        let raw = min(max(transition / 0.48, 0), 1)
+        let raw = min(max(transition / heroRotationEndTransition, 0), 1)
         return 1 - pow(1 - raw, 2)
     }
 
     static func heroMorphProgress(from transition: CGFloat) -> CGFloat {
-        let raw = (transition - 0.28) / 0.72
+        let span = max(1 - heroMorphStartTransition, 0.001)
+        let raw = (transition - heroMorphStartTransition) / span
         let clamped = min(max(raw, 0), 1)
         return 1 - pow(1 - clamped, 3)
     }
@@ -157,7 +163,7 @@ struct OnboardingSinglePageView: View {
     private var heroTransitionAnimation: Animation {
         reduceMotion
             ? .easeInOut(duration: 0.35)
-            : .smooth(duration: 0.92, extraBounce: 0)
+            : .smooth(duration: 1.02, extraBounce: 0)
     }
 
     // MARK: - Animation Curves
