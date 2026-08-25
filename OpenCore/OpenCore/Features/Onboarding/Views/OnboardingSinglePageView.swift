@@ -11,6 +11,8 @@ struct OnboardingSinglePageView: View {
     @State private var cubeAppeared = false
     /// 0 = large centered hero, 1 = docked header icon. Interpolated by the hero spring.
     @State private var heroMorph: CGFloat = 0
+    /// 0 = idle cube morph, 1 = locked to the header isometric wireframe pose.
+    @State private var heroRotation: CGFloat = 0
     @State private var isTransformed = false
     @State private var showCarousel = false
     @State private var carouselRevealed = false
@@ -24,6 +26,8 @@ struct OnboardingSinglePageView: View {
     private let headerHorizontalPadding: CGFloat = 24
     private let footerBottomPadding: CGFloat = 2
     private let carouselFadeDelay: Duration = .milliseconds(780)
+    private let heroRotationSettleDelay: Duration = .milliseconds(500)
+    private let heroShrinkPauseDelay: Duration = .milliseconds(320)
 
     var body: some View {
         GeometryReader { proxy in
@@ -46,6 +50,7 @@ struct OnboardingSinglePageView: View {
 
                 OnboardingHeroCubeOverlay(
                     morph: heroMorph,
+                    rotationProgress: heroRotation,
                     appeared: cubeAppeared,
                     morphPaused: showCarousel && carouselRevealed,
                     containerSize: proxy.size,
@@ -158,6 +163,7 @@ struct OnboardingSinglePageView: View {
 
     @MainActor
     private func triggerHeroTransformation() {
+        let rotationSpring = Animation.spring(response: 0.52, dampingFraction: 0.84)
         let transformationSpring = Animation.spring(
             response: 0.75,
             dampingFraction: 0.82,
@@ -165,18 +171,34 @@ struct OnboardingSinglePageView: View {
         )
 
         if reduceMotion {
+            heroRotation = 1
             withAnimation(.easeInOut(duration: 0.35)) {
                 heroMorph = 1
                 isTransformed = true
             }
-        } else {
-            withAnimation(transformationSpring) {
-                heroMorph = 1
-                isTransformed = true
-            }
+            scheduleCarouselAppearance()
+            return
         }
 
-        scheduleCarouselAppearance()
+        withAnimation(rotationSpring) {
+            heroRotation = 1
+        }
+
+        transitionTask?.cancel()
+        transitionTask = Task {
+            try? await Task.sleep(for: heroRotationSettleDelay)
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: heroShrinkPauseDelay)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                withAnimation(transformationSpring) {
+                    heroMorph = 1
+                    isTransformed = true
+                }
+                scheduleCarouselAppearance()
+            }
+        }
     }
 
     @MainActor
@@ -284,6 +306,7 @@ private struct OnboardingTransformedLayout: View {
 
 private struct OnboardingHeroCubeOverlay: View, Animatable {
     var morph: CGFloat
+    var rotationProgress: CGFloat
     let appeared: Bool
     let morphPaused: Bool
     let containerSize: CGSize
@@ -294,8 +317,12 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
     let headerHorizontalPadding: CGFloat
     let safeTop: CGFloat
 
-    var animatableData: CGFloat {
-        morph
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(morph, rotationProgress) }
+        set {
+            morph = newValue.first
+            rotationProgress = newValue.second
+        }
     }
 
     var body: some View {
@@ -309,7 +336,12 @@ private struct OnboardingHeroCubeOverlay: View, Animatable {
             safeTop: safeTop
         )
 
-        OnboardingCubeView(appeared: appeared, inkColor: inkColor, morphPaused: morphPaused)
+        OnboardingCubeView(
+            appeared: appeared,
+            inkColor: inkColor,
+            morphPaused: morphPaused,
+            rotationProgress: rotationProgress
+        )
             .frame(width: layout.size, height: layout.size)
             .position(x: layout.center.x, y: layout.center.y)
     }
