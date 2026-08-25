@@ -405,6 +405,11 @@ private struct OnboardingFeatureCarouselCardView: View {
     @Environment(\.sharedPalette) private var palette
     @State private var ambientOffset: CGSize = .zero
     @State private var ambientTask: Task<Void, Never>?
+    @State private var isPressing = false
+    @State private var holdRevealTask: Task<Void, Never>?
+
+    private let revealHoldDuration: Duration = .milliseconds(380)
+    private let pressMaximumDistance: CGFloat = 14
 
     private var layout: CardLayoutMetrics {
         CardLayoutMetrics(cardWidth: cardWidth, cardHeight: cardHeight)
@@ -452,25 +457,60 @@ private struct OnboardingFeatureCarouselCardView: View {
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous))
         .onAppear { syncAmbientBob() }
         .onChange(of: shouldAmbientBob) { _, _ in syncAmbientBob() }
-        .onDisappear { stopAmbientBob() }
-        .onLongPressGesture(
-            minimumDuration: 0.38,
-            maximumDistance: 14,
-            pressing: { pressing in
-                guard isFocused else { return }
-                if !pressing {
-                    onRevealChanged(false)
-                }
-            },
-            perform: {
-                guard isFocused else { return }
-                onRevealChanged(true)
+        .onChange(of: isFocused) { _, focused in
+            if !focused {
+                handlePressChanged(false)
             }
+        }
+        .onDisappear {
+            stopAmbientBob()
+            handlePressChanged(false)
+        }
+        .onLongPressGesture(
+            minimumDuration: 10_000,
+            maximumDistance: pressMaximumDistance,
+            pressing: { pressing in
+                handlePressChanged(pressing)
+            },
+            perform: {}
         )
         .sensoryFeedback(.impact(flexibility: .soft), trigger: isRevealed) { _, newValue in
             newValue
         }
-        .accessibilityHint(isFocused ? "Long press to preview the full artwork." : "")
+        .accessibilityHint(isFocused ? "Press and hold to preview the full artwork." : "")
+    }
+
+    private func handlePressChanged(_ pressing: Bool) {
+        guard isFocused else {
+            resetPressState()
+            return
+        }
+
+        guard pressing != isPressing else { return }
+
+        isPressing = pressing
+        holdRevealTask?.cancel()
+        holdRevealTask = nil
+
+        if pressing {
+            holdRevealTask = Task {
+                try? await Task.sleep(for: revealHoldDuration)
+                guard !Task.isCancelled, isPressing else { return }
+                await MainActor.run {
+                    guard isPressing else { return }
+                    onRevealChanged(true)
+                }
+            }
+        } else {
+            resetPressState()
+            onRevealChanged(false)
+        }
+    }
+
+    private func resetPressState() {
+        isPressing = false
+        holdRevealTask?.cancel()
+        holdRevealTask = nil
     }
 
     // MARK: - Card Layout
