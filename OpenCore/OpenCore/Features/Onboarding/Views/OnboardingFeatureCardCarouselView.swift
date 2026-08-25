@@ -419,6 +419,10 @@ private struct OnboardingFeatureCarouselCardView: View {
         .spring(response: 0.44, dampingFraction: 0.86)
     }
 
+    private var pressFeedbackSpring: Animation {
+        .spring(response: 0.22, dampingFraction: 0.78)
+    }
+
     private var showsShadow: Bool {
         isRevealed || abs(relativePosition) < 0.05
     }
@@ -453,6 +457,8 @@ private struct OnboardingFeatureCarouselCardView: View {
                 : layout.focusedShadowY
         )
         .offset(ambientOffset)
+        .scaleEffect(pressScale)
+        .animation(pressFeedbackSpring, value: isPressing)
         .animation(revealSpring, value: isRevealed)
         .contentShape(RoundedRectangle(cornerRadius: layout.cornerRadius, style: .continuous))
         .onAppear { syncAmbientBob() }
@@ -478,6 +484,11 @@ private struct OnboardingFeatureCarouselCardView: View {
             newValue
         }
         .accessibilityHint(isFocused ? "Press and hold to preview the full artwork." : "")
+    }
+
+    private var pressScale: CGFloat {
+        guard isPressing, !isRevealed else { return 1 }
+        return 0.97
     }
 
     private func handlePressChanged(_ pressing: Bool) {
