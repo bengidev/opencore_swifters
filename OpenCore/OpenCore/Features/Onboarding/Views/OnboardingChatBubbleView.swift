@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import ThinkingOrbsKit
 
 /// Left/right chat bubble for onboarding — user prompts on the right, thinking orbs
@@ -12,8 +13,12 @@ struct OnboardingChatBubbleView: View {
 
     private let cornerRadius: CGFloat = 20
     private let oppositeSpacerMinWidth: CGFloat = 52
-    private let maxBubbleWidth: CGFloat = 280
+    private let maxBubbleWidthRatio: CGFloat = 0.8
     private let thinkingOrbDisplaySize: CGFloat = 34
+
+    private var maxBubbleWidth: CGFloat {
+        UIScreen.main.bounds.width * maxBubbleWidthRatio
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
@@ -100,7 +105,7 @@ struct OnboardingChatBubbleView: View {
         HStack(alignment: .top, spacing: 12) {
             featureOrb
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(message.feature?.title ?? "")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.textPrimary)
