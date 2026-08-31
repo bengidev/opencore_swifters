@@ -311,11 +311,15 @@ private struct OnboardingTransformedLayout: View {
     }
 
     private var swipeToStartSection: some View {
-        OnboardingSwipeToStartView(isUnlocked: $swipeCompleted, onComplete: onComplete)
-            .opacity(isTransformed ? 1 : 0)
-            .offset(y: isTransformed ? 0 : 28)
-            .blur(radius: isTransformed || reduceMotion ? 0 : 4)
-            .animation(swipeSectionAnimation, value: isTransformed)
+        VStack(spacing: 14) {
+            OnboardingUsageNoticeView()
+
+            OnboardingSwipeToStartView(isUnlocked: $swipeCompleted, onComplete: onComplete)
+        }
+        .opacity(isTransformed ? 1 : 0)
+        .offset(y: isTransformed ? 0 : 28)
+        .blur(radius: isTransformed || reduceMotion ? 0 : 4)
+        .animation(swipeSectionAnimation, value: isTransformed)
     }
 }
 
