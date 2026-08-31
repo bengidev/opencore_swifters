@@ -12,6 +12,9 @@ struct OnboardingUsageNoticeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .accessibilityIdentifier("onboarding-usage-notice")
+            .accessibilityLabel(
+                "The default key is free to start with, but daily token and turn limits apply. Bring your own API key in Settings for higher limits and full provider access."
+            )
     }
 }
 
