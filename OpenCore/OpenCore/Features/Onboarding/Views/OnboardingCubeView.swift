@@ -10,7 +10,7 @@ import UIKit
 struct OnboardingCubeView: View {
     let appeared: Bool
     let inkColor: Color
-    /// When true, construction may still run but idle morph pauses to yield GPU time to the carousel.
+    /// When true, construction may still run but idle morph pauses to yield GPU time to the chat feed.
     var morphPaused: Bool = false
     /// Hero rotation progress — settles the cube into the header isometric pose before shrink.
     var rotationProgress: CGFloat = 0
