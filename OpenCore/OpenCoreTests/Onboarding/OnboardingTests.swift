@@ -102,6 +102,41 @@ struct OnboardingFlowControllerTests {
 }
 
 @MainActor
+@Suite("OnboardingFeature Tests")
+struct OnboardingFeatureTests {
+
+    @Test("Catalog entries include descriptions for assistant bubbles")
+    func catalogDescriptions() {
+        for feature in OnboardingFeature.catalog {
+            #expect(!feature.description.isEmpty)
+            #expect(!feature.accessibilitySummary.isEmpty)
+        }
+    }
+
+    @Test("Accessibility summary matches title and subtitle")
+    func accessibilitySummary() {
+        let feature = OnboardingFeature.catalog[0]
+        #expect(feature.accessibilitySummary == "\(feature.title). \(feature.subtitle)")
+    }
+}
+
+@MainActor
+@Suite("OnboardingChatMessage Tests")
+struct OnboardingChatMessageTests {
+
+    @Test("Morph to assistant preserves message identity")
+    func morphPreservesIdentity() {
+        let feature = OnboardingFeature.catalog[0]
+        let thinking = OnboardingChatMessage.thinking(feature: feature)
+        let assistant = thinking.morphToAssistant()
+
+        #expect(assistant.id == thinking.id)
+        #expect(assistant.role == .assistant)
+        #expect(assistant.feature?.id == feature.id)
+    }
+}
+
+@MainActor
 @Suite("Theme Tests")
 struct ThemeTests {
 
