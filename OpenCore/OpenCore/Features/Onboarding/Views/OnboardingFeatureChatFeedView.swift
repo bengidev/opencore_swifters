@@ -9,6 +9,8 @@ struct OnboardingFeatureChatFeedView: View {
 
     @State private var feedItems: [OnboardingChatMessage] = []
     @State private var nextFeatureIndex = 0
+    @State private var focusedFeatureIndex = 0
+    @State private var accessibilityFeatureIndex = 0
     @State private var feedStep: FeedStep = .user
     @State private var feedTask: Task<Void, Never>?
 
@@ -35,12 +37,12 @@ struct OnboardingFeatureChatFeedView: View {
         }
         .onAppear {
             if isActive {
-                startFeedLoop()
+                activateFeedIfNeeded()
             }
         }
         .onChange(of: isActive) { _, active in
             if active {
-                startFeedLoop()
+                activateFeedIfNeeded()
             } else {
                 stopFeedLoop()
             }
@@ -71,6 +73,11 @@ struct OnboardingFeatureChatFeedView: View {
             .onChange(of: feedItems.last?.role) { _, _ in
                 scrollToBottom(proxy: proxy)
             }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(currentFeatureAccessibilityLabel)
+        .accessibilityAdjustableAction { direction in
+            nudgeFeed(by: direction == .increment ? 1 : -1)
         }
     }
 
@@ -106,9 +113,12 @@ struct OnboardingFeatureChatFeedView: View {
     // MARK: - Reduced Motion Fallback
 
     private var staticConversation: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        let catalog = OnboardingFeature.catalog
+        let feature = catalog.isEmpty ? nil : catalog[wrappedFeatureIndex(focusedFeatureIndex)]
+
+        return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: messageSpacing) {
-                ForEach(OnboardingFeature.catalog) { feature in
+                if let feature {
                     OnboardingChatBubbleView(message: .user(prompt: feature.userPrompt, feature: feature))
                     OnboardingChatBubbleView(message: .assistant(feature: feature))
                 }
@@ -116,19 +126,27 @@ struct OnboardingFeatureChatFeedView: View {
             .padding(.vertical, 6)
         }
         .mask(feedEdgeFade)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(currentFeatureAccessibilityLabel)
+        .accessibilityAdjustableAction { direction in
+            nudgeFocusedFeature(by: direction == .increment ? 1 : -1)
+        }
     }
 
     // MARK: - Feed Loop
 
+    private func activateFeedIfNeeded() {
+        guard !reduceMotion else { return }
+        startFeedLoop()
+    }
+
     private func startFeedLoop() {
         stopFeedLoop()
         feedItems = []
-        nextFeatureIndex = 0
         feedStep = .user
 
         feedTask = Task {
-            try? await Task.sleep(for: firstMessageDelay)
-            guard !Task.isCancelled, isActive else { return }
+            guard await sleepUnlessCancelled(for: firstMessageDelay) else { return }
 
             while !Task.isCancelled, isActive {
                 await advanceFeed()
@@ -150,12 +168,13 @@ struct OnboardingFeatureChatFeedView: View {
 
         switch feedStep {
         case .user:
+            accessibilityFeatureIndex = nextFeatureIndex
             withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
                 feedItems.append(.user(prompt: feature.userPrompt, feature: feature))
                 trimFeedIfNeeded()
             }
             feedStep = .thinking
-            try? await Task.sleep(for: afterUserDelay)
+            guard await sleepUnlessCancelled(for: afterUserDelay) else { return }
 
         case .thinking:
             withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
@@ -163,7 +182,7 @@ struct OnboardingFeatureChatFeedView: View {
                 trimFeedIfNeeded()
             }
             feedStep = .morph
-            try? await Task.sleep(for: thinkingDuration)
+            guard await sleepUnlessCancelled(for: thinkingDuration) else { return }
 
         case .morph:
             if let thinkingIndex = feedItems.lastIndex(where: { $0.role == .thinking }) {
@@ -173,7 +192,7 @@ struct OnboardingFeatureChatFeedView: View {
             }
             nextFeatureIndex = (nextFeatureIndex + 1) % catalog.count
             feedStep = .user
-            try? await Task.sleep(for: afterAssistantDelay)
+            guard await sleepUnlessCancelled(for: afterAssistantDelay) else { return }
         }
     }
 
@@ -181,5 +200,52 @@ struct OnboardingFeatureChatFeedView: View {
     private func trimFeedIfNeeded() {
         guard feedItems.count > maxVisibleItems else { return }
         feedItems.removeFirst(feedItems.count - maxVisibleItems)
+    }
+
+    @MainActor
+    private func sleepUnlessCancelled(for duration: Duration) async -> Bool {
+        do {
+            try await Task.sleep(for: duration)
+        } catch {
+            return false
+        }
+        return !Task.isCancelled && isActive
+    }
+
+    private var currentFeatureAccessibilityLabel: String {
+        let catalog = OnboardingFeature.catalog
+        guard !catalog.isEmpty else { return "Onboarding features" }
+
+        let index = reduceMotion ? focusedFeatureIndex : accessibilityFeatureIndex
+        return catalog[wrappedFeatureIndex(index)].accessibilitySummary
+    }
+
+    private func wrappedFeatureIndex(_ index: Int) -> Int {
+        let count = OnboardingFeature.catalog.count
+        guard count > 0 else { return 0 }
+        return ((index % count) + count) % count
+    }
+
+    private func nudgeFeed(by delta: Int) {
+        let catalog = OnboardingFeature.catalog
+        guard !catalog.isEmpty else { return }
+
+        stopFeedLoop()
+        let current = wrappedFeatureIndex(accessibilityFeatureIndex)
+        let target = wrappedFeatureIndex(current + delta)
+        nextFeatureIndex = target
+        accessibilityFeatureIndex = target
+        feedStep = .user
+        feedItems = []
+
+        if isActive {
+            activateFeedIfNeeded()
+        }
+    }
+
+    private func nudgeFocusedFeature(by delta: Int) {
+        let count = OnboardingFeature.catalog.count
+        guard count > 0 else { return }
+        focusedFeatureIndex = wrappedFeatureIndex(focusedFeatureIndex + delta)
     }
 }
