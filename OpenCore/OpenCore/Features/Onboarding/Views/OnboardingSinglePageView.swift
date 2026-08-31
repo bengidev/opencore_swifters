@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Single-page onboarding — one persistent cube hero animates from center to the header slot,
-/// then feature cards auto-swipe in a loop and the swipe CTA staggers in.
+/// then a looping chat feed and the swipe CTA stagger in.
 struct OnboardingSinglePageView: View {
     var onComplete: () async -> Bool = { true }
 
@@ -12,18 +12,19 @@ struct OnboardingSinglePageView: View {
     /// 0 = large centered hero, 1 = docked header icon with isometric pose locked.
     @State private var heroTransition: CGFloat = 0
     @State private var isTransformed = false
-    @State private var showCarousel = false
-    @State private var carouselRevealed = false
+    @State private var showChatFeed = false
+    @State private var chatFeedRevealed = false
     @State private var swipeCompleted = false
     @State private var transitionTask: Task<Void, Never>?
-    @State private var carouselMountTask: Task<Void, Never>?
+    @State private var chatFeedMountTask: Task<Void, Never>?
 
     private let heroLargeSize: CGFloat = 220
     private let heroSmallSize: CGFloat = 36
     private let headerTopPadding: CGFloat = 18
     private let headerHorizontalPadding: CGFloat = 24
+    private let chatVerticalInset: CGFloat = 44
     private let footerBottomPadding: CGFloat = 2
-    private let carouselFadeDelay: Duration = .milliseconds(780)
+    private let chatFeedFadeDelay: Duration = .milliseconds(780)
     /// Time the large centered cube stays on screen before the header transition begins.
     private let heroShowoffDelay: Duration = .milliseconds(1750)
 
@@ -32,24 +33,25 @@ struct OnboardingSinglePageView: View {
             ZStack(alignment: .topLeading) {
                 OnboardingTransformedLayout(
                     isTransformed: isTransformed,
-                    showCarousel: showCarousel,
-                    carouselRevealed: carouselRevealed,
+                    showChatFeed: showChatFeed,
+                    chatFeedRevealed: chatFeedRevealed,
                     swipeCompleted: $swipeCompleted,
                     heroSmallSize: heroSmallSize,
                     headerTopPadding: headerTopPadding,
                     headerHorizontalPadding: headerHorizontalPadding,
+                    chatVerticalInset: chatVerticalInset,
                     footerBottomPadding: footerBottomPadding,
                     reduceMotion: reduceMotion,
                     headerTitleAnimation: headerTitleAnimation,
                     swipeSectionAnimation: swipeSectionAnimation,
-                    carouselFadeAnimation: carouselFadeAnimation,
+                    chatFeedFadeAnimation: chatFeedFadeAnimation,
                     onComplete: onComplete
                 )
 
                 OnboardingHeroCubeOverlay(
                     transition: heroTransition,
                     appeared: cubeAppeared,
-                    morphPaused: showCarousel && carouselRevealed,
+                    morphPaused: showChatFeed && chatFeedRevealed,
                     containerSize: proxy.size,
                     inkColor: palette.textPrimary,
                     largeSize: heroLargeSize,
@@ -74,8 +76,8 @@ struct OnboardingSinglePageView: View {
         .onDisappear {
             transitionTask?.cancel()
             transitionTask = nil
-            carouselMountTask?.cancel()
-            carouselMountTask = nil
+            chatFeedMountTask?.cancel()
+            chatFeedMountTask = nil
         }
     }
 
@@ -180,7 +182,7 @@ struct OnboardingSinglePageView: View {
             : .spring(response: 0.6, dampingFraction: 0.8).delay(0.62)
     }
 
-    private var carouselFadeAnimation: Animation {
+    private var chatFeedFadeAnimation: Animation {
         reduceMotion
             ? .easeOut(duration: 0.2)
             : .spring(response: 0.58, dampingFraction: 0.78)
@@ -207,7 +209,7 @@ struct OnboardingSinglePageView: View {
         if reduceMotion {
             heroTransition = 1
             isTransformed = true
-            scheduleCarouselAppearance()
+            scheduleChatFeedAppearance()
             return
         }
 
@@ -215,19 +217,19 @@ struct OnboardingSinglePageView: View {
             heroTransition = 1
             isTransformed = true
         }
-        scheduleCarouselAppearance()
+        scheduleChatFeedAppearance()
     }
 
     @MainActor
-    private func scheduleCarouselAppearance() {
-        carouselMountTask?.cancel()
-        carouselMountTask = Task {
-            try? await Task.sleep(for: carouselFadeDelay)
+    private func scheduleChatFeedAppearance() {
+        chatFeedMountTask?.cancel()
+        chatFeedMountTask = Task {
+            try? await Task.sleep(for: chatFeedFadeDelay)
             guard !Task.isCancelled, isTransformed else { return }
 
-            showCarousel = true
-            withAnimation(carouselFadeAnimation) {
-                carouselRevealed = true
+            showChatFeed = true
+            withAnimation(chatFeedFadeAnimation) {
+                chatFeedRevealed = true
             }
         }
     }
@@ -237,17 +239,18 @@ struct OnboardingSinglePageView: View {
 
 private struct OnboardingTransformedLayout: View {
     let isTransformed: Bool
-    let showCarousel: Bool
-    let carouselRevealed: Bool
+    let showChatFeed: Bool
+    let chatFeedRevealed: Bool
     @Binding var swipeCompleted: Bool
     let heroSmallSize: CGFloat
     let headerTopPadding: CGFloat
     let headerHorizontalPadding: CGFloat
+    let chatVerticalInset: CGFloat
     let footerBottomPadding: CGFloat
     let reduceMotion: Bool
     let headerTitleAnimation: Animation
     let swipeSectionAnimation: Animation
-    let carouselFadeAnimation: Animation
+    let chatFeedFadeAnimation: Animation
     var onComplete: () async -> Bool
 
     @Environment(\.sharedPalette) private var palette
@@ -261,17 +264,14 @@ private struct OnboardingTransformedLayout: View {
             }
 
             if isTransformed {
-                if showCarousel {
-                    OnboardingFeatureCardCarouselView(
-                        isActive: true,
-                        initialAdvanceDelay: .milliseconds(680)
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .layoutPriority(1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 14)
-                    .opacity(carouselRevealed ? 1 : 0)
-                    .animation(carouselFadeAnimation, value: carouselRevealed)
+                if showChatFeed {
+                    OnboardingFeatureChatFeedView(isActive: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .layoutPriority(1)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, chatVerticalInset)
+                        .opacity(chatFeedRevealed ? 1 : 0)
+                        .animation(chatFeedFadeAnimation, value: chatFeedRevealed)
                 } else {
                     Spacer(minLength: 0)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
