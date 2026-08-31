@@ -43,6 +43,7 @@ struct OnboardingChatBubbleView: View {
                     .fill(palette.controlStrong)
             )
             .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
+            .accessibilityLabel(message.text)
     }
 
     // MARK: - Assistant / Thinking (left)
@@ -85,6 +86,8 @@ struct OnboardingChatBubbleView: View {
         .background(bubbleBackground)
         .overlay(bubbleStroke)
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Thinking")
         .transition(
             .asymmetric(
                 insertion: .move(edge: .leading).combined(with: .opacity),
@@ -107,6 +110,15 @@ struct OnboardingChatBubbleView: View {
                     .foregroundStyle(palette.textSecondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let description = message.feature?.description, !description.isEmpty {
+                    Text(description)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(palette.textSecondary)
+                        .lineSpacing(3)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -114,6 +126,8 @@ struct OnboardingChatBubbleView: View {
         .background(bubbleBackground)
         .overlay(bubbleStroke)
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(assistantAccessibilityLabel)
         .transition(
             .asymmetric(
                 insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .leading)),
@@ -130,6 +144,11 @@ struct OnboardingChatBubbleView: View {
     private var bubbleStroke: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .strokeBorder(palette.lineSoft, lineWidth: 1)
+    }
+
+    private var assistantAccessibilityLabel: String {
+        guard let feature = message.feature else { return message.text }
+        return "\(feature.title). \(feature.subtitle). \(feature.description)"
     }
 
     private var featureOrb: some View {
@@ -195,12 +214,12 @@ struct OnboardingChatMessage: Identifiable {
     }
 
     static func assistant(feature: OnboardingFeature) -> OnboardingChatMessage {
-        OnboardingChatMessage(id: UUID(), role: .assistant, feature: feature, text: feature.subtitle)
+        OnboardingChatMessage(id: UUID(), role: .assistant, feature: feature, text: feature.accessibilitySummary)
     }
 
     func morphToAssistant() -> OnboardingChatMessage {
         guard let feature else { return self }
-        return OnboardingChatMessage(id: id, role: .assistant, feature: feature, text: feature.subtitle)
+        return OnboardingChatMessage(id: id, role: .assistant, feature: feature, text: feature.accessibilitySummary)
     }
 }
 
