@@ -22,7 +22,7 @@ struct OnboardingSinglePageView: View {
     private let heroSmallSize: CGFloat = 36
     private let headerTopPadding: CGFloat = 18
     private let headerHorizontalPadding: CGFloat = 24
-    private let chatVerticalInset: CGFloat = 44
+    private let chatVerticalInset: CGFloat = 14
     private let footerBottomPadding: CGFloat = 2
     private let chatFeedFadeDelay: Duration = .milliseconds(780)
     /// Time the large centered cube stays on screen before the header transition begins.
@@ -268,7 +268,7 @@ private struct OnboardingTransformedLayout: View {
                     OnboardingFeatureChatFeedView(isActive: true)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .layoutPriority(1)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 12)
                         .padding(.vertical, chatVerticalInset)
                         .opacity(chatFeedRevealed ? 1 : 0)
                         .animation(chatFeedFadeAnimation, value: chatFeedRevealed)
