@@ -15,6 +15,17 @@ struct OnboardingFeature: Identifiable {
         "\(title). \(subtitle)"
     }
 
+    /// Full spoken label for the adjustable chat feed, including the assistant description.
+    var feedAccessibilityLabel: String {
+        "\(title). \(subtitle). \(description)"
+    }
+
+    static func wrappedCatalogIndex(_ index: Int) -> Int {
+        let count = catalog.count
+        guard count > 0 else { return 0 }
+        return ((index % count) + count) % count
+    }
+
     /// Monochrome orb ramps derived from the shared palette.
     func orbColors(palette: SharedOpenCorePalette) -> [Color] {
         let ramps: [[Color]]
