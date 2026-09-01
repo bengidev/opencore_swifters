@@ -1,11 +1,19 @@
 import SwiftUI
 
+enum OnboardingChatFeedTiming {
+    static let firstMessageDelay: Duration = .milliseconds(350)
+    static let afterUserDelay: Duration = .milliseconds(450)
+    static let thinkingDuration: Duration = .milliseconds(1100)
+    static let afterAssistantDelay: Duration = .milliseconds(1300)
+}
+
 /// Alternating left/right chat feed — user prompts on the right, thinking orbs that morph
 /// into feature replies on the left, auto-scrolls upward, and loops forever while active.
 struct OnboardingFeatureChatFeedView: View {
     let isActive: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var bubbleNamespace
 
     @State private var feedItems: [OnboardingChatMessage] = []
     @State private var nextFeatureIndex = 0
@@ -16,10 +24,6 @@ struct OnboardingFeatureChatFeedView: View {
 
     private let messageSpacing: CGFloat = 10
     private let maxVisibleItems = 20
-    private let firstMessageDelay: Duration = .milliseconds(350)
-    private let afterUserDelay: Duration = .milliseconds(450)
-    private let thinkingDuration: Duration = .milliseconds(1100)
-    private let afterAssistantDelay: Duration = .milliseconds(1300)
 
     private enum FeedStep {
         case user
@@ -55,23 +59,29 @@ struct OnboardingFeatureChatFeedView: View {
     // MARK: - Animated Feed
 
     private var scrollingConversation: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: messageSpacing) {
-                    ForEach(feedItems) { message in
-                        OnboardingChatBubbleView(message: message)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: messageSpacing) {
+                        ForEach(feedItems) { message in
+                            OnboardingChatBubbleView(
+                                message: message,
+                                containerWidth: geometry.size.width,
+                                bubbleNamespace: bubbleNamespace
+                            )
                             .id(message.id)
                             .transition(chatTransition(for: message.role))
+                        }
                     }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
-            }
-            .mask(feedEdgeFade)
-            .onChange(of: feedItems.count) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: feedItems.last?.role) { _, _ in
-                scrollToBottom(proxy: proxy)
+                .mask(feedEdgeFade)
+                .onChange(of: feedItems.count) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
+                .onChange(of: feedItems.last?.role) { _, _ in
+                    scrollToBottom(proxy: proxy)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -83,8 +93,12 @@ struct OnboardingFeatureChatFeedView: View {
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         guard let lastID = feedItems.last?.id else { return }
-        withAnimation(.spring(response: 0.52, dampingFraction: 0.84)) {
+        if reduceMotion {
             proxy.scrollTo(lastID, anchor: .bottom)
+        } else {
+            withAnimation(.spring(response: 0.52, dampingFraction: 0.84)) {
+                proxy.scrollTo(lastID, anchor: .bottom)
+            }
         }
     }
 
@@ -116,16 +130,26 @@ struct OnboardingFeatureChatFeedView: View {
         let catalog = OnboardingFeature.catalog
         let feature = catalog.isEmpty ? nil : catalog[OnboardingFeature.wrappedCatalogIndex(focusedFeatureIndex)]
 
-        return ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: messageSpacing) {
-                if let feature {
-                    OnboardingChatBubbleView(message: .user(prompt: feature.userPrompt, feature: feature))
-                    OnboardingChatBubbleView(message: .assistant(feature: feature))
+        return GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: messageSpacing) {
+                    if let feature {
+                        OnboardingChatBubbleView(
+                            message: .user(prompt: feature.userPrompt, feature: feature),
+                            containerWidth: geometry.size.width,
+                            bubbleNamespace: bubbleNamespace
+                        )
+                        OnboardingChatBubbleView(
+                            message: .assistant(feature: feature),
+                            containerWidth: geometry.size.width,
+                            bubbleNamespace: bubbleNamespace
+                        )
+                    }
                 }
+                .padding(.vertical, 6)
             }
-            .padding(.vertical, 6)
+            .mask(feedEdgeFade)
         }
-        .mask(feedEdgeFade)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(currentFeatureAccessibilityLabel)
         .accessibilityAdjustableAction { direction in
@@ -135,18 +159,22 @@ struct OnboardingFeatureChatFeedView: View {
 
     // MARK: - Feed Loop
 
-    private func activateFeedIfNeeded() {
+    private func activateFeedIfNeeded(preserveFeatureIndex: Bool = false) {
         guard !reduceMotion else { return }
-        startFeedLoop()
+        startFeedLoop(preserveFeatureIndex: preserveFeatureIndex)
     }
 
-    private func startFeedLoop() {
+    private func startFeedLoop(preserveFeatureIndex: Bool = false) {
         stopFeedLoop()
         feedItems = []
         feedStep = .user
+        if !preserveFeatureIndex {
+            nextFeatureIndex = 0
+            accessibilityFeatureIndex = 0
+        }
 
         feedTask = Task {
-            guard await sleepUnlessCancelled(for: firstMessageDelay) else { return }
+            guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.firstMessageDelay) else { return }
 
             while !Task.isCancelled, isActive {
                 await advanceFeed()
@@ -174,7 +202,7 @@ struct OnboardingFeatureChatFeedView: View {
                 trimFeedIfNeeded()
             }
             feedStep = .thinking
-            guard await sleepUnlessCancelled(for: afterUserDelay) else { return }
+            guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.afterUserDelay) else { return }
 
         case .thinking:
             withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
@@ -182,7 +210,7 @@ struct OnboardingFeatureChatFeedView: View {
                 trimFeedIfNeeded()
             }
             feedStep = .morph
-            guard await sleepUnlessCancelled(for: thinkingDuration) else { return }
+            guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.thinkingDuration) else { return }
 
         case .morph:
             if let thinkingIndex = feedItems.lastIndex(where: { $0.role == .thinking }) {
@@ -192,7 +220,7 @@ struct OnboardingFeatureChatFeedView: View {
             }
             nextFeatureIndex = (nextFeatureIndex + 1) % catalog.count
             feedStep = .user
-            guard await sleepUnlessCancelled(for: afterAssistantDelay) else { return }
+            guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.afterAssistantDelay) else { return }
         }
     }
 
@@ -233,7 +261,7 @@ struct OnboardingFeatureChatFeedView: View {
         feedItems = []
 
         if isActive {
-            activateFeedIfNeeded()
+            activateFeedIfNeeded(preserveFeatureIndex: true)
         }
     }
 

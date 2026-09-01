@@ -1,15 +1,15 @@
 import SwiftUI
-import UIKit
 import ThinkingOrbsKit
 
 /// Left/right chat bubble for onboarding — user prompts on the right, thinking orbs
 /// and feature replies on the left.
 struct OnboardingChatBubbleView: View {
     let message: OnboardingChatMessage
+    let containerWidth: CGFloat
+    var bubbleNamespace: Namespace.ID
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var bubbleNamespace
 
     private let cornerRadius: CGFloat = 20
     private let oppositeSpacerMinWidth: CGFloat = 52
@@ -17,7 +17,7 @@ struct OnboardingChatBubbleView: View {
     private let thinkingOrbDisplaySize: CGFloat = 34
 
     private var maxBubbleWidth: CGFloat {
-        UIScreen.main.bounds.width * maxBubbleWidthRatio
+        containerWidth * maxBubbleWidthRatio
     }
 
     var body: some View {
@@ -53,6 +53,8 @@ struct OnboardingChatBubbleView: View {
 
     // MARK: - Assistant / Thinking (left)
 
+    /// Thinking and assistant share one `message.id` and the feed-level namespace so
+    /// `matchedGeometryEffect` can morph in place instead of inserting a second row.
     @ViewBuilder
     private var leftAlignedBubble: some View {
         Group {
