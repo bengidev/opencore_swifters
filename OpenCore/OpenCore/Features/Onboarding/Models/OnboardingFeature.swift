@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A highlight card shown after the cube hero transitions into the header.
+/// A feature highlight surfaced in the onboarding chat loop after the cube hero docks.
 struct OnboardingFeature: Identifiable {
     let id = UUID()
     let title: String
@@ -8,8 +8,23 @@ struct OnboardingFeature: Identifiable {
     let description: String
     let userPrompt: String
     let iconName: String
-    let imageName: String
     let orbStyleIndex: Int
+
+    /// VoiceOver label matching the pre-carousel accessibility format.
+    var accessibilitySummary: String {
+        "\(title). \(subtitle)"
+    }
+
+    /// Full spoken label for the adjustable chat feed, including the assistant description.
+    var feedAccessibilityLabel: String {
+        "\(title). \(subtitle). \(description)"
+    }
+
+    static func wrappedCatalogIndex(_ index: Int) -> Int {
+        let count = catalog.count
+        guard count > 0 else { return 0 }
+        return ((index % count) + count) % count
+    }
 
     /// Monochrome orb ramps derived from the shared palette.
     func orbColors(palette: SharedOpenCorePalette) -> [Color] {
@@ -42,7 +57,6 @@ struct OnboardingFeature: Identifiable {
             """,
             userPrompt: "How does on-device reasoning work?",
             iconName: "cpu",
-            imageName: "OnboardingFeatureNeuralCore",
             orbStyleIndex: 0
         ),
         OnboardingFeature(
@@ -54,7 +68,6 @@ struct OnboardingFeature: Identifiable {
             """,
             userPrompt: "Can it map my workspace spatially?",
             iconName: "square.3.layers.3d",
-            imageName: "OnboardingFeatureSpatialCanvas",
             orbStyleIndex: 1
         ),
         OnboardingFeature(
@@ -66,7 +79,6 @@ struct OnboardingFeature: Identifiable {
             """,
             userPrompt: "What about automating workflows?",
             iconName: "arrow.triangle.branch",
-            imageName: "OnboardingFeatureWorkflows",
             orbStyleIndex: 2
         ),
         OnboardingFeature(
@@ -78,7 +90,6 @@ struct OnboardingFeature: Identifiable {
             """,
             userPrompt: "Is my data secure on-device?",
             iconName: "lock.shield",
-            imageName: "OnboardingFeatureVault",
             orbStyleIndex: 3
         )
     ]
