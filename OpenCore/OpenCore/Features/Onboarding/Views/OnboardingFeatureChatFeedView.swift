@@ -114,7 +114,7 @@ struct OnboardingFeatureChatFeedView: View {
 
     private var staticConversation: some View {
         let catalog = OnboardingFeature.catalog
-        let feature = catalog.isEmpty ? nil : catalog[wrappedFeatureIndex(focusedFeatureIndex)]
+        let feature = catalog.isEmpty ? nil : catalog[OnboardingFeature.wrappedCatalogIndex(focusedFeatureIndex)]
 
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: messageSpacing) {
@@ -217,13 +217,7 @@ struct OnboardingFeatureChatFeedView: View {
         guard !catalog.isEmpty else { return "Onboarding features" }
 
         let index = reduceMotion ? focusedFeatureIndex : accessibilityFeatureIndex
-        return catalog[wrappedFeatureIndex(index)].accessibilitySummary
-    }
-
-    private func wrappedFeatureIndex(_ index: Int) -> Int {
-        let count = OnboardingFeature.catalog.count
-        guard count > 0 else { return 0 }
-        return ((index % count) + count) % count
+        return catalog[OnboardingFeature.wrappedCatalogIndex(index)].feedAccessibilityLabel
     }
 
     private func nudgeFeed(by delta: Int) {
@@ -231,8 +225,8 @@ struct OnboardingFeatureChatFeedView: View {
         guard !catalog.isEmpty else { return }
 
         stopFeedLoop()
-        let current = wrappedFeatureIndex(accessibilityFeatureIndex)
-        let target = wrappedFeatureIndex(current + delta)
+        let current = OnboardingFeature.wrappedCatalogIndex(accessibilityFeatureIndex)
+        let target = OnboardingFeature.wrappedCatalogIndex(current + delta)
         nextFeatureIndex = target
         accessibilityFeatureIndex = target
         feedStep = .user
@@ -246,6 +240,6 @@ struct OnboardingFeatureChatFeedView: View {
     private func nudgeFocusedFeature(by delta: Int) {
         let count = OnboardingFeature.catalog.count
         guard count > 0 else { return }
-        focusedFeatureIndex = wrappedFeatureIndex(focusedFeatureIndex + delta)
+        focusedFeatureIndex = OnboardingFeature.wrappedCatalogIndex(focusedFeatureIndex + delta)
     }
 }

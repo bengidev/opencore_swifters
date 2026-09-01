@@ -113,7 +113,6 @@ struct OnboardingChatBubbleView: View {
                 Text(message.feature?.subtitle ?? "")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(palette.textSecondary)
-                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let description = message.feature?.description, !description.isEmpty {
@@ -121,7 +120,6 @@ struct OnboardingChatBubbleView: View {
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(palette.textSecondary)
                         .lineSpacing(3)
-                        .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -153,7 +151,7 @@ struct OnboardingChatBubbleView: View {
 
     private var assistantAccessibilityLabel: String {
         guard let feature = message.feature else { return message.text }
-        return "\(feature.title). \(feature.subtitle). \(feature.description)"
+        return feature.feedAccessibilityLabel
     }
 
     private var featureOrb: some View {
