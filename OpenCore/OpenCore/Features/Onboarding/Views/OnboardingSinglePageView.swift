@@ -265,7 +265,7 @@ private struct OnboardingTransformedLayout: View {
 
             if isTransformed {
                 if showChatFeed {
-                    OnboardingFeatureChatFeedView(isActive: true)
+                    OnboardingFeatureChatFeedView(isActive: chatFeedRevealed)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .layoutPriority(1)
                         .padding(.horizontal, 12)
