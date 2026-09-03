@@ -8,14 +8,14 @@ import Testing
 struct ChatContextCompactionIntegrationTests {
     @Test("send replaces messages when compaction runs")
     func sendReplacesMessagesWhenCompactionRuns() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(modelID: "test-model")
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(modelID: "test-model")
         )
 
         var replacedMessages: [ChatMessage]?
         let history = ChatHistoryClient(
             loadMessages: { _ in [] },
-            saveConversation: { _ in },
+            saveAtom: { _ in },
             appendMessage: { _, _ in },
             replaceMessages: { _, messages in
                 replacedMessages = messages
@@ -60,8 +60,8 @@ struct ChatContextCompactionIntegrationTests {
 
     @Test("compaction failure aborts send and restores draft")
     func compactionFailureAbortsSend() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(modelID: "test-model")
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(modelID: "test-model")
         )
 
         let compaction = SettingsContextCompactionClient { _, _ in
@@ -90,13 +90,13 @@ struct ChatContextCompactionIntegrationTests {
 
     @Test("persistence failure aborts send and restores draft")
     func persistenceFailureAbortsSend() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(modelID: "test-model")
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(modelID: "test-model")
         )
 
         let history = ChatHistoryClient(
             loadMessages: { _ in [] },
-            saveConversation: { _ in throw NSError(domain: "test", code: 1) },
+            saveAtom: { _ in throw NSError(domain: "test", code: 1) },
             appendMessage: { _, _ in },
             replaceMessages: { _, _ in }
         )

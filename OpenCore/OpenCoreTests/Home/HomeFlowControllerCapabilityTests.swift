@@ -14,7 +14,7 @@ struct HomeFlowControllerCapabilityTests {
                 ModelInputCapabilities.from(fallback!)
             },
             credentialStore: HomeTestCatalog.credentialStoreWithKey(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
         await home.onAppear()
         home.selectModel("meta-llama/llama-3.3-70b-instruct:free")
@@ -35,7 +35,7 @@ struct HomeFlowControllerCapabilityTests {
                 return ModelInputCapabilities(inputModalities: [.text, .image])
             },
             credentialStore: HomeTestCatalog.credentialStoreWithKey(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
         await home.onAppear()
         home.selectModel("meta-llama/llama-3.3-70b-instruct:free")
@@ -56,7 +56,7 @@ struct HomeFlowControllerCapabilityTests {
                 ModelInputCapabilities(inputModalities: [.text])
             },
             credentialStore: HomeTestCatalog.credentialStoreWithKey(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
         home.onInputCapabilitiesResolved = { caps in
             if !caps.supportsAttachments { cleared = true }

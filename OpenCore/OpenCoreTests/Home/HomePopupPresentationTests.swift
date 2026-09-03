@@ -9,7 +9,7 @@ struct HomePopupPresentationTests {
     private func makeHome() -> HomeFlowController {
         HomeFlowController(
             credentialStore: CredentialInMemoryStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
     }
 

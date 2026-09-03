@@ -128,7 +128,7 @@ struct ChatMultimodalWireLogicTests {
             providerID: ProviderDescriptor.openRouter.id,
             secret: "test-key",
             chatRequest: ChatRequest(
-                conversationID: UUID(),
+                atomID: UUID(),
                 messages: [message],
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"

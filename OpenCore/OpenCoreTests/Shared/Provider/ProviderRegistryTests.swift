@@ -11,7 +11,7 @@ struct ProviderRegistryTests {
         providerSortBy: String? = nil
     ) -> ChatRequest {
         ChatRequest(
-            conversationID: UUID(),
+            atomID: UUID(),
             messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
             providerID: ProviderDescriptor.openRouter.id,
             modelID: modelID,

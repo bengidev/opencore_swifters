@@ -34,8 +34,8 @@ struct ChatReasoningStreamingTests {
             ))
         }
     ) -> ChatFlowController {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )

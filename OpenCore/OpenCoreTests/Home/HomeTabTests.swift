@@ -9,7 +9,7 @@ struct HomeTabTests {
     private func makeHome() -> HomeFlowController {
         HomeFlowController(
             credentialStore: CredentialInMemoryStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
     }
 
@@ -22,6 +22,8 @@ struct HomeTabTests {
     @Test("selectTab updates selected tab")
     func selectTabUpdatesState() {
         let home = makeHome()
+        home.selectTab(.atoms)
+        #expect(home.state.selectedTab == .atoms)
         home.selectTab(.settings)
         #expect(home.state.selectedTab == .settings)
         home.selectTab(.about)

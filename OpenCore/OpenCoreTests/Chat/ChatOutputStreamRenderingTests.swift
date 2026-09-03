@@ -81,8 +81,8 @@ struct ChatOutputStreamStreamingTests {
             ))
         }
     ) -> ChatFlowController {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
@@ -187,8 +187,8 @@ struct ChatOutputStreamStreamingTests {
         }
 
         let appended = OutputStreamAppendTracker()
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
@@ -200,7 +200,7 @@ struct ChatOutputStreamStreamingTests {
             ]).asHangingStreamingClient,
             history: ChatHistoryClient(
                 loadMessages: { _ in [] },
-                saveConversation: { _ in },
+                saveAtom: { _ in },
                 appendMessage: { _, message in appended.append(message) },
                 replaceMessages: { _, _ in }
             ),
@@ -219,7 +219,7 @@ struct ChatOutputStreamStreamingTests {
         }
         #expect(controller.state.streamingOutputStreamID != nil)
 
-        controller.clearActiveConversation()
+        controller.clearActiveAtom()
         await sendTask.value
 
         for _ in 0..<100 {

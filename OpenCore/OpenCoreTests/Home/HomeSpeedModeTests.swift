@@ -41,7 +41,7 @@ struct HomeSpeedModeTests {
                 catalogModels: HomeTestCatalog.sampleModels
             ),
             credentialStore: CredentialInMemoryStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
 
         home.selectModel("meta-llama/llama-3.3-70b-instruct:free")
@@ -58,7 +58,7 @@ struct HomeSpeedModeTests {
                 catalogModels: HomeTestCatalog.sampleModels
             ),
             credentialStore: CredentialInMemoryStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
 
         home.selectSpeedMode(.fast)
@@ -189,7 +189,7 @@ struct HomeSpeedModeTests {
             providerID: ProviderDescriptor.openCode.id,
             secret: "test-key",
             chatRequest: ChatRequest(
-                conversationID: UUID(),
+                atomID: UUID(),
                 messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
                 providerID: ProviderDescriptor.openCode.id,
                 modelID: "glm-5",
@@ -236,7 +236,7 @@ struct HomeSpeedModeTests {
             providerID: ProviderDescriptor.openRouter.id,
             secret: "test-key",
             chatRequest: ChatRequest(
-                conversationID: UUID(),
+                atomID: UUID(),
                 messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free",
@@ -255,7 +255,7 @@ struct HomeSpeedModeTests {
             providerID: ProviderDescriptor.openRouter.id,
             secret: "test-key",
             chatRequest: ChatRequest(
-                conversationID: UUID(),
+                atomID: UUID(),
                 messages: [.text(id: UUID(), role: .user, content: "Hi", timestamp: .init())],
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"
@@ -286,8 +286,8 @@ struct HomeSpeedModeTests {
         }
 
         let log = RequestLog()
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"
             )

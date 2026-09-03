@@ -137,8 +137,8 @@ struct ChatStreamOutputMappingTests {
             ProviderOpenAICompatibleAdapter.mapStreamPayload($0)
         }.flatMap { $0 } + [.done]
 
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "openrouter/free"
             )
@@ -303,8 +303,8 @@ struct ChatStreamContentMappingTests {
 
     let controller = ChatFlowController(
       streaming: ChatCannedEventClient(events: events).asStreamingClient,
-      providerPreference: SidePanelInMemoryProviderPreferenceStore(
-        preference: SidePanelProviderPreference(
+      providerPreference: InMemoryProviderPreferenceStore(
+        preference: ProviderPreference(
           providerID: ProviderDescriptor.openRouter.id,
           modelID: "openrouter/free"
         )
@@ -335,8 +335,8 @@ struct ChatStreamContentMappingTests {
   func contentBlockStringInFlow() async {
     let raw =
       "[{'type': 'text', 'text': \"GeForce is NVIDIA's brand for consumer GPUs.\"}]"
-    let preference = SidePanelInMemoryProviderPreferenceStore(
-      preference: SidePanelProviderPreference(
+    let preference = InMemoryProviderPreferenceStore(
+      preference: ProviderPreference(
         providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )
@@ -361,8 +361,8 @@ struct ChatStreamContentMappingTests {
   @MainActor
   func safetyOnlyInFlow() async {
     let raw = "User Safety: safe\nResponse Safety: safe"
-    let preference = SidePanelInMemoryProviderPreferenceStore(
-      preference: SidePanelProviderPreference(
+    let preference = InMemoryProviderPreferenceStore(
+      preference: ProviderPreference(
         providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )
@@ -392,8 +392,8 @@ struct ChatStreamContentMappingTests {
       #"[{"type":"text","text":"GeForce is NVIDIA GPUs."}]"#,
     ]
     let events: [ChatStreamingEvent] = deltas.map { .textDelta($0) } + [.done]
-    let preference = SidePanelInMemoryProviderPreferenceStore(
-      preference: SidePanelProviderPreference(
+    let preference = InMemoryProviderPreferenceStore(
+      preference: ProviderPreference(
         providerID: ProviderDescriptor.openRouter.id,
         modelID: "openrouter/free"
       )

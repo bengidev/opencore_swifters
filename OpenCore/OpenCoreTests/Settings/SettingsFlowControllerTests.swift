@@ -14,7 +14,7 @@ struct SettingsFlowControllerTests {
         SettingsFlowController(
             state: state,
             credentialStore: credentialStore,
-            providerPreference: SidePanelInMemoryProviderPreferenceStore(),
+            providerPreference: InMemoryProviderPreferenceStore(),
             contextCompactionPreference: compactionStore
         )
     }

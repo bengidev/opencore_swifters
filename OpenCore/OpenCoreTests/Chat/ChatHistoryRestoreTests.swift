@@ -20,7 +20,7 @@ struct ChatHistoryRestoreTests {
     @Test("Clear active conversation resets streaming revision")
     func clearResetsStreamingRevision() {
         var state = ChatFlowState(streamingRevision: 3)
-        ChatClearActiveConversationCommand().execute(on: &state)
+        ChatClearActiveAtomCommand().execute(on: &state)
 
         #expect(state.messages.isEmpty)
         #expect(state.streamingRevision == 0)
@@ -28,7 +28,7 @@ struct ChatHistoryRestoreTests {
 
     @Test("Reopen loads history messages")
     func reopenLoadsHistoryMessages() async {
-        let conversation = SidePanelConversation(
+        let conversation = Atom(
             id: UUID(),
             title: "Test",
             createdAt: Date(),
@@ -42,13 +42,13 @@ struct ChatHistoryRestoreTests {
                         .text(role: .assistant, content: "Reply", isComplete: true)
                     ]
                 },
-                saveConversation: { _ in },
+                saveAtom: { _ in },
                 appendMessage: { _, _ in },
                 replaceMessages: { _, _ in }
             )
         )
 
-        await controller.reopenConversation(conversation)
+        await controller.reopenAtom(conversation)
 
         #expect(controller.state.messages.count == 2)
         #expect(controller.state.streamingRevision == 0)
