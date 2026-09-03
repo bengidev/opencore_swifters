@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 struct AtomMessage: Equatable, Identifiable, Sendable {
     let id: UUID
@@ -59,20 +58,16 @@ struct AtomsHistoryClient: Sendable {
 }
 
 extension AtomsHistoryClient {
-    @MainActor
-    static func live(modelContainer: ModelContainer) -> Self {
-        let store = PersistenceAtomHistoryStore.live(modelContainer: modelContainer)
-        return Self(
+    static func live(store: PersistenceAtomHistoryStore) -> Self {
+        Self(
             listAtomEntries: { try await store.listAtomEntries() },
             listAtoms: { try await store.listAtoms() },
-            loadMessages: { @MainActor atomID in
+            loadMessages: { atomID in
                 let messages = try await store.loadChatMessages(atomID: atomID)
-                return messages.compactMap(Self.atomMessage(from:))
+                return messages.compactMap { Self.atomMessage(from: $0) }
             },
-            saveAtom: { @MainActor atom in
-                try await store.saveAtom(atom)
-            },
-            appendMessage: { @MainActor atomID, message in
+            saveAtom: { try await store.saveAtom($0) },
+            appendMessage: { atomID, message in
                 guard let chatMessage = Self.chatMessage(from: message) else { return }
                 try await store.appendChatMessage(atomID: atomID, message: chatMessage)
             },
@@ -84,8 +79,7 @@ extension AtomsHistoryClient {
         )
     }
 
-    @MainActor
-    private static func atomMessage(from message: ChatMessage) -> AtomMessage? {
+    nonisolated private static func atomMessage(from message: ChatMessage) -> AtomMessage? {
         switch message {
         case let .text(text):
             return AtomMessage(
@@ -113,8 +107,7 @@ extension AtomsHistoryClient {
         }
     }
 
-    @MainActor
-    private static func chatMessage(from message: AtomMessage) -> ChatMessage? {
+    nonisolated private static func chatMessage(from message: AtomMessage) -> ChatMessage? {
         let role = ChatMessageRole(rawValue: message.role) ?? .user
         return .text(
             id: message.id,
