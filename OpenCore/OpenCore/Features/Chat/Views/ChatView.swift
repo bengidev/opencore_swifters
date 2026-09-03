@@ -14,8 +14,8 @@ struct ChatView<Composer: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let conversation = chat.state.conversation {
-                Text(conversation.title)
+            if let atom = chat.state.atom {
+                Text(atom.title)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(palette.textPrimary)
                     .lineLimit(1)

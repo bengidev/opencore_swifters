@@ -9,7 +9,7 @@ final class ChatFlowController {
     private(set) var state: ChatFlowState
     private let streaming: ChatStreamingClient
     private let history: ChatHistoryClient
-    private let providerPreference: any SidePanelProviderPreferenceStore
+    private let providerPreference: any ProviderPreferenceStore
     private let contextCompaction: SettingsContextCompactionClient
     private let contextLengthResolver: () -> Int
     private let invoker = ChatCommandInvoker()
@@ -32,7 +32,7 @@ final class ChatFlowController {
         state: ChatFlowState = ChatFlowState(),
         streaming: ChatStreamingClient = .preview,
         history: ChatHistoryClient = .preview,
-        providerPreference: any SidePanelProviderPreferenceStore = SidePanelInMemoryProviderPreferenceStore(),
+        providerPreference: any ProviderPreferenceStore = InMemoryProviderPreferenceStore(),
         contextCompaction: SettingsContextCompactionClient = .disabled,
         contextLengthResolver: @escaping () -> Int = { 0 },
         makeID: @escaping () -> UUID = UUID.init,
@@ -80,30 +80,30 @@ final class ChatFlowController {
         dispatch(ChatErrorDismissedCommand())
     }
 
-    func clearActiveConversation() {
+    func clearActiveAtom() {
         cancelStream()
         clearDraftAttachments()
-        dispatch(ChatClearActiveConversationCommand())
+        dispatch(ChatClearActiveAtomCommand())
     }
 
-    func reopenConversation(_ conversation: SidePanelConversation) async {
+    func reopenAtom(_ atom: Atom) async {
         cancelStream()
         clearDraftAttachments()
-        dispatch(ChatReopenConversationCommand(conversation: conversation))
-        let restored = (try? await history.loadMessages(conversation.id)) ?? []
+        dispatch(ChatReopenAtomCommand(atom: atom))
+        let restored = (try? await history.loadMessages(atom.id)) ?? []
         dispatch(ChatMessagesRestoredCommand(messages: restored))
     }
 
-    func renameActiveConversation(id: UUID, title: String) {
-        guard state.conversation?.id == id else { return }
-        state.conversation?.title = title
+    func renameActiveAtom(id: UUID, title: String) {
+        guard state.atom?.id == id else { return }
+        state.atom?.title = title
     }
 
     // MARK: - Send / Retry
 
     private struct SendTurnSnapshot {
         let messages: [ChatMessage]
-        let conversation: SidePanelConversation?
+        let atom: Atom?
         let draftMessage: String
         let draftAttachments: [ChatMessageAttachment]
     }
@@ -120,7 +120,7 @@ final class ChatFlowController {
 
         let snapshot = SendTurnSnapshot(
             messages: state.messages,
-            conversation: state.conversation,
+            atom: state.atom,
             draftMessage: state.draftMessage,
             draftAttachments: attachments
         )
@@ -155,19 +155,19 @@ final class ChatFlowController {
         state.draftAttachments = []
         state.messages.append(userMessage)
 
-        if state.conversation == nil {
-            state.conversation = SidePanelConversation(
+        if state.atom == nil {
+            state.atom = Atom(
                 id: makeID(),
-                title: Self.conversationTitle(visibleText: visibleText, attachments: attachments),
+                title: Self.atomTitle(visibleText: visibleText, attachments: attachments),
                 createdAt: timestamp,
                 updatedAt: timestamp
             )
         } else {
-            state.conversation?.title = Self.conversationTitle(
+            state.atom?.title = Self.atomTitle(
                 visibleText: visibleText,
                 attachments: attachments
             )
-            state.conversation?.updatedAt = timestamp
+            state.atom?.updatedAt = timestamp
         }
 
         guard await prepareTurnForStreaming(
@@ -351,7 +351,7 @@ final class ChatFlowController {
 
     private func startStream(
         modelID: String,
-        preference: SidePanelProviderPreference,
+        preference: ProviderPreference,
         providerSortBy: String? = nil,
         reasoningEffort: String? = nil
     ) {
@@ -359,9 +359,9 @@ final class ChatFlowController {
         lastProviderSortBy = providerSortBy
         lastReasoningEffort = reasoningEffort
 
-        let conversationID = state.conversation?.id ?? makeID()
+        let atomID = state.atom?.id ?? makeID()
         let request = ChatRequest(
-            conversationID: conversationID,
+            atomID: atomID,
             messages: state.messages,
             providerID: preference.providerID ?? ProviderDescriptor.openRouter.id,
             modelID: modelID,
@@ -434,8 +434,8 @@ final class ChatFlowController {
                     "The model finished reasoning but did not return an answer. Try lowering reasoning effort or switching models."
             }
 
-            let conversationID = state.conversation?.id
-            let updatedConversation = state.conversation
+            let atomID = state.atom?.id
+            let updatedAtom = state.atom
             let finalizedMessages: [ChatMessage] = [
                 state.streamingThinkingID,
                 state.streamingAnswerID
@@ -457,14 +457,14 @@ final class ChatFlowController {
             state.isSending = false
             state.streamingRevision &+= 1
 
-            if let conversationID {
+            if let atomID {
                 let history = history
                 Task {
-                    if let updatedConversation {
-                        try? await history.saveConversation(updatedConversation)
+                    if let updatedAtom {
+                        try? await history.saveAtom(updatedAtom)
                     }
                     for message in finalizedMessages {
-                        try? await history.appendMessage(conversationID, message)
+                        try? await history.appendMessage(atomID, message)
                     }
                 }
             }
@@ -528,11 +528,11 @@ final class ChatFlowController {
         state.streamingOutputStreamID = nil
         state.streamingRevision &+= 1
 
-        if let conversationID = state.conversation?.id {
+        if let atomID = state.atom?.id {
             let message = state.messages[index]
             let history = history
             Task {
-                try? await history.appendMessage(conversationID, message)
+                try? await history.appendMessage(atomID, message)
             }
         }
     }
@@ -549,7 +549,7 @@ final class ChatFlowController {
 
     private func restoreSendTurn(_ snapshot: SendTurnSnapshot) {
         state.messages = snapshot.messages
-        state.conversation = snapshot.conversation
+        state.atom = snapshot.atom
         state.draftMessage = snapshot.draftMessage
         state.draftAttachments = snapshot.draftAttachments
         state.streamingStatus = .failed
@@ -560,7 +560,7 @@ final class ChatFlowController {
         let messagesBeforeCompaction = state.messages
         do {
             try await applyContextCompactionIfNeeded()
-            try await persistConversationMessages()
+            try await persistAtomMessages()
             return true
         } catch {
             state.messages = messagesBeforeCompaction
@@ -569,9 +569,9 @@ final class ChatFlowController {
         }
     }
 
-    private func persistConversationMessages() async throws {
-        guard let conversation = state.conversation else { return }
-        try await history.saveConversation(conversation)
+    private func persistAtomMessages() async throws {
+        guard let conversation = state.atom else { return }
+        try await history.saveAtom(conversation)
         try await history.replaceMessages(conversation.id, state.messages)
     }
 
@@ -585,7 +585,7 @@ final class ChatFlowController {
         }
     }
 
-    private static func conversationTitle(
+    private static func atomTitle(
         visibleText: String,
         attachments: [ChatMessageAttachment]
     ) -> String {

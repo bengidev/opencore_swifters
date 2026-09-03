@@ -52,9 +52,9 @@ struct ChatMessagesRestoredCommand: ChatCommand {
     }
 }
 
-struct ChatClearActiveConversationCommand: ChatCommand {
+struct ChatClearActiveAtomCommand: ChatCommand {
     func execute(on state: inout ChatFlowState) {
-        state.conversation = nil
+        state.atom = nil
         state.messages = []
         state.draftMessage = ""
         state.draftAttachments = []
@@ -70,11 +70,11 @@ struct ChatClearActiveConversationCommand: ChatCommand {
     }
 }
 
-struct ChatReopenConversationCommand: ChatCommand {
-    let conversation: SidePanelConversation
+struct ChatReopenAtomCommand: ChatCommand {
+    let atom: Atom
 
     func execute(on state: inout ChatFlowState) {
-        state.conversation = conversation
+        state.atom = atom
         state.messages = []
         state.draftMessage = ""
         state.draftAttachments = []
