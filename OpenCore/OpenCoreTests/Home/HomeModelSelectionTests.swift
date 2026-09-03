@@ -8,7 +8,7 @@ import Testing
 struct HomeModelSelectionTests {
     @Test("Catalog load auto-selects first model when none stored")
     func autoSelectsDefaultModel() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore()
+        let preference = InMemoryProviderPreferenceStore()
         let credentialStore = CredentialInMemoryStore()
         try? credentialStore.save("test-key", for: ProviderDescriptor.openRouter.id)
         let home = HomeFlowController(
@@ -25,7 +25,7 @@ struct HomeModelSelectionTests {
 
     @Test("Selecting a model persists to preference store")
     func selectModelPersists() {
-        let preference = SidePanelInMemoryProviderPreferenceStore()
+        let preference = InMemoryProviderPreferenceStore()
         let home = HomeFlowController(
             credentialStore: CredentialInMemoryStore(),
             providerPreference: preference
@@ -39,8 +39,8 @@ struct HomeModelSelectionTests {
 
     @Test("Provider change clears model and reloads catalog")
     func providerChangeClearsModel() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
@@ -67,7 +67,7 @@ struct HomeModelSelectionTests {
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
             credentialStore: CredentialInMemoryStore(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
 
         await home.onAppear()
@@ -79,8 +79,8 @@ struct HomeModelSelectionTests {
 
     @Test("Stale persisted model auto-replaces with first catalog model")
     func stalePersistedModelAutoReplaced() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(modelID: "removed-model-id")
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(modelID: "removed-model-id")
         )
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
@@ -106,7 +106,7 @@ struct HomeModelSelectionTests {
         let home = HomeFlowController(
             catalog: catalog,
             credentialStore: HomeTestCatalog.credentialStoreWithKey(),
-            providerPreference: SidePanelInMemoryProviderPreferenceStore()
+            providerPreference: InMemoryProviderPreferenceStore()
         )
 
         await home.onAppear()

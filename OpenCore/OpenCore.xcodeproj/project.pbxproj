@@ -10,6 +10,8 @@
 		B6336BC2303B16460009CC7F /* ThinkingOrbsKit in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0032FE2AA0100ED1A41 /* ThinkingOrbsKit */; };
 		B65666202FFA33D5009B72E4 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0012FE2AA0100ED1A41 /* MarkdownUI */; };
 		B65666212FFA33D5009B72E4 /* LaTeXSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0022FE2AA0100ED1A41 /* LaTeXSwiftUI */; };
+		B65666222FFA33D5009B72E4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0042FE2AA0100ED1A41 /* GRDB */; };
+		B65666232FFA33D5009B72E4 /* Tiktoken in Frameworks */ = {isa = PBXBuildFile; productRef = B6E1A0052FE2AA0100ED1A41 /* Tiktoken */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +63,8 @@
 				B6336BC2303B16460009CC7F /* ThinkingOrbsKit in Frameworks */,
 				B65666212FFA33D5009B72E4 /* LaTeXSwiftUI in Frameworks */,
 				B65666202FFA33D5009B72E4 /* MarkdownUI in Frameworks */,
+				B65666222FFA33D5009B72E4 /* GRDB in Frameworks */,
+				B65666232FFA33D5009B72E4 /* Tiktoken in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +128,8 @@
 				B6E1A0012FE2AA0100ED1A41 /* MarkdownUI */,
 				B6E1A0022FE2AA0100ED1A41 /* LaTeXSwiftUI */,
 				B6E1A0032FE2AA0100ED1A41 /* ThinkingOrbsKit */,
+				B6E1A0042FE2AA0100ED1A41 /* GRDB */,
+				B6E1A0052FE2AA0100ED1A41 /* Tiktoken */,
 			);
 			productName = OpenCore;
 			productReference = B6D73C152FE1992D00ED1A41 /* OpenCore.app */;
@@ -211,6 +217,8 @@
 				B6E1A0112FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 				B6E1A0122FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "LaTeXSwiftUI" */,
 				B6E1A0132FE2AA0100ED1A41 /* XCLocalSwiftPackageReference "Packages/ThinkingOrbsKit" */,
+				B6E1A0152FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "Tiktoken" */,
+				B6E1A0142FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B6D73C162FE1992D00ED1A41 /* Products */;
@@ -638,6 +646,22 @@
 				minimumVersion = 1.5.0;
 			};
 		};
+		B6E1A0142FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+		B6E1A0152FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "Tiktoken" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/aespinilla/Tiktoken.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -655,6 +679,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B6E1A0132FE2AA0100ED1A41 /* XCLocalSwiftPackageReference "Packages/ThinkingOrbsKit" */;
 			productName = ThinkingOrbsKit;
+		};
+		B6E1A0042FE2AA0100ED1A41 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6E1A0142FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+		B6E1A0052FE2AA0100ED1A41 /* Tiktoken */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6E1A0152FE2AA0100ED1A41 /* XCRemoteSwiftPackageReference "Tiktoken" */;
+			productName = Tiktoken;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,73 +1,43 @@
 import SwiftUI
 
-/// Sliding history drawer listing persisted conversations, grouped into a
-/// Pinned section followed by user-defined groups and recency buckets
-/// (Today, Yesterday, Previous 7 Days, Previous 30 Days, Older). A search
-/// field filters by title; each row offers a long-press menu to pin,
-/// group, or delete. Tapping a row opens the conversation. All colors are
-/// sourced from the shared palette.
-struct SidePanelSessionSidebarView: View {
-    @Bindable var flow: SidePanelSessionFlowController
+/// Full-screen Atoms list with search, grouped rows, and metadata actions.
+struct AtomsListView: View {
+    @Bindable var flow: AtomsFlowController
 
     @Environment(\.sharedPalette) private var palette
 
-    @State private var renameTarget: SidePanelConversation?
+    @State private var renameTarget: Atom?
     @State private var renameText: String = ""
     @State private var newGroupText: String = ""
     @State private var newGroupTargetID: UUID?
 
-    private let drawerWidthRatio: CGFloat = 0.82
-    private let maxDrawerWidth: CGFloat = 360
-
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                if flow.state.isSidebarVisible {
-                    scrim
-                    drawer(width: drawerWidth(for: proxy.size.width))
-                        .transition(.move(edge: .leading))
-                }
-            }
-            .animation(.easeInOut(duration: 0.28), value: flow.state.isSidebarVisible)
-        }
-        .alert("Rename conversation", isPresented: renameAlertBinding) {
-            TextField("Title", text: $renameText)
-            Button("Cancel", role: .cancel) { renameTarget = nil }
-            Button("Save") {
-                if let target = renameTarget {
-                    flow.dispatch(SidePanelSessionConversationRenamedCommand(id: target.id, title: renameText))
-                }
-                renameTarget = nil
-            }
-        }
-    }
-
-    private var scrim: some View {
-        Button {
-            flow.dispatch(SidePanelSessionSidebarDismissCommand())
-        } label: {
-            palette.textPrimary
-                .opacity(0.32)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Dismiss sidebar")
-    }
-
-    private func drawer(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
             searchField
             Divider()
                 .overlay(palette.textTertiary.opacity(0.25))
 
-            if flow.state.conversations.isEmpty {
+            if flow.state.entries.isEmpty {
                 emptyState
-            } else if flow.state.filteredConversations.isEmpty {
+            } else if flow.state.filteredEntries.isEmpty {
                 noResultsState
             } else {
-                conversationList
+                atomList
+            }
+        }
+        .navigationTitle("Atoms")
+        .navigationBarTitleDisplayMode(.large)
+        .task {
+            await flow.loadAtoms()
+        }
+        .alert("Rename atom", isPresented: renameAlertBinding) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+            Button("Save") {
+                if let target = renameTarget {
+                    Task { await flow.renameAtom(id: target.id, title: renameText) }
+                }
+                renameTarget = nil
             }
         }
         .alert("Create Group", isPresented: Binding(
@@ -82,36 +52,13 @@ struct SidePanelSessionSidebarView: View {
                 if let targetID = newGroupTargetID {
                     let trimmed = newGroupText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {
-                        flow.dispatch(SidePanelSessionConversationGroupChangedCommand(id: targetID, group: trimmed))
+                        Task { await flow.changeGroup(id: targetID, group: trimmed) }
                     }
                     newGroupTargetID = nil
                 }
             }
         }
-        .frame(width: width)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(palette.surfacePaper)
-        .ignoresSafeArea(edges: .bottom)
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Text("History")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(palette.textPrimary)
-            Spacer()
-            Button {
-                flow.dispatch(SidePanelSessionSidebarDismissCommand())
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(palette.textSecondary)
-            }
-            .accessibilityLabel("Close history")
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
+        .background(palette.surfaceBase)
     }
 
     private var searchField: some View {
@@ -121,10 +68,10 @@ struct SidePanelSessionSidebarView: View {
                 .foregroundStyle(palette.textTertiary)
 
             TextField(
-                "Search conversations",
+                "Search atoms",
                 text: Binding(
-                    get: { flow.state.historySearchQuery },
-                    set: { flow.dispatch(SidePanelSessionHistorySearchQueryChangedCommand(query: $0)) }
+                    get: { flow.state.searchQuery },
+                    set: { flow.dispatch(AtomsSearchQueryChangedCommand(query: $0)) }
                 )
             )
             .font(.system(size: 15))
@@ -133,9 +80,9 @@ struct SidePanelSessionSidebarView: View {
             .autocorrectionDisabled()
             .submitLabel(.search)
 
-            if !flow.state.historySearchQuery.isEmpty {
+            if !flow.state.searchQuery.isEmpty {
                 Button {
-                    flow.dispatch(SidePanelSessionHistorySearchQueryChangedCommand(query: ""))
+                    flow.dispatch(AtomsSearchQueryChangedCommand(query: ""))
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
@@ -150,14 +97,14 @@ struct SidePanelSessionSidebarView: View {
             Capsule(style: .continuous).fill(palette.surfaceSubtle)
         )
         .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.vertical, 12)
     }
 
     private var emptyState: some View {
         centeredState(
-            icon: "bubble.left.and.bubble.right",
-            title: "No conversations yet",
-            subtitle: "Your chats will appear here."
+            icon: "atom",
+            title: "No atoms yet",
+            subtitle: "Your conversations will appear here."
         )
     }
 
@@ -165,7 +112,7 @@ struct SidePanelSessionSidebarView: View {
         centeredState(
             icon: "magnifyingglass",
             title: "No matches",
-            subtitle: "No conversations match your search."
+            subtitle: "No atoms match your search."
         )
     }
 
@@ -187,66 +134,66 @@ struct SidePanelSessionSidebarView: View {
         .padding(.horizontal, 20)
     }
 
-    private var conversationList: some View {
+    private var atomList: some View {
         ScrollView(.vertical) {
-            conversationListContent
+            atomListContent
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
         }
     }
 
-    /// Busts LazyVStack identity when pin/group state changes so rows move between
-    /// sections immediately instead of only after the drawer is reopened.
-    private var sessionListIdentity: String {
-        flow.state.filteredConversations
-            .map { "\($0.id):\($0.title):\($0.isPinned):\($0.groupName ?? ""):\($0.updatedAt.timeIntervalSinceReferenceDate)" }
+    private var listIdentity: String {
+        flow.state.filteredEntries
+            .map {
+                "\($0.id):\($0.lastMessagePreview):\($0.atom.isPinned):\($0.atom.groupName ?? ""):\($0.lastMessageAt.timeIntervalSinceReferenceDate)"
+            }
             .joined(separator: "|")
     }
 
-    private func liveConversation(id: UUID) -> SidePanelConversation? {
-        flow.state.filteredConversations.first { $0.id == id }
+    private func liveEntry(id: UUID) -> AtomListEntry? {
+        flow.state.filteredEntries.first { $0.id == id }
     }
 
     @ViewBuilder
-    private var conversationListContent: some View {
+    private var atomListContent: some View {
         LazyVStack(alignment: .leading, spacing: 4, pinnedViews: [.sectionHeaders]) {
-            ForEach(SidePanelSessionSection.grouped(
-                flow.state.filteredConversations,
+            ForEach(AtomsSection.grouped(
+                flow.state.filteredEntries,
                 expandedGroups: flow.state.expandedGroups,
-                forceExpandGroups: !flow.state.historySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                forceExpandGroups: !flow.state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )) { section in
                 Section {
-                    ForEach(section.conversations) { conversation in
+                    ForEach(section.entries) { entry in
                         Button {
-                            let live = liveConversation(id: conversation.id) ?? conversation
-                            flow.selectConversation(live)
+                            let live = liveEntry(id: entry.id) ?? entry
+                            flow.selectAtom(live.atom)
                         } label: {
-                            conversationRow(
-                                conversation,
+                            atomRow(
+                                entry,
                                 isInGroup: section.id.hasPrefix("group:")
                             )
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { rowMenu(conversation) }
+                        .contextMenu { rowMenu(entry) }
                         .transition(.opacity.combined(with: .move(edge: .top)))
-                        .id("\(section.id)-\(conversation.id)")
+                        .id("\(section.id)-\(entry.id)")
                     }
                 } header: {
                     groupSectionHeader(section)
                 }
             }
         }
-        .id(sessionListIdentity)
+        .id(listIdentity)
     }
 
     @ViewBuilder
-    private func groupSectionHeader(_ section: SidePanelSessionSection) -> some View {
+    private func groupSectionHeader(_ section: AtomsSection) -> some View {
         if section.id.hasPrefix("group:") {
             let groupName = String(section.id.dropFirst("group:".count))
             let isExpanded = flow.state.expandedGroups.contains(groupName)
             Button {
                 _ = withAnimation(.easeInOut(duration: 0.22)) {
-                    flow.dispatch(SidePanelSessionGroupHeaderToggledCommand(group: groupName))
+                    flow.dispatch(AtomsGroupHeaderToggledCommand(group: groupName))
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -280,82 +227,84 @@ struct SidePanelSessionSidebarView: View {
             .padding(.horizontal, 12)
             .padding(.top, 12)
             .padding(.bottom, 4)
-            .background(palette.surfacePaper)
+            .background(palette.surfaceBase)
     }
 
     @ViewBuilder
-    private func rowMenu(_ conversation: SidePanelConversation) -> some View {
-        let live = liveConversation(id: conversation.id) ?? conversation
+    private func rowMenu(_ entry: AtomListEntry) -> some View {
+        let live = liveEntry(id: entry.id) ?? entry
         Button {
-            renameTarget = live
-            renameText = live.title
+            renameTarget = live.atom
+            renameText = live.atom.title
         } label: {
             Label("Rename", systemImage: "pencil")
         }
         Button {
             _ = withAnimation(.easeInOut(duration: 0.22)) {
-                flow.dispatch(SidePanelSessionConversationPinToggledCommand(conversation: live))
+                Task { await flow.pinAtom(live.atom) }
             }
         } label: {
             Label(
-                live.isPinned ? "Unpin" : "Pin",
-                systemImage: live.isPinned ? "pin.slash" : "pin"
+                live.atom.isPinned ? "Unpin" : "Pin",
+                systemImage: live.atom.isPinned ? "pin.slash" : "pin"
             )
         }
         Menu {
             ForEach(flow.state.availableGroups, id: \.self) { group in
                 Button(group) {
-                    flow.dispatch(SidePanelSessionConversationGroupChangedCommand(
-                        id: live.id,
-                        group: live.groupName == group ? nil : group
-                    ))
+                    Task {
+                        await flow.changeGroup(
+                            id: live.atom.id,
+                            group: live.atom.groupName == group ? nil : group
+                        )
+                    }
                 }
             }
-            if let currentGroup = live.groupName {
+            if let currentGroup = live.atom.groupName {
                 Button(role: .destructive) {
-                    flow.dispatch(SidePanelSessionConversationGroupChangedCommand(id: live.id, group: nil))
+                    Task { await flow.changeGroup(id: live.atom.id, group: nil) }
                 } label: {
                     Label("Remove from \(currentGroup)", systemImage: "folder.badge.minus")
                 }
             }
             Divider()
             Button {
-                newGroupTargetID = live.id
+                newGroupTargetID = live.atom.id
                 newGroupText = ""
             } label: {
                 Label("New Group...", systemImage: "folder.badge.plus")
             }
         } label: {
             Label(
-                live.groupName == nil ? "Move to Group" : "Group: \(live.groupName!)",
+                live.atom.groupName == nil ? "Move to Group" : "Group: \(live.atom.groupName!)",
                 systemImage: "folder"
             )
         }
         Button(role: .destructive) {
-            flow.dispatch(SidePanelSessionConversationDeletedCommand(id: live.id))
+            Task { await flow.deleteAtom(id: live.atom.id) }
         } label: {
             Label("Delete", systemImage: "trash")
         }
     }
 
-    private func conversationRow(
-        _ conversation: SidePanelConversation,
+    private func atomRow(
+        _ entry: AtomListEntry,
         isInGroup: Bool
     ) -> some View {
-        let live = liveConversation(id: conversation.id) ?? conversation
-        let isActive = flow.state.activeConversationID == live.id
+        let live = liveEntry(id: entry.id) ?? entry
+        let isActive = flow.state.activeAtomID == live.atom.id
         return HStack(spacing: 8) {
-            if live.isPinned {
+            if live.atom.isPinned {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(palette.textTertiary)
             }
-            if !isInGroup, live.groupName != nil {
+            if !isInGroup, live.atom.groupName != nil {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(palette.accentSoft)
             }
-            Text(live.title)
+            Text(live.lastMessagePreview)
                 .font(.system(size: 15, weight: isActive ? .semibold : .regular))
                 .foregroundStyle(palette.textPrimary)
                 .lineLimit(1)
@@ -363,10 +312,11 @@ struct SidePanelSessionSidebarView: View {
 
             Spacer(minLength: 8)
 
-            Text(SidePanelSessionSection.relativeLabel(for: live.updatedAt))
+            Text(AtomsSection.relativeLabel(for: live.lastMessageAt))
                 .font(.system(size: 12))
                 .foregroundStyle(palette.textTertiary)
-                .fixedSize()
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, isInGroup ? 18 : 0)
@@ -377,7 +327,7 @@ struct SidePanelSessionSidebarView: View {
                 .fill(isActive ? palette.surfaceSubtle : .clear)
         )
         .contentShape(Rectangle())
-        .accessibilityIdentifier("history-conversation-row")
+        .accessibilityIdentifier("atom-row")
     }
 
     private var renameAlertBinding: Binding<Bool> {
@@ -386,13 +336,11 @@ struct SidePanelSessionSidebarView: View {
             set: { if !$0 { renameTarget = nil } }
         )
     }
-
-    private func drawerWidth(for totalWidth: CGFloat) -> CGFloat {
-        min(totalWidth * drawerWidthRatio, maxDrawerWidth)
-    }
 }
 
 #Preview {
-    SidePanelSessionSidebarView(flow: SidePanelSessionFlowController())
-        .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
+    NavigationStack {
+        AtomsListView(flow: AtomsFlowController())
+    }
+    .environment(\.sharedPalette, SharedOpenCorePalette.resolve(.light))
 }

@@ -4,7 +4,7 @@ import Foundation
 nonisolated enum SpeechRemoteTranscriptionContextResolver {
     nonisolated static func make(
         credentialStore: CredentialStoring,
-        providerPreference: SidePanelProviderPreferenceStore
+        providerPreference: ProviderPreferenceStore
     ) -> @Sendable () -> SpeechRemoteTranscriptionContext? {
         {
             let preference = providerPreference.preference()

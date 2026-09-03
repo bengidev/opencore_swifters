@@ -6,9 +6,7 @@ import Testing
 @Suite("Context Window Estimator")
 struct ContextWindowEstimatorTests {
     private func estimatedTokens(for text: String) -> Int {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return 0 }
-        return (trimmed.count + 3) / 4
+        ContextTokenCounter.countTokens(in: text)
     }
 
     @Test("Empty messages and no draft yield zero used with known limit")
@@ -52,6 +50,27 @@ struct ContextWindowEstimatorTests {
         #expect(usage.tokensUsed == expectedUsed)
         #expect(usage.tokenLimit == 131_072)
         #expect(usage.fractionUsed == Double(expectedUsed) / 131_072)
+    }
+
+    @Test("Pi reserve rule triggers when usage exceeds window minus reserve")
+    func piReserveRuleTriggersCompaction() {
+        let messages: [ChatMessage] = [.text(role: .user, content: String(repeating: "a", count: 400))]
+        #expect(
+            ContextWindowEstimator.shouldCompact(
+                messages: messages,
+                draft: nil,
+                contextLength: 100,
+                reserveTokens: 20
+            )
+        )
+        #expect(
+            !ContextWindowEstimator.shouldCompact(
+                messages: messages,
+                draft: nil,
+                contextLength: 10_000,
+                reserveTokens: 9_000
+            )
+        )
     }
 
     @Test("Draft message is included in estimate")

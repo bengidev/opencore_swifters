@@ -27,12 +27,21 @@ struct SettingsContextCompactionEnabledChangedCommand: SettingsCommand {
     }
 }
 
-/// Updates context compaction trigger threshold percent.
-struct SettingsContextCompactionThresholdChangedCommand: SettingsCommand {
-    let percent: Int
+/// Updates context compaction reserve token headroom.
+struct SettingsContextCompactionReserveTokensChangedCommand: SettingsCommand {
+    let reserveTokens: Int
 
     func execute(on state: inout SettingsFlowState) {
-        state.contextCompaction.triggerThresholdPercent = percent
+        state.contextCompaction.reserveTokens = reserveTokens
+    }
+}
+
+/// Updates how many recent tokens compaction keeps verbatim.
+struct SettingsContextCompactionKeepRecentTokensChangedCommand: SettingsCommand {
+    let keepRecentTokens: Int
+
+    func execute(on state: inout SettingsFlowState) {
+        state.contextCompaction.keepRecentTokens = keepRecentTokens
     }
 }
 

@@ -9,8 +9,8 @@ struct SpeechRecognitionClientTests {
     func liveWithCredentialStoreUsesFallback() {
         let store = CredentialInMemoryStore()
         try? store.save("sk-test", for: ProviderDescriptor.openRouter.id)
-        let providerPreference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(providerID: ProviderDescriptor.openRouter.id)
+        let providerPreference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(providerID: ProviderDescriptor.openRouter.id)
         )
         let transcriptionContext = SpeechRemoteTranscriptionContextResolver.make(
             credentialStore: store,

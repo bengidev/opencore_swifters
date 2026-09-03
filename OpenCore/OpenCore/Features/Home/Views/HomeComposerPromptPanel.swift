@@ -13,6 +13,7 @@ struct HomeComposerPromptPanel: View {
     @State private var sendFeedbackTrigger = false
     @State private var micFeedbackTrigger = false
     @State private var stopFeedbackTrigger = false
+    @State private var compactionFeedbackTrigger = false
     @State private var isAttachmentMenuPresented = false
     @State private var isFileImporterPresented = false
     @State private var isPhotoPickerPresented = false
@@ -37,11 +38,23 @@ struct HomeComposerPromptPanel: View {
         speech.state.isListening || speech.state.isTranscribing
     }
 
+    private var canCompact: Bool {
+        chat.state.hasMessages
+            && !chat.state.isSending
+            && !chat.state.isCompacting
+            && !speech.state.isListening
+            && !speech.state.isTranscribing
+            && !vision.state.isProcessing
+            && home.state.hasAPIKey
+            && home.state.hasSelectedModel
+    }
+
     private var canSend: Bool {
         let hasVisibleText = !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasAttachments = !chat.state.draftAttachments.isEmpty
         return (hasVisibleText || hasAttachments)
             && !chat.state.isSending
+            && !chat.state.isCompacting
             && !speech.state.isListening
             && !speech.state.isTranscribing
             && !vision.state.isProcessing
@@ -152,6 +165,20 @@ struct HomeComposerPromptPanel: View {
             }
 
             HStack(spacing: 6) {
+                if chat.state.isCompacting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 30, height: 30)
+                        .accessibilityLabel("Compacting conversation context")
+                } else {
+                    HomeComposerIconButton(
+                        systemImage: "rectangle.compress.vertical",
+                        accessibilityLabel: "Compact conversation context",
+                        isEnabled: canCompact,
+                        action: compactContext
+                    )
+                }
+
                 switch plusButtonState {
                 case .hidden:
                     EmptyView()
@@ -192,6 +219,7 @@ struct HomeComposerPromptPanel: View {
         .sensoryFeedback(.success, trigger: sendFeedbackTrigger)
         .sensoryFeedback(.success, trigger: micFeedbackTrigger)
         .sensoryFeedback(.success, trigger: stopFeedbackTrigger)
+        .sensoryFeedback(.success, trigger: compactionFeedbackTrigger)
         .animation(.easeInOut(duration: 0.18), value: isSpeechComposerActive)
         .animation(.easeInOut(duration: 0.18), value: chat.state.draftAttachments.count)
         .animation(.easeInOut(duration: 0.18), value: vision.state.isProcessing)
@@ -244,6 +272,15 @@ struct HomeComposerPromptPanel: View {
             guard let capture else { return }
             applyVoiceCapture(capture)
             speech.clearPendingCapture()
+        }
+    }
+
+    private func compactContext() {
+        guard canCompact else { return }
+        dismissKeyboard()
+        compactionFeedbackTrigger.toggle()
+        Task {
+            await chat.compactContextManually()
         }
     }
 

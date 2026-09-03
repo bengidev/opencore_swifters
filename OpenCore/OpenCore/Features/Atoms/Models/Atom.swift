@@ -1,11 +1,10 @@
 import Foundation
 
-/// Pure domain model for a conversation in the side panel.
+/// Pure domain model for a persisted atom — session metadata plus chat history.
 ///
-/// `groupName` places the conversation into a named folder in the history
-/// sidebar. `nil` means the conversation is ungrouped (appears in its
-/// recency bucket).
-nonisolated struct SidePanelConversation: Equatable, Identifiable, Sendable {
+/// `groupName` places the atom into a named folder in the Atoms list.
+/// `nil` means the atom is ungrouped (appears in its created-date section).
+nonisolated struct Atom: Equatable, Identifiable, Sendable {
     let id: UUID
     var title: String
     let createdAt: Date
@@ -28,4 +27,12 @@ nonisolated struct SidePanelConversation: Equatable, Identifiable, Sendable {
         self.isPinned = isPinned
         self.groupName = groupName
     }
+}
+
+/// Row model for the Atoms list — atom metadata plus last-message preview.
+nonisolated struct AtomListEntry: Equatable, Identifiable, Sendable {
+    var id: UUID { atom.id }
+    var atom: Atom
+    let lastMessagePreview: String
+    let lastMessageAt: Date
 }

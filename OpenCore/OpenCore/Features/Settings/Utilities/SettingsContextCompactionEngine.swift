@@ -1,11 +1,10 @@
 import Foundation
 
-/// Strategy for reducing message history when context usage exceeds a threshold.
+/// Strategy for reducing message history when session-tree compaction is unavailable.
 nonisolated protocol SettingsContextCompactionStrategizing: Sendable {
     func compact(
         messages: [ChatMessage],
         contextLength: Int,
-        thresholdPercent: Int,
         minRecentMessages: Int
     ) async throws -> [ChatMessage]
 }
@@ -13,23 +12,30 @@ nonisolated protocol SettingsContextCompactionStrategizing: Sendable {
 /// Model-agnostic summarization boundary for compaction.
 nonisolated protocol SettingsContextCompactionSummarizing: Sendable {
     func summarize(messages: [ChatMessage]) async throws -> String
+    func summarize(prompt: String) async throws -> String
 }
 
-/// Drops oldest non-system messages until usage falls below the threshold.
+extension SettingsContextCompactionSummarizing {
+    func summarize(prompt: String) async throws -> String {
+        try await summarize(messages: [.text(role: .user, content: prompt)])
+    }
+}
+
+/// Drops oldest non-system messages until usage falls below the Pi reserve threshold.
 nonisolated struct SettingsContextCompactionTrimStrategy: SettingsContextCompactionStrategizing {
     func compact(
         messages: [ChatMessage],
         contextLength: Int,
-        thresholdPercent: Int,
         minRecentMessages: Int
     ) async throws -> [ChatMessage] {
         guard contextLength > 0, messages.count > minRecentMessages else { return messages }
 
         var working = messages
-        let targetFraction = Double(thresholdPercent) / 100.0 * 0.85
+        let reserveTokens = SettingsContextCompactionPreference().reserveTokens
+        let targetTokens = max(0, contextLength - reserveTokens)
 
         while working.count > minRecentMessages + 1,
-              usageFraction(messages: working, contextLength: contextLength) >= targetFraction {
+              ContextTokenCounter.countTokens(for: working) > targetTokens {
             guard let dropIndex = indexOfOldestDroppableMessage(in: working, minRecentMessages: minRecentMessages) else {
                 break
             }
@@ -50,70 +56,19 @@ nonisolated struct SettingsContextCompactionTrimStrategy: SettingsContextCompact
     private func isLeadingSystemMessage(_ message: ChatMessage, at index: Int) -> Bool {
         index == 0 && message.role == .system
     }
-
-    private func usageFraction(messages: [ChatMessage], contextLength: Int) -> Double {
-        ContextWindowEstimator.estimate(
-            messages: messages,
-            draft: nil,
-            contextLength: contextLength
-        ).fractionUsed
-    }
 }
 
-/// Summarizes the oldest block into a single system message before the recent tail.
-nonisolated struct SettingsContextCompactionSummarizeStrategy: SettingsContextCompactionStrategizing {
-    let summarizer: any SettingsContextCompactionSummarizing
-
-    func compact(
-        messages: [ChatMessage],
-        contextLength: Int,
-        thresholdPercent: Int,
-        minRecentMessages: Int
-    ) async throws -> [ChatMessage] {
-        guard messages.count > minRecentMessages else { return messages }
-
-        let splitIndex = messages.count - minRecentMessages
-        let leadingSystem = messages.first?.role == .system ? messages[0] : nil
-        let compactStart = leadingSystem == nil ? 0 : 1
-        let compactEnd = splitIndex
-        guard compactEnd > compactStart else { return messages }
-
-        let toSummarize = Array(messages[compactStart..<compactEnd])
-        guard !toSummarize.isEmpty else { return messages }
-
-        let summaryText = try await summarizer.summarize(messages: toSummarize)
-        let summaryMessage = ChatMessage.system(
-            id: UUID(),
-            content: "[Conversation summary]\n\(summaryText)",
-            timestamp: toSummarize.last?.timestamp ?? Date()
-        )
-
-        var result: [ChatMessage] = []
-        if let leadingSystem { result.append(leadingSystem) }
-        result.append(summaryMessage)
-        result.append(contentsOf: messages[splitIndex...])
-        return result
-    }
-}
-
-/// Facade coordinating trim-then-summarize compaction.
+/// Facade coordinating Pi-style append-only compaction checkpoints.
 nonisolated struct SettingsContextCompactionEngine: Sendable {
     let trimStrategy: any SettingsContextCompactionStrategizing
-    let summarizeStrategy: any SettingsContextCompactionStrategizing
+    let summarizer: any SettingsContextCompactionSummarizing
 
     init(
         trimStrategy: any SettingsContextCompactionStrategizing = SettingsContextCompactionTrimStrategy(),
-        summarizeStrategy: (any SettingsContextCompactionStrategizing)? = nil,
-        summarizer: (any SettingsContextCompactionSummarizing)? = nil
+        summarizer: any SettingsContextCompactionSummarizing
     ) {
         self.trimStrategy = trimStrategy
-        if let summarizeStrategy {
-            self.summarizeStrategy = summarizeStrategy
-        } else if let summarizer {
-            self.summarizeStrategy = SettingsContextCompactionSummarizeStrategy(summarizer: summarizer)
-        } else {
-            self.summarizeStrategy = SettingsContextCompactionTrimStrategy()
-        }
+        self.summarizer = summarizer
     }
 
     func shouldCompact(
@@ -122,40 +77,176 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
         preference: SettingsContextCompactionPreference
     ) -> Bool {
         guard preference.isEnabled, contextLength > 0, !messages.isEmpty else { return false }
-        let usage = ContextWindowEstimator.estimate(
+        return ContextWindowEstimator.shouldCompact(
             messages: messages,
             draft: nil,
-            contextLength: contextLength
+            contextLength: contextLength,
+            reserveTokens: preference.reserveTokens
         )
-        let threshold = Double(preference.triggerThresholdPercent) / 100.0
-        return usage.fractionUsed >= threshold
     }
 
     func compactIfNeeded(
         messages: [ChatMessage],
+        sessionEntries: [AtomSessionEntry],
+        leafEntryID: UUID?,
         contextLength: Int,
         preference: SettingsContextCompactionPreference
-    ) async throws -> [ChatMessage] {
+    ) async throws -> SettingsContextCompactionOutcome {
         guard shouldCompact(messages: messages, contextLength: contextLength, preference: preference) else {
-            return messages
+            return .unchanged(messages)
         }
 
-        let trimmed = try await trimStrategy.compact(
+        return try await performCompaction(
             messages: messages,
+            sessionEntries: sessionEntries,
+            leafEntryID: leafEntryID,
             contextLength: contextLength,
-            thresholdPercent: preference.triggerThresholdPercent,
-            minRecentMessages: preference.minRecentMessages
+            preference: preference,
+            keepRecentTokens: preference.keepRecentTokens
         )
+    }
 
-        if !shouldCompact(messages: trimmed, contextLength: contextLength, preference: preference) {
-            return trimmed
+    func compactManually(
+        messages: [ChatMessage],
+        sessionEntries: [AtomSessionEntry],
+        leafEntryID: UUID?,
+        contextLength: Int,
+        preference: SettingsContextCompactionPreference
+    ) async throws -> SettingsContextCompactionOutcome {
+        try await performCompaction(
+            messages: messages,
+            sessionEntries: sessionEntries,
+            leafEntryID: leafEntryID,
+            contextLength: contextLength,
+            preference: preference,
+            keepRecentTokens: 0
+        )
+    }
+
+    func compactForOverflow(
+        messages: [ChatMessage],
+        sessionEntries: [AtomSessionEntry],
+        leafEntryID: UUID?,
+        contextLength: Int,
+        preference: SettingsContextCompactionPreference
+    ) async throws -> SettingsContextCompactionOutcome {
+        try await performCompaction(
+            messages: messages,
+            sessionEntries: sessionEntries,
+            leafEntryID: leafEntryID,
+            contextLength: contextLength,
+            preference: preference,
+            keepRecentTokens: preference.keepRecentTokens
+        )
+    }
+
+    private func performCompaction(
+        messages: [ChatMessage],
+        sessionEntries: [AtomSessionEntry],
+        leafEntryID: UUID?,
+        contextLength: Int,
+        preference: SettingsContextCompactionPreference,
+        keepRecentTokens: Int
+    ) async throws -> SettingsContextCompactionOutcome {
+        let tokensBefore = ContextTokenCounter.countTokens(for: messages)
+        let plannerSettings = AtomSessionCompactionPlanner.Settings(
+            keepRecentTokens: keepRecentTokens
+        )
+        guard let preparation = AtomSessionCompactionPlanner.prepareCompaction(
+            entries: sessionEntries,
+            leafID: leafEntryID,
+            settings: plannerSettings,
+            tokensBefore: tokensBefore
+        ) else {
+            guard contextLength > 0 else { return .unchanged(messages) }
+            let trimmed = try await trimStrategy.compact(
+                messages: messages,
+                contextLength: contextLength,
+                minRecentMessages: preference.minRecentMessages
+            )
+            guard trimmed != messages else { return .unchanged(messages) }
+            return SettingsContextCompactionOutcome(projectedMessages: trimmed, checkpoint: nil)
         }
 
-        return try await summarizeStrategy.compact(
-            messages: trimmed,
-            contextLength: contextLength,
-            thresholdPercent: preference.triggerThresholdPercent,
-            minRecentMessages: preference.minRecentMessages
+        let summaryBody = try await summarizePreparedSegment(preparation)
+
+        let checkpoint = AtomCompactionCheckpoint(
+            summary: summaryBody,
+            firstKeptEntryID: preparation.firstKeptEntryID,
+            tokensBefore: tokensBefore,
+            readFiles: preparation.readFiles,
+            modifiedFiles: preparation.modifiedFiles
         )
+
+        var syntheticEntries = sessionEntries
+        let compactionEntry = AtomSessionEntry.compactionEntry(
+            id: UUID(),
+            atomID: sessionEntries.first?.atomID ?? UUID(),
+            parentID: leafEntryID,
+            checkpoint: checkpoint,
+            timestamp: Date()
+        )
+        syntheticEntries.append(compactionEntry)
+
+        let projected = AtomSessionContextBuilder.buildModelMessages(
+            entries: syntheticEntries,
+            leafID: compactionEntry.id
+        )
+
+        return SettingsContextCompactionOutcome(
+            projectedMessages: projected,
+            checkpoint: checkpoint
+        )
+    }
+
+    private func summarizePreparedSegment(
+        _ preparation: AtomSessionCompactionPlanner.Preparation
+    ) async throws -> String {
+        if preparation.isSplitTurn {
+            let historyPrompt = AtomSessionCompactionPlanner.structuredSummarizationPrompt(
+                messagesToSummarize: preparation.messagesToSummarize,
+                previousSummary: preparation.previousSummary
+            )
+            let historySummary = try await summarizer.summarize(prompt: historyPrompt)
+            let turnPrefixPrompt = AtomSessionCompactionPlanner.splitTurnPrefixPrompt(
+                messages: preparation.turnPrefixMessages
+            )
+            let turnPrefixSummary = try await summarizer.summarize(prompt: turnPrefixPrompt)
+            let merged = AtomSessionCompactionPlanner.mergeSplitSummaries(
+                historySummary: historySummary,
+                turnPrefixSummary: turnPrefixSummary
+            )
+            return appendFileTags(
+                to: merged,
+                readFiles: preparation.readFiles,
+                modifiedFiles: preparation.modifiedFiles
+            )
+        }
+
+        let prompt = AtomSessionCompactionPlanner.structuredSummarizationPrompt(
+            messagesToSummarize: preparation.messagesToSummarize,
+            previousSummary: preparation.previousSummary
+        )
+        let summaryText = try await summarizer.summarize(prompt: prompt)
+        return appendFileTags(
+            to: summaryText,
+            readFiles: preparation.readFiles,
+            modifiedFiles: preparation.modifiedFiles
+        )
+    }
+
+    private func appendFileTags(
+        to summary: String,
+        readFiles: [String],
+        modifiedFiles: [String]
+    ) -> String {
+        var body = summary
+        if !readFiles.isEmpty {
+            body += "\n\n<read-files>\n\(readFiles.joined(separator: "\n"))\n</read-files>"
+        }
+        if !modifiedFiles.isEmpty {
+            body += "\n\n<modified-files>\n\(modifiedFiles.joined(separator: "\n"))\n</modified-files>"
+        }
+        return body
     }
 }

@@ -118,7 +118,7 @@ struct SettingsView: View {
         SettingsView(
             flow: SettingsFlowController(
                 credentialStore: CredentialInMemoryStore(),
-                providerPreference: SidePanelInMemoryProviderPreferenceStore()
+                providerPreference: InMemoryProviderPreferenceStore()
             )
         )
     }

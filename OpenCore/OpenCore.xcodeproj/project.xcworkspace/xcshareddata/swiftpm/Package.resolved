@@ -1,6 +1,15 @@
 {
-  "originHash" : "8320cffa9b619578c35f5fbdb6e7393b53e9ff8d2b2796ee6fd17e148adf68a6",
+  "originHash" : "404862cf93fd4b07fd22a8d16c34965397d1003eb8abd357b2a00582d8405ee1",
   "pins" : [
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift",
+      "state" : {
+        "revision" : "b83108d10f42680d78f23fe4d4d80fc88dab3212",
+        "version" : "7.11.1"
+      }
+    },
     {
       "identity" : "latexswiftui",
       "kind" : "remoteSourceControl",
@@ -62,6 +71,15 @@
       "state" : {
         "revision" : "c30af35f753aa1f54872522d6530b485fdb43d14",
         "version" : "0.28.0"
+      }
+    },
+    {
+      "identity" : "tiktoken",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/aespinilla/Tiktoken.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "4ad6460448278f7a28f1e4ee2723500369f20acb"
       }
     }
   ],

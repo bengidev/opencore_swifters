@@ -8,8 +8,8 @@ import Testing
 struct HomeContextWindowTests {
     @Test("Catalog fetch applies selected model context limit")
     func catalogFetchAppliesContextLimit() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
@@ -31,7 +31,7 @@ struct HomeContextWindowTests {
     @Test("Credentials change reloads catalog and updates context limit")
     func credentialsChangeReloadsCatalog() async {
         let credentialStore = CredentialInMemoryStore()
-        let preference = SidePanelInMemoryProviderPreferenceStore()
+        let preference = InMemoryProviderPreferenceStore()
         let home = HomeFlowController(
             catalog: HomeTestCatalog.client,
             credentialStore: credentialStore,
@@ -52,8 +52,8 @@ struct HomeContextWindowTests {
 
     @Test("Refresh reflects messages, draft, and selected model limit")
     func refreshReflectsConversationAndModel() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )
         )
@@ -69,14 +69,16 @@ struct HomeContextWindowTests {
             draftMessage: "draft"
         )
 
+        let messages = [ChatMessage.text(role: .user, content: String(repeating: "a", count: 400))]
+        let expectedUsed = ContextTokenCounter.countTokens(for: messages, draft: "draft")
         #expect(home.state.contextUsage.tokenLimit == 131_072)
-        #expect(home.state.contextUsage.tokensUsed == 102)
+        #expect(home.state.contextUsage.tokensUsed == expectedUsed)
     }
 
     @Test("Model selection updates token limit without clearing used estimate")
     func modelSelectionUpdatesLimit() async {
-        let preference = SidePanelInMemoryProviderPreferenceStore(
-            preference: SidePanelProviderPreference(
+        let preference = InMemoryProviderPreferenceStore(
+            preference: ProviderPreference(
                 providerID: ProviderDescriptor.openRouter.id,
                 modelID: "meta-llama/llama-3.3-70b-instruct:free"
             )

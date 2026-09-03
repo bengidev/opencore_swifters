@@ -76,6 +76,33 @@ SidePanel is a self-contained internal module with a nested `Session/` scope for
 
 Home uses flat role folders only (`Core/`, `Models/`, `Utilities/`, `Views/`). Context window estimation lives in Home; compaction prefs and engine live in Settings.
 
+Atom session persistence (`Shared/Persistence/Session/`, GRDB store) is append-only: message entries and compaction checkpoints form a tree. Chat resume and model sends use the projected context; the display view retains every message entry for auditing.
+
+```mermaid
+flowchart TB
+    subgraph features [Feature modules]
+        Home[Home<br/>ContextWindowEstimator]
+        Chat[Chat<br/>ChatFlowController]
+        Settings[Settings<br/>CompactionEngine]
+    end
+
+    subgraph shared [Shared persistence]
+        GRDB[(GRDB atom session tree)]
+        Builder[AtomSessionContextBuilder]
+    end
+
+    Settings -->|prefs + engine| Chat
+    Home -->|token estimate| Chat
+    Chat -->|append messages / checkpoints| GRDB
+    GRDB --> Builder
+    Builder -->|projected| Chat
+    Builder -->|display| GRDB
+```
+
+See [docs/contexts/settings/Settings-CONTEXT.md](../contexts/settings/Settings-CONTEXT.md) for compaction flow diagrams.
+
+Local Swift packages live under `OpenCore/Packages/` (e.g. `ThinkingOrbsKit`).
+
 ## Role-based folders
 
 Each feature organizes files by responsibility:

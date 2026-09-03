@@ -6,7 +6,7 @@ struct OpenCoreApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var onboardingFlow: OnboardingFlowController
-    @State private var sidePanel: SidePanelFlowController
+    @State private var atoms: AtomsFlowController
     @State private var home: HomeFlowController
     @State private var chat: ChatFlowController
     @State private var settings: SettingsFlowController
@@ -14,20 +14,39 @@ struct OpenCoreApp: App {
     @State private var vision: VisionFlowController
 
     private let modelContainer: ModelContainer
+    private let grdbDatabase: PersistenceGRDBDatabase
+    private let atomHistoryStore: PersistenceAtomHistoryStore
 
     init() {
         let modelContainer = Self.makeModelContainer()
         self.modelContainer = modelContainer
+
+        let grdbDatabase: PersistenceGRDBDatabase
+        do {
+            grdbDatabase = try PersistenceGRDBDatabase.make()
+            try PersistenceAtomHistoryStore.migrateSwiftDataIfNeeded(
+                database: grdbDatabase,
+                modelContainer: modelContainer
+            )
+        } catch {
+            fatalError("Could not create GRDB database: \(error)")
+        }
+        self.grdbDatabase = grdbDatabase
+
+        let atomHistoryStore = PersistenceAtomHistoryStore.live(database: grdbDatabase)
+        self.atomHistoryStore = atomHistoryStore
+
         _onboardingFlow = State(
             initialValue: OnboardingFlowController(
                 persistence: .live(modelContainer: modelContainer)
             )
         )
         let credentialStore = CredentialKeychainStore(service: CredentialKeychainStore.openCoreService)
-        let providerPreference = SidePanelUserDefaultsProviderPreferenceStore()
+        let providerPreference = UserDefaultsProviderPreferenceStore()
         let contextCompactionPreference = SettingsUserDefaultsContextCompactionPreferenceStore()
-        let session = SidePanelSessionFlowController(history: .live(modelContainer: modelContainer))
-        _sidePanel = State(initialValue: SidePanelFlowController(session: session))
+        _atoms = State(
+            initialValue: AtomsFlowController(history: .live(store: atomHistoryStore))
+        )
 
         let homeController = HomeFlowController(
             credentialStore: credentialStore,
@@ -47,7 +66,7 @@ struct OpenCoreApp: App {
 
         _chat = State(initialValue: ChatFlowController(
             streaming: .live(credentialStore: credentialStore),
-            history: .live(modelContainer: modelContainer),
+            history: .live(store: atomHistoryStore),
             providerPreference: providerPreference,
             contextCompaction: contextCompaction,
             contextLengthResolver: {
@@ -73,8 +92,8 @@ struct OpenCoreApp: App {
     private static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
             OnboardingProgressEntity.self,
-            SidePanelConversationEntity.self,
-            SidePanelMessageEntity.self
+            AtomEntity.self,
+            AtomMessageEntity.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -90,7 +109,7 @@ struct OpenCoreApp: App {
             SharedThemedRootView {
                 AppRootView(
                     onboardingFlow: onboardingFlow,
-                    sidePanel: sidePanel,
+                    atoms: atoms,
                     home: home,
                     chat: chat,
                     settings: settings,
@@ -100,6 +119,9 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
+                if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+                    await ContextTokenCounter.warmUp()
+                }
                 await sweepExpiredVoiceAttachmentsIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -115,8 +137,8 @@ struct OpenCoreApp: App {
     @MainActor
     private func sweepExpiredVoiceAttachmentsIfNeeded() async {
         do {
-            try PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
-                modelContainer: modelContainer
+            try PersistenceAtomHistoryStore.sweepExpiredVoiceAttachments(
+                database: grdbDatabase
             )
         } catch {
             assertionFailure("Voice attachment retention sweep failed: \(error)")

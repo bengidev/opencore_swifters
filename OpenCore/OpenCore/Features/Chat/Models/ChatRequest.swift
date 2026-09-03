@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated struct ChatRequest: Equatable, Sendable {
-    let conversationID: UUID
+    let atomID: UUID
     let messages: [ChatMessage]
     let providerID: String
     let modelID: String
@@ -10,14 +10,14 @@ nonisolated struct ChatRequest: Equatable, Sendable {
     let providerSortBy: String?
 
     init(
-        conversationID: UUID,
+        atomID: UUID,
         messages: [ChatMessage],
         providerID: String,
         modelID: String,
         reasoningEffort: String? = nil,
         providerSortBy: String? = nil
     ) {
-        self.conversationID = conversationID
+        self.atomID = atomID
         self.messages = messages
         self.providerID = providerID
         self.modelID = modelID

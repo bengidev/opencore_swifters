@@ -49,7 +49,7 @@ struct HomeComposerView: View {
                 HomeComposerView(
                     home: HomeFlowController(
                         credentialStore: CredentialInMemoryStore(),
-                        providerPreference: SidePanelInMemoryProviderPreferenceStore()
+                        providerPreference: InMemoryProviderPreferenceStore()
                     ),
                     chat: ChatFlowController(),
                     speech: SpeechFlowController(),

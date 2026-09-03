@@ -27,7 +27,7 @@ struct ProviderOpenAICompatibleMultimodalWireTests {
 
         let body = try ProviderOpenAICompatibleAdapter.makeRequestBody(
             chatRequest: ChatRequest(
-                conversationID: UUID(),
+                atomID: UUID(),
                 messages: [message],
                 providerID: "openrouter",
                 modelID: "openai/gpt-4o"

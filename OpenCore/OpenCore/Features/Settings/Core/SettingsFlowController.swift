@@ -7,7 +7,7 @@ import Observation
 final class SettingsFlowController {
     private(set) var state: SettingsFlowState
     private let credentialStore: any CredentialStoring
-    private let providerPreference: any SidePanelProviderPreferenceStore
+    private let providerPreference: any ProviderPreferenceStore
     private let contextCompactionPreference: any SettingsContextCompactionPreferenceStore
     private let invoker = SettingsCommandInvoker()
 
@@ -18,7 +18,7 @@ final class SettingsFlowController {
     init(
         state: SettingsFlowState = SettingsFlowState(),
         credentialStore: any CredentialStoring,
-        providerPreference: any SidePanelProviderPreferenceStore,
+        providerPreference: any ProviderPreferenceStore,
         contextCompactionPreference: any SettingsContextCompactionPreferenceStore = SettingsUserDefaultsContextCompactionPreferenceStore()
     ) {
         self.state = state
@@ -30,7 +30,8 @@ final class SettingsFlowController {
     func dispatch(_ command: any SettingsCommand) {
         invoker.invoke(command, on: &state)
         if command is SettingsContextCompactionEnabledChangedCommand
-            || command is SettingsContextCompactionThresholdChangedCommand {
+            || command is SettingsContextCompactionReserveTokensChangedCommand
+            || command is SettingsContextCompactionKeepRecentTokensChangedCommand {
             persistContextCompaction()
         }
     }
@@ -79,10 +80,14 @@ final class SettingsFlowController {
         dispatch(SettingsContextCompactionEnabledChangedCommand(isEnabled: isEnabled))
     }
 
-    func setContextCompactionThresholdPercent(_ percent: Int) {
-        guard !state.contextCompaction.isEnabled else { return }
-        let clamped = min(95, max(50, percent))
-        dispatch(SettingsContextCompactionThresholdChangedCommand(percent: clamped))
+    func setContextCompactionReserveTokens(_ tokens: Int) {
+        let clamped = min(32_768, max(4_096, tokens))
+        dispatch(SettingsContextCompactionReserveTokensChangedCommand(reserveTokens: clamped))
+    }
+
+    func setContextCompactionKeepRecentTokens(_ tokens: Int) {
+        let clamped = min(40_960, max(4_096, tokens))
+        dispatch(SettingsContextCompactionKeepRecentTokensChangedCommand(keepRecentTokens: clamped))
     }
 
     private func persistContextCompaction() {
