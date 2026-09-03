@@ -23,7 +23,7 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 - **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`, `HomeModelPopupView`
 - **Catalog**: `HomeModelCatalogClient` + `HomeModelCatalogCachePreferenceClient`
 - **Composition**: wires `ChatView` + `SidePanelView`; switches welcome vs active chat
-- **Context window (display)**: `ContextWindowEstimator`, `ContextWindowUsage`
+- **Context window (display)**: `ContextWindowEstimator`, `ContextWindowUsage`, `ContextTokenCounter`
 - **Speed mode**: `HomeComposerSpeedMode` (standard vs fast provider routing)
 
 ## Vision
@@ -52,12 +52,33 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 
 ## Chat
 
-- **Flow controller**: `ChatFlowController` (commands + async send/retry/stream + compaction hook)
+- **Flow controller**: `ChatFlowController` (commands + async send/retry/stream + Pi-style compaction hook)
 - **Attachments**: `ChatMessageAttachment` stores bubble media; `ChatModelInputBuilder` sends file paths and hidden speech transcripts to the model
 - **Entry view**: `ChatView` (title, thread, error banner; composer stays in Home)
 - **Streaming**: `ChatStreamingClient` + `ChatOpenAICompatibleStreamingClient`
-- **Persistence**: `ChatHistoryClient` maps `ChatMessage` ↔ `SidePanelMessageEntity` (SwiftData)
+- **Persistence**: `ChatHistoryClient` + GRDB append-only atom session entries (`PersistenceGRDBAtomHistoryStore`)
+- **Compaction**: automatic (reserve headroom trigger), manual (composer button), overflow retry via `ChatContextOverflowDetector`
+- **Resume**: `reopenAtom` loads projected messages (`loadProjectedChatMessages`) so compaction checkpoints survive atom resume; full history remains in the session tree
 - **Views**: `ChatView`, `ChatThreadView`, `ChatMessageRowView`, `ChatReasoningCardView`, `ChatErrorBannerView`
+
+Compaction detail and diagrams: [docs/contexts/settings/Settings-CONTEXT.md](../docs/contexts/settings/Settings-CONTEXT.md).
+
+```mermaid
+flowchart LR
+    subgraph live [Live chat]
+        CF[ChatFlowController]
+        SM[state.messages]
+    end
+
+    subgraph persist [GRDB]
+        TREE[session tree]
+    end
+
+    CF -->|send / compact| TREE
+    CF -->|reopenAtom| PROJ[loadProjectedMessages]
+    PROJ --> TREE
+    PROJ --> SM
+```
 
 ## SidePanel
 
