@@ -1,104 +1,106 @@
 import Foundation
 import SwiftData
 
-enum PersistenceConversationHistoryError: Error, Equatable {
-    case conversationNotFound(UUID)
-}
-
-/// SwiftData repository adapter for `PersistenceConversationHistoryStoring`.
-extension PersistenceConversationHistoryStore {
+extension PersistenceAtomHistoryStore {
     @MainActor
     static func live(modelContainer: ModelContainer) -> Self {
         Self(
-            listConversations: { @MainActor in
+            listAtomEntries: { @MainActor in
                 let context = ModelContext(modelContainer)
-                let descriptor = FetchDescriptor<SidePanelConversationEntity>(
+                let descriptor = FetchDescriptor<AtomEntity>(
                     sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
                 )
                 let mapped = try context.fetch(descriptor)
-                    .map(Self.conversation(from:))
+                    .map(Self.listEntry(from:))
                     .sorted { lhs, rhs in
-                        if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
-                        return lhs.updatedAt > rhs.updatedAt
+                        if lhs.atom.isPinned != rhs.atom.isPinned { return lhs.atom.isPinned }
+                        return lhs.lastMessageAt > rhs.lastMessageAt
                     }
                 var seen = Set<UUID>()
                 return mapped.filter { seen.insert($0.id).inserted }
             },
-            loadChatMessages: { @MainActor conversationID in
+            listAtoms: { @MainActor in
                 let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
+                let descriptor = FetchDescriptor<AtomEntity>(
+                    sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+                )
+                return try context.fetch(descriptor).map(Self.atom(from:))
+            },
+            loadChatMessages: { @MainActor atomID in
+                let context = ModelContext(modelContainer)
+                guard let entity = try Self.fetchAtom(atomID, in: context) else {
                     return []
                 }
                 return entity.messages
                     .sorted { $0.order < $1.order }
                     .compactMap(Self.chatMessage(from:))
             },
-            saveConversation: { @MainActor conversation in
+            saveAtom: { @MainActor atom in
                 let context = ModelContext(modelContainer)
-                let entity: SidePanelConversationEntity
-                if let existing = try Self.fetchConversation(conversation.id, in: context) {
+                let entity: AtomEntity
+                if let existing = try Self.fetchAtom(atom.id, in: context) {
                     entity = existing
-                    entity.title = conversation.title
-                    entity.updatedAt = conversation.updatedAt
-                    entity.isPinned = conversation.isPinned
-                    entity.groupName = conversation.groupName
+                    entity.title = atom.title
+                    entity.updatedAt = atom.updatedAt
+                    entity.isPinned = atom.isPinned
+                    entity.groupName = atom.groupName
                 } else {
-                    entity = SidePanelConversationEntity(
-                        id: conversation.id,
-                        title: conversation.title,
-                        createdAt: conversation.createdAt,
-                        updatedAt: conversation.updatedAt,
-                        isPinned: conversation.isPinned,
-                        groupName: conversation.groupName
+                    entity = AtomEntity(
+                        id: atom.id,
+                        title: atom.title,
+                        createdAt: atom.createdAt,
+                        updatedAt: atom.updatedAt,
+                        isPinned: atom.isPinned,
+                        groupName: atom.groupName
                     )
                     context.insert(entity)
                 }
                 try context.save()
             },
-            appendChatMessage: { @MainActor conversationID, message in
+            appendChatMessage: { @MainActor atomID, message in
                 let context = ModelContext(modelContainer)
-                guard let conversation = try Self.fetchConversation(conversationID, in: context) else {
+                guard let atom = try Self.fetchAtom(atomID, in: context) else {
                     return
                 }
 
-                if let existing = conversation.messages.first(where: { $0.id == message.id }) {
+                if let existing = atom.messages.first(where: { $0.id == message.id }) {
                     Self.apply(message, to: existing)
                 } else {
-                    let nextOrder = (conversation.messages.map(\.order).max() ?? -1) + 1
+                    let nextOrder = (atom.messages.map(\.order).max() ?? -1) + 1
                     let entity = Self.entity(from: message, order: nextOrder)
-                    entity.conversation = conversation
-                    conversation.messages.append(entity)
+                    entity.atom = atom
+                    atom.messages.append(entity)
                     context.insert(entity)
                 }
-                conversation.updatedAt = message.timestamp
+                atom.updatedAt = message.timestamp
                 try context.save()
             },
-            replaceChatMessages: { @MainActor conversationID, messages in
+            replaceChatMessages: { @MainActor atomID, messages in
                 let context = ModelContext(modelContainer)
-                guard let conversation = try Self.fetchConversation(conversationID, in: context) else {
-                    throw PersistenceConversationHistoryError.conversationNotFound(conversationID)
+                guard let atom = try Self.fetchAtom(atomID, in: context) else {
+                    throw PersistenceAtomHistoryError.atomNotFound(atomID)
                 }
 
-                for entity in conversation.messages {
+                for entity in atom.messages {
                     context.delete(entity)
                 }
-                conversation.messages.removeAll()
+                atom.messages.removeAll()
 
                 for (order, message) in messages.enumerated() {
                     let entity = Self.entity(from: message, order: order)
-                    entity.conversation = conversation
-                    conversation.messages.append(entity)
+                    entity.atom = atom
+                    atom.messages.append(entity)
                     context.insert(entity)
                 }
 
                 if let last = messages.last {
-                    conversation.updatedAt = last.timestamp
+                    atom.updatedAt = last.timestamp
                 }
                 try context.save()
             },
-            deleteConversation: { @MainActor conversationID in
+            deleteAtom: { @MainActor atomID in
                 let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
+                guard let entity = try Self.fetchAtom(atomID, in: context) else {
                     return
                 }
                 let messages = entity.messages.compactMap(Self.chatMessage(from:))
@@ -106,28 +108,28 @@ extension PersistenceConversationHistoryStore {
                 context.delete(entity)
                 try context.save()
             },
-            setPinned: { @MainActor conversationID, isPinned in
+            setPinned: { @MainActor atomID, isPinned in
                 let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
+                guard let entity = try Self.fetchAtom(atomID, in: context) else {
                     return
                 }
                 entity.isPinned = isPinned
                 try context.save()
             },
-            renameConversation: { @MainActor conversationID, title in
+            renameAtom: { @MainActor atomID, title in
                 let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { return }
                 let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
+                guard let entity = try Self.fetchAtom(atomID, in: context) else {
                     return
                 }
                 entity.title = trimmed
                 entity.updatedAt = .now
                 try context.save()
             },
-            setGroup: { @MainActor conversationID, groupName in
+            setGroup: { @MainActor atomID, groupName in
                 let context = ModelContext(modelContainer)
-                guard let entity = try Self.fetchConversation(conversationID, in: context) else {
+                guard let entity = try Self.fetchAtom(atomID, in: context) else {
                     return
                 }
                 if let groupName {
@@ -141,7 +143,7 @@ extension PersistenceConversationHistoryStore {
             },
             listGroups: { @MainActor in
                 let context = ModelContext(modelContainer)
-                let descriptor = FetchDescriptor<SidePanelConversationEntity>(
+                let descriptor = FetchDescriptor<AtomEntity>(
                     predicate: #Predicate { $0.groupName != nil }
                 )
                 let entities = try context.fetch(descriptor)
@@ -158,10 +160,10 @@ extension PersistenceConversationHistoryStore {
     ) throws {
         let cutoff = ChatVoiceAttachmentRetention.expirationCutoff(from: now)
         let context = ModelContext(modelContainer)
-        let conversations = try context.fetch(FetchDescriptor<SidePanelConversationEntity>())
+        let atoms = try context.fetch(FetchDescriptor<AtomEntity>())
 
-        for conversation in conversations {
-            let messages = conversation.messages
+        for atom in atoms {
+            let messages = atom.messages
                 .sorted { $0.order < $1.order }
                 .compactMap(Self.chatMessage(from:))
 
@@ -173,15 +175,15 @@ extension PersistenceConversationHistoryStore {
 
             ChatAttachmentStore.removeAll(at: result.removedPaths)
 
-            for entity in conversation.messages {
+            for entity in atom.messages {
                 context.delete(entity)
             }
-            conversation.messages.removeAll()
+            atom.messages.removeAll()
 
             for (order, message) in result.messages.enumerated() {
                 let entity = Self.entity(from: message, order: order)
-                entity.conversation = conversation
-                conversation.messages.append(entity)
+                entity.atom = atom
+                atom.messages.append(entity)
                 context.insert(entity)
             }
         }
@@ -190,11 +192,11 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func fetchConversation(
+    private static func fetchAtom(
         _ id: UUID,
         in context: ModelContext
-    ) throws -> SidePanelConversationEntity? {
-        var descriptor = FetchDescriptor<SidePanelConversationEntity>(
+    ) throws -> AtomEntity? {
+        var descriptor = FetchDescriptor<AtomEntity>(
             predicate: #Predicate { $0.id == id }
         )
         descriptor.fetchLimit = 1
@@ -202,8 +204,8 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func conversation(from entity: SidePanelConversationEntity) -> SidePanelConversation {
-        SidePanelConversation(
+    private static func atom(from entity: AtomEntity) -> Atom {
+        Atom(
             id: entity.id,
             title: entity.title,
             createdAt: entity.createdAt,
@@ -214,7 +216,58 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func chatMessage(from entity: SidePanelMessageEntity) -> ChatMessage? {
+    private static func listEntry(from entity: AtomEntity) -> AtomListEntry {
+        let atom = atom(from: entity)
+        if let last = lastListableMessage(in: entity) {
+            return AtomListEntry(
+                atom: atom,
+                lastMessagePreview: last.preview,
+                lastMessageAt: last.timestamp
+            )
+        }
+        let fallback = atom.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AtomListEntry(
+            atom: atom,
+            lastMessagePreview: fallback.isEmpty ? "New atom" : fallback,
+            lastMessageAt: atom.updatedAt
+        )
+    }
+
+    @MainActor
+    private static func lastListableMessage(
+        in entity: AtomEntity
+    ) -> (preview: String, timestamp: Date)? {
+        for message in entity.messages.sorted(by: { $0.order > $1.order }) {
+            guard let chatMessage = chatMessage(from: message),
+                  let preview = listPreview(for: chatMessage) else {
+                continue
+            }
+            return (preview, message.timestamp)
+        }
+        return nil
+    }
+
+    @MainActor
+    private static func listPreview(for message: ChatMessage) -> String? {
+        switch message {
+        case let .text(text):
+            let content = text.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !content.isEmpty { return content }
+            if !text.attachments.isEmpty { return "Attachment" }
+            return nil
+        case let .system(system):
+            let content = system.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return content.isEmpty ? nil : content
+        case let .outputStream(outputStream):
+            let command = outputStream.command.trimmingCharacters(in: .whitespacesAndNewlines)
+            return command.isEmpty ? nil : command
+        case .thinking:
+            return nil
+        }
+    }
+
+    @MainActor
+    private static func chatMessage(from entity: AtomMessageEntity) -> ChatMessage? {
         let kind = ChatMessageKind(rawValue: entity.kindRaw) ?? .text
         let role = ChatMessageRole(rawValue: entity.role) ?? .assistant
 
@@ -255,10 +308,10 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func entity(from message: ChatMessage, order: Int) -> SidePanelMessageEntity {
+    private static func entity(from message: ChatMessage, order: Int) -> AtomMessageEntity {
         switch message {
         case let .text(text):
-            return SidePanelMessageEntity(
+            return AtomMessageEntity(
                 id: text.id,
                 kindRaw: ChatMessageKind.text.rawValue,
                 role: text.role.rawValue,
@@ -272,7 +325,7 @@ extension PersistenceConversationHistoryStore {
                 )
             )
         case let .thinking(thinking):
-            return SidePanelMessageEntity(
+            return AtomMessageEntity(
                 id: thinking.id,
                 kindRaw: ChatMessageKind.thinking.rawValue,
                 role: thinking.role.rawValue,
@@ -282,7 +335,7 @@ extension PersistenceConversationHistoryStore {
                 order: order
             )
         case let .system(system):
-            return SidePanelMessageEntity(
+            return AtomMessageEntity(
                 id: system.id,
                 kindRaw: ChatMessageKind.system.rawValue,
                 role: system.role.rawValue,
@@ -292,7 +345,7 @@ extension PersistenceConversationHistoryStore {
                 order: order
             )
         case let .outputStream(outputStream):
-            return SidePanelMessageEntity(
+            return AtomMessageEntity(
                 id: outputStream.id,
                 kindRaw: ChatMessageKind.outputStream.rawValue,
                 role: outputStream.role.rawValue,
@@ -306,7 +359,7 @@ extension PersistenceConversationHistoryStore {
     }
 
     @MainActor
-    private static func apply(_ message: ChatMessage, to entity: SidePanelMessageEntity) {
+    private static func apply(_ message: ChatMessage, to entity: AtomMessageEntity) {
         switch message {
         case let .text(text):
             entity.kindRaw = ChatMessageKind.text.rawValue
