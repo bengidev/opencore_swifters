@@ -9,7 +9,7 @@ final class HomeFlowController {
     private let cachePreference: HomeModelCatalogCachePreferenceClient
     private let capabilityClient: HomeModelCapabilityClient
     private let credentialStore: any CredentialStoring
-    private let providerPreference: any SidePanelProviderPreferenceStore
+    private let providerPreference: any ProviderPreferenceStore
     private var searchDebounceTask: Task<Void, Never>?
     private var capabilityFetchTask: Task<Void, Never>?
     private var contextMessages: [ChatMessage] = []
@@ -32,7 +32,7 @@ final class HomeFlowController {
         cachePreference: HomeModelCatalogCachePreferenceClient = .live,
         capabilityClient: HomeModelCapabilityClient = .live,
         credentialStore: any CredentialStoring,
-        providerPreference: any SidePanelProviderPreferenceStore
+        providerPreference: any ProviderPreferenceStore
     ) {
         self.state = state
         self.catalog = catalog

@@ -2,7 +2,6 @@ import Foundation
 
 /// A reasoning-effort option for a model, sourced from the provider catalog.
 nonisolated struct ModelReasoningEffort: Equatable, Hashable, Identifiable, Sendable, Codable {
-    /// Wire value sent to the provider, or `nil` to omit the reasoning parameter.
     let wireValue: String?
 
     var id: String { wireValue ?? "off" }
@@ -12,7 +11,6 @@ nonisolated struct ModelReasoningEffort: Equatable, Hashable, Identifiable, Send
         return Self.displayTitle(for: wireValue)
     }
 
-    /// Value placed on the request, or `nil` when reasoning should be omitted.
     var requestEffort: String? { wireValue }
 
     static let off = ModelReasoningEffort(wireValue: nil)
@@ -32,8 +30,6 @@ nonisolated struct ModelReasoningEffort: Equatable, Hashable, Identifiable, Send
         }
     }
 
-    /// Builds menu options from catalog `supported_efforts`, appending Off when the
-    /// model allows disabling reasoning and the catalog does not list `none`.
     static func catalogOptions(from wireEfforts: [String], reasoningMandatory: Bool) -> [ModelReasoningEffort] {
         guard !wireEfforts.isEmpty else { return [] }
         var options = wireEfforts.map { ModelReasoningEffort(wireValue: $0) }
@@ -43,7 +39,6 @@ nonisolated struct ModelReasoningEffort: Equatable, Hashable, Identifiable, Send
         return options
     }
 
-    /// Picks a stored effort that is valid for the model, or a sensible default.
     static func resolvedSelection(
         storedWireValue: String?,
         available: [ModelReasoningEffort]

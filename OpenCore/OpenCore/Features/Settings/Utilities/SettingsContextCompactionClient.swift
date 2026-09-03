@@ -3,7 +3,7 @@ import Foundation
 /// Summarizes messages using the active provider stream (model-agnostic).
 nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCompactionSummarizing {
     let streaming: ChatStreamingClient
-    let providerPreference: any SidePanelProviderPreferenceStore
+    let providerPreference: any ProviderPreferenceStore
 
     func summarize(messages: [ChatMessage]) async throws -> String {
         let preference = providerPreference.preference()
@@ -13,7 +13,7 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
 
         let prompt = Self.summarizationPrompt(for: messages)
         let request = ChatRequest(
-            conversationID: UUID(),
+            atomID: UUID(),
             messages: [.text(role: .user, content: prompt, timestamp: Date())],
             providerID: preference.providerID ?? ProviderDescriptor.openRouter.id,
             modelID: modelID,

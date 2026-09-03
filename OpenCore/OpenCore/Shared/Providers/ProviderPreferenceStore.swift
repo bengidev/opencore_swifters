@@ -1,19 +1,9 @@
 import Foundation
 
 /// The persisted selection of provider and model.
-///
-/// Pure value data: a provider id (matching a `ProviderDescriptor` in the
-/// catalog) plus a dynamic model id string. The model id is intentionally a
-/// free-form string — model identity is no longer a closed enum, so any model
-/// the provider exposes can be selected without a code change.
-nonisolated struct SidePanelProviderPreference: Equatable, Sendable {
-    /// Stable provider identifier (e.g. `"openrouter"`). Defaults to the
-    /// default provider.
+nonisolated struct ProviderPreference: Equatable, Sendable {
     var providerID: String?
-    /// Dynamic model identifier (e.g. `"meta-llama/llama-3.3-70b-instruct:free"`).
-    /// `nil` until a model is selected; send is gated until this is set.
     var modelID: String?
-    /// Persisted reasoning effort wire value. `nil` omits reasoning on requests.
     var reasoningEffortWireValue: String?
 
     init(
@@ -27,32 +17,14 @@ nonisolated struct SidePanelProviderPreference: Equatable, Sendable {
     }
 }
 
-// MARK: - Store abstraction
-
-/// A minimal store for the provider/model preference.
-///
-/// This is the single source of truth for which provider and model the app
-/// sends with. The live adapter persists to `UserDefaults`; an in-memory double
-/// backs tests and previews.
-///
-/// The preference is read lazily (`preference()`), never cached by callers, so
-/// a change made in one surface takes effect on the next read with no stale
-/// value — mirroring how `CredentialStoring` resolves the secret per request.
-nonisolated protocol SidePanelProviderPreferenceStore: Sendable {
-    /// The current stored preference.
-    func preference() -> SidePanelProviderPreference
-    /// Persists the selected provider id.
+nonisolated protocol ProviderPreferenceStore: Sendable {
+    func preference() -> ProviderPreference
     func setProviderID(_ providerID: String?)
-    /// Persists the selected model id.
     func setModelID(_ modelID: String?)
-    /// Persists the selected reasoning effort wire value (`nil` = off).
     func setReasoningEffort(_ effort: ModelReasoningEffort)
 }
 
-// MARK: - UserDefaults adapter
-
-/// Live `SidePanelProviderPreferenceStore` backed by `UserDefaults`.
-nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProviderPreferenceStore {
+nonisolated struct UserDefaultsProviderPreferenceStore: ProviderPreferenceStore {
     let suiteName: String?
 
     private enum Key {
@@ -69,12 +41,12 @@ nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProvid
         suiteName.flatMap(UserDefaults.init(suiteName:)) ?? .standard
     }
 
-    func preference() -> SidePanelProviderPreference {
+    func preference() -> ProviderPreference {
         let stored = defaults.string(forKey: Key.reasoningLevel) ?? "high"
-        return SidePanelProviderPreference(
+        return ProviderPreference(
             providerID: nonEmpty(defaults.string(forKey: Key.providerID)),
             modelID: nonEmpty(defaults.string(forKey: Key.modelID)),
-            reasoningEffortWireValue: SidePanelReasoningModel.migrateStoredValue(stored)
+            reasoningEffortWireValue: LegacyReasoningLevel.migrateStoredValue(stored)
         )
     }
 
@@ -98,7 +70,7 @@ nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProvid
         if let wireValue = effort.wireValue {
             defaults.set(wireValue, forKey: Key.reasoningLevel)
         } else {
-            defaults.set(SidePanelReasoningModel.off.rawValue, forKey: Key.reasoningLevel)
+            defaults.set(LegacyReasoningLevel.off.rawValue, forKey: Key.reasoningLevel)
         }
     }
 
@@ -109,18 +81,15 @@ nonisolated struct SidePanelUserDefaultsProviderPreferenceStore: SidePanelProvid
     }
 }
 
-// MARK: - In-memory test double
-
-/// Thread-safe in-memory `SidePanelProviderPreferenceStore` for tests and previews.
-nonisolated final class SidePanelInMemoryProviderPreferenceStore: SidePanelProviderPreferenceStore, @unchecked Sendable {
+nonisolated final class InMemoryProviderPreferenceStore: ProviderPreferenceStore, @unchecked Sendable {
     private let lock = NSLock()
-    private var stored: SidePanelProviderPreference
+    private var stored: ProviderPreference
 
-    init(preference: SidePanelProviderPreference = SidePanelProviderPreference()) {
+    init(preference: ProviderPreference = ProviderPreference()) {
         self.stored = preference
     }
 
-    func preference() -> SidePanelProviderPreference {
+    func preference() -> ProviderPreference {
         lock.lock()
         defer { lock.unlock() }
         return stored
@@ -142,5 +111,33 @@ nonisolated final class SidePanelInMemoryProviderPreferenceStore: SidePanelProvi
         lock.lock()
         defer { lock.unlock() }
         stored.reasoningEffortWireValue = effort.wireValue
+    }
+}
+
+/// Legacy persisted reasoning tiers. New code stores wire values via
+/// `ProviderPreference.reasoningEffortWireValue`.
+nonisolated enum LegacyReasoningLevel: String, Equatable, Sendable, Codable {
+    case off
+    case low
+    case medium
+    case high
+
+    var wireValue: String? {
+        switch self {
+        case .off: return nil
+        case .low: return "low"
+        case .medium: return "medium"
+        case .high: return "high"
+        }
+    }
+
+    static func migrateStoredValue(_ raw: String) -> String? {
+        if let legacy = LegacyReasoningLevel(rawValue: raw) {
+            return legacy.wireValue
+        }
+        if raw == "off" || raw.isEmpty {
+            return nil
+        }
+        return raw
     }
 }

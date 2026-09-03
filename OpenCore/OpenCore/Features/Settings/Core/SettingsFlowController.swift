@@ -7,7 +7,7 @@ import Observation
 final class SettingsFlowController {
     private(set) var state: SettingsFlowState
     private let credentialStore: any CredentialStoring
-    private let providerPreference: any SidePanelProviderPreferenceStore
+    private let providerPreference: any ProviderPreferenceStore
     private let contextCompactionPreference: any SettingsContextCompactionPreferenceStore
     private let invoker = SettingsCommandInvoker()
 
@@ -18,7 +18,7 @@ final class SettingsFlowController {
     init(
         state: SettingsFlowState = SettingsFlowState(),
         credentialStore: any CredentialStoring,
-        providerPreference: any SidePanelProviderPreferenceStore,
+        providerPreference: any ProviderPreferenceStore,
         contextCompactionPreference: any SettingsContextCompactionPreferenceStore = SettingsUserDefaultsContextCompactionPreferenceStore()
     ) {
         self.state = state

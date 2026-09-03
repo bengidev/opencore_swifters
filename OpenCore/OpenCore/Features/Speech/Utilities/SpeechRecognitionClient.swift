@@ -51,7 +51,7 @@ nonisolated struct SpeechRecognitionClient: Sendable {
     static func live(
         locale: Locale = .current,
         credentialStore: CredentialStoring? = nil,
-        providerPreference: SidePanelProviderPreferenceStore? = nil
+        providerPreference: ProviderPreferenceStore? = nil
     ) -> SpeechRecognitionClient {
         let transcriptionContext: @Sendable () -> SpeechRemoteTranscriptionContext? = {
             guard let credentialStore, let providerPreference else { return nil }
