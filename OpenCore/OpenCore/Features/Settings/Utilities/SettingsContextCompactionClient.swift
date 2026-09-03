@@ -5,13 +5,12 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
     let streaming: ChatStreamingClient
     let providerPreference: any ProviderPreferenceStore
 
-    func summarize(messages: [ChatMessage]) async throws -> String {
+    func summarize(prompt: String) async throws -> String {
         let preference = providerPreference.preference()
         guard let modelID = preference.modelID else {
             throw SettingsContextCompactionError.missingModel
         }
 
-        let prompt = Self.summarizationPrompt(for: messages)
         let request = ChatRequest(
             atomID: UUID(),
             messages: [.text(role: .user, content: prompt, timestamp: Date())],
@@ -38,16 +37,17 @@ nonisolated struct SettingsContextCompactionStreamSummarizer: SettingsContextCom
         return summary.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func summarizationPrompt(for messages: [ChatMessage]) -> String {
+    func summarize(messages: [ChatMessage]) async throws -> String {
         let transcript = messages.map { message in
-            "\(message.role.rawValue): \(messageText(message))"
+            "\(message.role.rawValue): \(Self.messageText(message))"
         }.joined(separator: "\n")
 
-        return """
+        let prompt = """
         Summarize the following conversation for continuation. Preserve goals, decisions, facts, and open tasks. Be concise.
 
         \(transcript)
         """
+        return try await summarize(prompt: prompt)
     }
 
     private static func messageText(_ message: ChatMessage) -> String {
@@ -67,32 +67,95 @@ enum SettingsContextCompactionError: Error, Equatable {
     case summarizationFailed(String)
 }
 
-/// Thin client injected into Chat for automatic compaction before send.
+/// Thin client injected into Chat for automatic, manual, and overflow compaction.
 nonisolated struct SettingsContextCompactionClient: Sendable {
     var compactIfNeeded: @Sendable (
         _ messages: [ChatMessage],
+        _ sessionEntries: [AtomSessionEntry],
+        _ leafEntryID: UUID?,
         _ contextLength: Int
-    ) async throws -> [ChatMessage]
+    ) async throws -> SettingsContextCompactionOutcome
+
+    var compactManually: @Sendable (
+        _ messages: [ChatMessage],
+        _ sessionEntries: [AtomSessionEntry],
+        _ leafEntryID: UUID?,
+        _ contextLength: Int
+    ) async throws -> SettingsContextCompactionOutcome
+
+    var compactForOverflow: @Sendable (
+        _ messages: [ChatMessage],
+        _ sessionEntries: [AtomSessionEntry],
+        _ leafEntryID: UUID?,
+        _ contextLength: Int
+    ) async throws -> SettingsContextCompactionOutcome
 
     init(
-        compactIfNeeded: @escaping @Sendable ([ChatMessage], Int) async throws -> [ChatMessage]
+        compactIfNeeded: @escaping @Sendable (
+            [ChatMessage],
+            [AtomSessionEntry],
+            UUID?,
+            Int
+        ) async throws -> SettingsContextCompactionOutcome,
+        compactManually: @escaping @Sendable (
+            [ChatMessage],
+            [AtomSessionEntry],
+            UUID?,
+            Int
+        ) async throws -> SettingsContextCompactionOutcome,
+        compactForOverflow: @escaping @Sendable (
+            [ChatMessage],
+            [AtomSessionEntry],
+            UUID?,
+            Int
+        ) async throws -> SettingsContextCompactionOutcome
     ) {
         self.compactIfNeeded = compactIfNeeded
+        self.compactManually = compactManually
+        self.compactForOverflow = compactForOverflow
     }
 
-    static let disabled = SettingsContextCompactionClient { messages, _ in messages }
+    static let disabled = SettingsContextCompactionClient(
+        compactIfNeeded: { messages, _, _, _ in .unchanged(messages) },
+        compactManually: { messages, _, _, _ in .unchanged(messages) },
+        compactForOverflow: { messages, _, _, _ in .unchanged(messages) }
+    )
 
     static func live(
         engine: SettingsContextCompactionEngine,
         preferenceStore: any SettingsContextCompactionPreferenceStore
     ) -> SettingsContextCompactionClient {
-        SettingsContextCompactionClient { messages, contextLength in
-            let preference = preferenceStore.preference()
-            return try await engine.compactIfNeeded(
-                messages: messages,
-                contextLength: contextLength,
-                preference: preference
-            )
-        }
+        SettingsContextCompactionClient(
+            compactIfNeeded: { messages, sessionEntries, leafEntryID, contextLength in
+                let preference = preferenceStore.preference()
+                return try await engine.compactIfNeeded(
+                    messages: messages,
+                    sessionEntries: sessionEntries,
+                    leafEntryID: leafEntryID,
+                    contextLength: contextLength,
+                    preference: preference
+                )
+            },
+            compactManually: { messages, sessionEntries, leafEntryID, contextLength in
+                let preference = preferenceStore.preference()
+                return try await engine.compactManually(
+                    messages: messages,
+                    sessionEntries: sessionEntries,
+                    leafEntryID: leafEntryID,
+                    contextLength: contextLength,
+                    preference: preference
+                )
+            },
+            compactForOverflow: { messages, sessionEntries, leafEntryID, contextLength in
+                let preference = preferenceStore.preference()
+                return try await engine.compactForOverflow(
+                    messages: messages,
+                    sessionEntries: sessionEntries,
+                    leafEntryID: leafEntryID,
+                    contextLength: contextLength,
+                    preference: preference
+                )
+            }
+        )
     }
 }

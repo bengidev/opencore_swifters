@@ -1,52 +1,27 @@
 import Foundation
 
-/// Character-based token estimation strategy until provider usage events land.
+/// Token estimation backed by Tiktoken (`cl100k_base`) when available.
 nonisolated enum ContextWindowEstimator {
     static func estimate(
         messages: [ChatMessage],
         draft: String?,
         contextLength: Int?
     ) -> ContextWindowUsage {
-        var tokensUsed = messages.reduce(0) { partial, message in
-            partial + estimatedTokens(for: messageText(message))
-        }
-
-        if let draft {
-            tokensUsed += estimatedTokens(for: draft)
-        }
-
+        let tokensUsed = ContextTokenCounter.countTokens(for: messages, draft: draft)
         return ContextWindowUsage(
             tokensUsed: tokensUsed,
             tokenLimit: contextLength ?? 0
         )
     }
 
-    private static func messageText(_ message: ChatMessage) -> String {
-        switch message {
-        case let .text(textMessage):
-            guard textMessage.isComplete else { return "" }
-            var text = textMessage.providerContent
-            let wireOverhead = ChatMultimodalWireLogic.estimatedWireTokenOverhead(
-                for: textMessage.attachments
-            )
-            if wireOverhead > 0 {
-                text += String(repeating: " ", count: wireOverhead * 4)
-            }
-            return text
-        case let .thinking(thinkingMessage):
-            guard thinkingMessage.isComplete else { return "" }
-            return thinkingMessage.content
-        case let .system(systemMessage):
-            return systemMessage.content
-        case let .outputStream(outputStreamMessage):
-            guard outputStreamMessage.isComplete else { return "" }
-            return outputStreamMessage.command + "\n" + outputStreamMessage.detail.outputTail
-        }
-    }
-
-    private static func estimatedTokens(for text: String) -> Int {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return 0 }
-        return (trimmed.count + 3) / 4
+    static func shouldCompact(
+        messages: [ChatMessage],
+        draft: String?,
+        contextLength: Int,
+        reserveTokens: Int
+    ) -> Bool {
+        guard contextLength > 0 else { return false }
+        let tokensUsed = ContextTokenCounter.countTokens(for: messages, draft: draft)
+        return tokensUsed > max(0, contextLength - reserveTokens)
     }
 }
