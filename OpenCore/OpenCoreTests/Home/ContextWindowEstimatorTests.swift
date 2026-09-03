@@ -6,7 +6,7 @@ import Testing
 @Suite("Context Window Estimator")
 struct ContextWindowEstimatorTests {
     private func estimatedTokens(for text: String) -> Int {
-        ContextTokenCounter.heuristicTokenCount(for: text)
+        ContextTokenCounter.countTokens(in: text)
     }
 
     @Test("Empty messages and no draft yield zero used with known limit")

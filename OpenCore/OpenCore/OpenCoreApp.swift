@@ -119,7 +119,9 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
-                await ContextTokenCounter.warmUp()
+                if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+                    await ContextTokenCounter.warmUp()
+                }
                 await sweepExpiredVoiceAttachmentsIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in

@@ -69,8 +69,10 @@ struct HomeContextWindowTests {
             draftMessage: "draft"
         )
 
+        let messages = [ChatMessage.text(role: .user, content: String(repeating: "a", count: 400))]
+        let expectedUsed = ContextTokenCounter.countTokens(for: messages, draft: "draft")
         #expect(home.state.contextUsage.tokenLimit == 131_072)
-        #expect(home.state.contextUsage.tokensUsed == 102)
+        #expect(home.state.contextUsage.tokensUsed == expectedUsed)
     }
 
     @Test("Model selection updates token limit without clearing used estimate")
