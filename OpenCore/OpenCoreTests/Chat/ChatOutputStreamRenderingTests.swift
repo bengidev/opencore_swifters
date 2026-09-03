@@ -198,11 +198,8 @@ struct ChatOutputStreamStreamingTests {
                 .outputStreamBegan(command: "npm test", cwd: nil),
                 .outputStreamDelta("partial\n"),
             ]).asHangingStreamingClient,
-            history: ChatHistoryClient(
-                loadMessages: { _ in [] },
-                saveAtom: { _ in },
-                appendMessage: { _, message in appended.append(message) },
-                replaceMessages: { _, _ in }
+            history: ChatHistoryClient.testing(
+                appendMessage: { _, message in appended.append(message) }
             ),
             providerPreference: preference,
             now: { Date(timeIntervalSince1970: 0) }
