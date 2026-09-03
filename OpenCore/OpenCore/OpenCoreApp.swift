@@ -14,10 +14,28 @@ struct OpenCoreApp: App {
     @State private var vision: VisionFlowController
 
     private let modelContainer: ModelContainer
+    private let grdbDatabase: PersistenceGRDBDatabase
+    private let atomHistoryStore: PersistenceAtomHistoryStore
 
     init() {
         let modelContainer = Self.makeModelContainer()
         self.modelContainer = modelContainer
+
+        let grdbDatabase: PersistenceGRDBDatabase
+        do {
+            grdbDatabase = try PersistenceGRDBDatabase.make()
+            try PersistenceAtomHistoryStore.migrateSwiftDataIfNeeded(
+                database: grdbDatabase,
+                modelContainer: modelContainer
+            )
+        } catch {
+            fatalError("Could not create GRDB database: \(error)")
+        }
+        self.grdbDatabase = grdbDatabase
+
+        let atomHistoryStore = PersistenceAtomHistoryStore.live(database: grdbDatabase)
+        self.atomHistoryStore = atomHistoryStore
+
         _onboardingFlow = State(
             initialValue: OnboardingFlowController(
                 persistence: .live(modelContainer: modelContainer)
@@ -27,7 +45,7 @@ struct OpenCoreApp: App {
         let providerPreference = UserDefaultsProviderPreferenceStore()
         let contextCompactionPreference = SettingsUserDefaultsContextCompactionPreferenceStore()
         _atoms = State(
-            initialValue: AtomsFlowController(history: .live(modelContainer: modelContainer))
+            initialValue: AtomsFlowController(history: .live(store: atomHistoryStore))
         )
 
         let homeController = HomeFlowController(
@@ -48,7 +66,7 @@ struct OpenCoreApp: App {
 
         _chat = State(initialValue: ChatFlowController(
             streaming: .live(credentialStore: credentialStore),
-            history: .live(modelContainer: modelContainer),
+            history: .live(store: atomHistoryStore),
             providerPreference: providerPreference,
             contextCompaction: contextCompaction,
             contextLengthResolver: {
@@ -101,6 +119,7 @@ struct OpenCoreApp: App {
             }
             .task {
                 await onboardingFlow.onAppear()
+                await ContextTokenCounter.warmUp()
                 await sweepExpiredVoiceAttachmentsIfNeeded()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -117,7 +136,7 @@ struct OpenCoreApp: App {
     private func sweepExpiredVoiceAttachmentsIfNeeded() async {
         do {
             try PersistenceAtomHistoryStore.sweepExpiredVoiceAttachments(
-                modelContainer: modelContainer
+                database: grdbDatabase
             )
         } catch {
             assertionFailure("Voice attachment retention sweep failed: \(error)")
