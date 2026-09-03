@@ -52,7 +52,7 @@ nonisolated struct ChatMessageAttachment: Identifiable, Equatable, Sendable, Cod
     }
 }
 
-struct ChatTextMessageDetail: Codable, Equatable, Sendable {
+nonisolated struct ChatTextMessageDetail: Codable, Equatable, Sendable {
     var attachments: [ChatMessageAttachment]
     var modelContent: String?
 }

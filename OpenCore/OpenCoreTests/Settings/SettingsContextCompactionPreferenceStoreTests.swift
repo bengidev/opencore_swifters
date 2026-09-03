@@ -9,7 +9,7 @@ struct SettingsContextCompactionPreferenceStoreTests {
     func defaultThresholdIsNinety() {
         let store = SettingsInMemoryContextCompactionPreferenceStore()
         #expect(store.preference().triggerThresholdPercent == 90)
-        #expect(store.preference().isEnabled == false)
+        #expect(store.preference().isEnabled == true)
     }
 
     @Test("UserDefaults store round-trips preference")

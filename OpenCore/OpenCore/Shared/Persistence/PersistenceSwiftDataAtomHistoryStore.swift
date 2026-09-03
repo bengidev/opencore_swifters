@@ -140,7 +140,6 @@ enum PersistenceSwiftDataAtomMigrationSupport {
         return String(data: data, encoding: .utf8)
     }
 
-    @MainActor
     private static func decodeTextMessageDetail(from json: String?) -> ChatTextMessageDetail? {
         guard let json,
               let data = json.data(using: .utf8),
@@ -156,7 +155,6 @@ enum PersistenceSwiftDataAtomMigrationSupport {
         return String(data: data, encoding: .utf8)
     }
 
-    @MainActor
     private static func decodeOutputStreamDetail(
         from json: String?,
         isComplete: Bool

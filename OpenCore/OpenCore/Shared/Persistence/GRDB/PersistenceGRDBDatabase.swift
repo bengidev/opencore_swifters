@@ -39,7 +39,14 @@ final class PersistenceGRDBDatabase: Sendable {
     }
 
     static func inMemory() throws -> PersistenceGRDBDatabase {
-        let pool = try DatabasePool(path: ":memory:")
+        // DatabasePool requires WAL; use an isolated temp file per test instance.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencore-test-\(UUID().uuidString).sqlite")
+        var configuration = Configuration()
+        configuration.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
+        }
+        let pool = try DatabasePool(path: url.path, configuration: configuration)
         let database = PersistenceGRDBDatabase(pool: pool)
         try database.migrate()
         return database
