@@ -17,7 +17,6 @@ struct SettingsContextCompactionTrimStrategyTests {
         let compacted = try await strategy.compact(
             messages: messages,
             contextLength: contextLength,
-            thresholdPercent: 50,
             minRecentMessages: 4
         )
 
@@ -25,8 +24,8 @@ struct SettingsContextCompactionTrimStrategyTests {
         #expect(compacted.suffix(4).map(\.id) == messages.suffix(4).map(\.id))
     }
 
-    @Test("Reduces usage below threshold when possible")
-    func reducesUsageBelowThreshold() async throws {
+    @Test("Reduces usage below Pi reserve threshold when possible")
+    func reducesUsageBelowReserveThreshold() async throws {
         let messages = (0..<10).map { _ in
             ChatMessage.text(role: .user, content: String(repeating: "z", count: 120))
         }
@@ -34,15 +33,15 @@ struct SettingsContextCompactionTrimStrategyTests {
         let compacted = try await strategy.compact(
             messages: messages,
             contextLength: contextLength,
-            thresholdPercent: 50,
             minRecentMessages: 2
         )
 
+        let reserveTokens = SettingsContextCompactionPreference().reserveTokens
         let usage = ContextWindowEstimator.estimate(
             messages: compacted,
             draft: nil,
             contextLength: contextLength
         )
-        #expect(usage.fractionUsed < 0.5 || compacted.count <= 3)
+        #expect(usage.tokensUsed <= contextLength - reserveTokens || compacted.count <= 3)
     }
 }

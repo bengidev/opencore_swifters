@@ -45,32 +45,27 @@ struct SettingsFlowControllerTests {
         #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == "sk-new")
     }
 
-    @Test("Threshold change persists to compaction store when auto is off")
-    func thresholdChangePersistsWhenAutoOff() {
+    @Test("Reserve token change persists to compaction store")
+    func reserveTokenChangePersists() {
         let compactionStore = SettingsInMemoryContextCompactionPreferenceStore()
         let controller = makeController(compactionStore: compactionStore)
         controller.onAppear()
-        controller.setContextCompactionEnabled(false)
 
-        controller.setContextCompactionThresholdPercent(80)
+        controller.setContextCompactionReserveTokens(20_480)
 
-        #expect(compactionStore.preference().triggerThresholdPercent == 80)
-        #expect(controller.state.contextCompaction.triggerThresholdPercent == 80)
+        #expect(compactionStore.preference().reserveTokens == 20_480)
+        #expect(controller.state.contextCompaction.reserveTokens == 20_480)
     }
 
-    @Test("Threshold change is ignored while automatic compaction is on")
-    func thresholdChangeIgnoredWhenAutoOn() {
+    @Test("Keep recent token change persists to compaction store")
+    func keepRecentTokenChangePersists() {
         let compactionStore = SettingsInMemoryContextCompactionPreferenceStore()
-        var preference = compactionStore.preference()
-        preference.isEnabled = true
-        preference.triggerThresholdPercent = 90
-        compactionStore.setPreference(preference)
-
         let controller = makeController(compactionStore: compactionStore)
         controller.onAppear()
-        controller.setContextCompactionThresholdPercent(75)
 
-        #expect(compactionStore.preference().triggerThresholdPercent == 90)
-        #expect(controller.state.contextCompaction.triggerThresholdPercent == 90)
+        controller.setContextCompactionKeepRecentTokens(24_576)
+
+        #expect(compactionStore.preference().keepRecentTokens == 24_576)
+        #expect(controller.state.contextCompaction.keepRecentTokens == 24_576)
     }
 }
