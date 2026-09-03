@@ -20,6 +20,7 @@ final class ChatFlowController {
     private var accumulatedPartialThinking = ""
     private var accumulatedOutputStreamDelta = ""
     private var streamingFlushTask: Task<Void, Never>?
+    private var activeStreamParameters: ActiveStreamParameters?
     /// True once this turn has produced at least one command output stream.
     /// Survives to `.done` because `finalizeActiveOutputStream` clears the
     /// streaming ID; lets `.done` tell an agent-style turn (output + thinking,
@@ -27,6 +28,13 @@ final class ChatFlowController {
     private var didProduceOutputStreamThisTurn = false
     private let makeID: () -> UUID
     private let now: () -> Date
+
+    private struct ActiveStreamParameters {
+        let modelID: String
+        let preference: ProviderPreference
+        let providerSortBy: String?
+        let reasoningEffort: String?
+    }
 
     init(
         state: ChatFlowState = ChatFlowState(),
@@ -90,13 +98,57 @@ final class ChatFlowController {
         cancelStream()
         clearDraftAttachments()
         dispatch(ChatReopenAtomCommand(atom: atom))
-        let restored = (try? await history.loadMessages(atom.id)) ?? []
+        let restored = (try? await history.loadProjectedMessages(atom.id)) ?? []
         dispatch(ChatMessagesRestoredCommand(messages: restored))
     }
 
     func renameActiveAtom(id: UUID, title: String) {
         guard state.atom?.id == id else { return }
         state.atom?.title = title
+    }
+
+    func compactContextManually() async {
+        guard !state.isSending,
+              !state.isCompacting,
+              state.hasMessages else {
+            return
+        }
+
+        state.isCompacting = true
+        state.streamErrorMessage = nil
+        defer { state.isCompacting = false }
+
+        do {
+            try await ensureAtomForCompaction()
+            try await persistAtomMessages()
+
+            guard let atomID = state.atom?.id else { return }
+
+            let sessionEntries = try await history.loadSessionEntries(atomID)
+            let leafEntryID = try await history.loadLeafEntryID(atomID)
+            let outcome = try await contextCompaction.compactManually(
+                state.messages,
+                sessionEntries,
+                leafEntryID,
+                contextLengthResolver()
+            )
+
+            if outcome.checkpoint == nil, outcome.projectedMessages == state.messages {
+                state.streamErrorMessage = "Not enough conversation history to compact yet."
+                return
+            }
+
+            if let checkpoint = outcome.checkpoint {
+                try await history.appendCompaction(atomID, checkpoint)
+            }
+
+            state.messages = outcome.projectedMessages
+            try await history.replaceMessages(atomID, state.messages)
+            state.streamingRevision &+= 1
+        } catch {
+            state.streamErrorMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Could not compact conversation context."
+        }
     }
 
     // MARK: - Send / Retry
@@ -114,6 +166,7 @@ final class ChatFlowController {
         let preference = providerPreference.preference()
         guard (!visibleText.isEmpty || !attachments.isEmpty),
               !state.isSending,
+              !state.isCompacting,
               let modelID = preference.modelID else {
             return
         }
@@ -190,6 +243,7 @@ final class ChatFlowController {
     func retry(providerSortBy: String? = nil, reasoningEffort: String? = nil) async {
         let preference = providerPreference.preference()
         guard !state.isSending,
+              !state.isCompacting,
               let modelID = preference.modelID,
               !state.messages.isEmpty else {
             return
@@ -358,6 +412,12 @@ final class ChatFlowController {
         cancelStream()
         lastProviderSortBy = providerSortBy
         lastReasoningEffort = reasoningEffort
+        activeStreamParameters = ActiveStreamParameters(
+            modelID: modelID,
+            preference: preference,
+            providerSortBy: providerSortBy,
+            reasoningEffort: reasoningEffort
+        )
 
         let atomID = state.atom?.id ?? makeID()
         let request = ChatRequest(
@@ -371,11 +431,77 @@ final class ChatFlowController {
 
         let stream = streaming.stream(request)
         streamTask = Task { [weak self] in
-            for await event in stream {
-                guard let self, !Task.isCancelled else { return }
-                await self.handleStreamingEvent(event)
+            guard let self else { return }
+            await self.consumeStream(stream, allowOverflowRetry: true)
+        }
+    }
+
+    private func consumeStream(
+        _ stream: AsyncStream<ChatStreamingEvent>,
+        allowOverflowRetry: Bool
+    ) async {
+        for await event in stream {
+            guard !Task.isCancelled else { return }
+
+            if case let .error(streamError) = event,
+               allowOverflowRetry,
+               ChatContextOverflowDetector.isContextOverflow(streamError.message),
+               await recoverFromContextOverflow() {
+                return
+            }
+
+            await handleStreamingEvent(event)
+        }
+    }
+
+    private func recoverFromContextOverflow() async -> Bool {
+        rollbackIncompleteStreamingMessages()
+
+        do {
+            let didCompact = try await applyContextCompactionForOverflow()
+            guard didCompact else { return false }
+            try await persistAtomMessages()
+        } catch {
+            return false
+        }
+
+        guard let activeStreamParameters else { return false }
+
+        let request = ChatRequest(
+            atomID: state.atom?.id ?? makeID(),
+            messages: state.messages,
+            providerID: activeStreamParameters.preference.providerID ?? ProviderDescriptor.openRouter.id,
+            modelID: activeStreamParameters.modelID,
+            reasoningEffort: activeStreamParameters.reasoningEffort,
+            providerSortBy: activeStreamParameters.providerSortBy
+        )
+
+        state.streamErrorMessage = nil
+        state.streamingStatus = .running
+        state.isSending = true
+        await consumeStream(streaming.stream(request), allowOverflowRetry: false)
+        return true
+    }
+
+    private func rollbackIncompleteStreamingMessages() {
+        flushStreamingNow()
+        state.messages.removeAll { message in
+            switch message {
+            case let .text(text):
+                return !text.isComplete
+            case let .thinking(thinking):
+                return !thinking.isComplete
+            case let .outputStream(outputStream):
+                return !outputStream.isComplete
+            case .system:
+                return false
             }
         }
+        resetStreamingBuffers()
+        state.streamingThinkingID = nil
+        state.streamingAnswerID = nil
+        state.streamingOutputStreamID = nil
+        state.streamingRevision &+= 1
     }
 
     private func handleStreamingEvent(_ event: ChatStreamingEvent) async {
@@ -436,14 +562,7 @@ final class ChatFlowController {
 
             let atomID = state.atom?.id
             let updatedAtom = state.atom
-            let finalizedMessages: [ChatMessage] = [
-                state.streamingThinkingID,
-                state.streamingAnswerID
-            ]
-            .compactMap { id in
-                guard let id else { return nil }
-                return state.messages.first(where: { $0.id == id })
-            }
+            let persistedMessages = state.messages
 
             state.currentPartialText = ""
             state.currentPartialThinking = ""
@@ -463,9 +582,7 @@ final class ChatFlowController {
                     if let updatedAtom {
                         try? await history.saveAtom(updatedAtom)
                     }
-                    for message in finalizedMessages {
-                        try? await history.appendMessage(atomID, message)
-                    }
+                    try? await history.replaceMessages(atomID, persistedMessages)
                 }
             }
 
@@ -575,14 +692,70 @@ final class ChatFlowController {
         try await history.replaceMessages(conversation.id, state.messages)
     }
 
-    private func applyContextCompactionIfNeeded() async throws {
-        let contextLength = contextLengthResolver()
-        guard contextLength > 0 else { return }
+    private func ensureAtomForCompaction() async throws {
+        guard state.atom == nil else { return }
 
-        let compacted = try await contextCompaction.compactIfNeeded(state.messages, contextLength)
-        if compacted != state.messages {
-            state.messages = compacted
+        let timestamp = now()
+        let titleSource = state.messages.compactMap { message -> String? in
+            guard case let .text(text) = message, text.role == .user else { return nil }
+            let trimmed = text.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }.first ?? "New chat"
+
+        state.atom = Atom(
+            id: makeID(),
+            title: Self.atomTitle(visibleText: titleSource, attachments: []),
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+    }
+
+    private func applyContextCompactionIfNeeded() async throws {
+        _ = try await applyCompaction(using: contextCompaction.compactIfNeeded)
+    }
+
+    private func applyContextCompactionForOverflow() async throws -> Bool {
+        try await applyCompaction(using: contextCompaction.compactForOverflow)
+    }
+
+    private func applyCompaction(
+        using compaction: @Sendable (
+            [ChatMessage],
+            [AtomSessionEntry],
+            UUID?,
+            Int
+        ) async throws -> SettingsContextCompactionOutcome
+    ) async throws -> Bool {
+        let contextLength = contextLengthResolver()
+        guard contextLength > 0 else { return false }
+
+        let atomID = state.atom?.id
+        let sessionEntries: [AtomSessionEntry]
+        let leafEntryID: UUID?
+        if let atomID {
+            sessionEntries = try await history.loadSessionEntries(atomID)
+            leafEntryID = try await history.loadLeafEntryID(atomID)
+        } else {
+            sessionEntries = []
+            leafEntryID = nil
         }
+
+        let outcome = try await compaction(
+            state.messages,
+            sessionEntries,
+            leafEntryID,
+            contextLength
+        )
+
+        if let atomID, let checkpoint = outcome.checkpoint {
+            try await history.appendCompaction(atomID, checkpoint)
+        }
+
+        if outcome.projectedMessages != state.messages {
+            state.messages = outcome.projectedMessages
+            return true
+        }
+        return outcome.checkpoint != nil
     }
 
     private static func atomTitle(

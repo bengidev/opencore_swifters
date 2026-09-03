@@ -59,6 +59,7 @@ struct ChatClearActiveAtomCommand: ChatCommand {
         state.draftMessage = ""
         state.draftAttachments = []
         state.isSending = false
+        state.isCompacting = false
         state.streamingStatus = .idle
         state.currentPartialText = ""
         state.currentPartialThinking = ""
@@ -79,6 +80,7 @@ struct ChatReopenAtomCommand: ChatCommand {
         state.draftMessage = ""
         state.draftAttachments = []
         state.isSending = false
+        state.isCompacting = false
         state.streamingStatus = .idle
         state.currentPartialText = ""
         state.currentPartialThinking = ""
