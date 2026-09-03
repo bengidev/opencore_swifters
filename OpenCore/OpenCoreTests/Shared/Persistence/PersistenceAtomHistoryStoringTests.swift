@@ -1,11 +1,16 @@
 import Foundation
-import SwiftData
 import Testing
 
 @testable import OpenCore
 
 @Suite("Persistence Atom History")
+@MainActor
 struct PersistenceAtomHistoryStoringTests {
+    private func makeStore() throws -> PersistenceAtomHistoryStore {
+        let database = try PersistenceGRDBDatabase.inMemory()
+        return PersistenceAtomHistoryStore.live(database: database)
+    }
+
     @Test("Preview store returns empty atoms")
     func previewReturnsEmpty() async throws {
         let store = PersistenceAtomHistoryStore.preview
@@ -20,13 +25,9 @@ struct PersistenceAtomHistoryStoringTests {
         #expect(messages.isEmpty)
     }
 
-    @Test("Output stream detailJSON round trips through SwiftData")
-    @MainActor
+    @Test("Output stream detailJSON round trips through GRDB")
     func outputStreamDetailRoundTrip() async throws {
-        let schema = Schema([AtomEntity.self, AtomMessageEntity.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: schema, configurations: [configuration])
-        let store = PersistenceAtomHistoryStore.live(modelContainer: container)
+        let store = try makeStore()
 
         let atomID = UUID()
         let atom = Atom(
@@ -68,12 +69,8 @@ struct PersistenceAtomHistoryStoringTests {
     }
 
     @Test("List entries include last message preview")
-    @MainActor
     func listEntriesIncludeLastMessagePreview() async throws {
-        let schema = Schema([AtomEntity.self, AtomMessageEntity.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: schema, configurations: [configuration])
-        let store = PersistenceAtomHistoryStore.live(modelContainer: container)
+        let store = try makeStore()
 
         let atomID = UUID()
         try await store.saveAtom(Atom(
@@ -92,61 +89,58 @@ struct PersistenceAtomHistoryStoringTests {
         #expect(entries[0].lastMessagePreview == "Latest preview")
     }
 
-    @Test("Corrupt detailJSON derives status from isComplete")
-    @MainActor
-    func corruptDetailJSONFallback() async throws {
-        let schema = Schema([AtomEntity.self, AtomMessageEntity.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: schema, configurations: [configuration])
-        let context = ModelContext(container)
+    @Test("Compaction checkpoint preserves full history and projects summary")
+    func compactionCheckpointPreservesHistory() async throws {
+        let store = try makeStore()
+        let atomID = UUID()
+        try await store.saveAtom(Atom(
+            id: atomID,
+            title: "Compaction",
+            createdAt: .now,
+            updatedAt: .now
+        ))
 
-        let atomEntity = AtomEntity(
-            id: UUID(),
-            title: "Test",
-            createdAt: Date(timeIntervalSince1970: 0),
-            updatedAt: Date(timeIntervalSince1970: 0)
+        let firstID = UUID()
+        let secondID = UUID()
+        try await store.appendChatMessage(
+            atomID: atomID,
+            message: .text(id: firstID, role: .user, content: "old", timestamp: Date(timeIntervalSince1970: 0))
         )
-        context.insert(atomEntity)
-
-        let completeEntity = AtomMessageEntity(
-            id: UUID(),
-            kindRaw: ChatMessageKind.outputStream.rawValue,
-            role: ChatMessageRole.system.rawValue,
-            content: "npm test",
-            isComplete: true,
-            timestamp: Date(timeIntervalSince1970: 1),
-            order: 0,
-            detailJSON: "not-valid-json",
-            atom: atomEntity
+        try await store.appendChatMessage(
+            atomID: atomID,
+            message: .text(id: secondID, role: .user, content: "recent", timestamp: Date(timeIntervalSince1970: 1))
         )
-        atomEntity.messages.append(completeEntity)
-        context.insert(completeEntity)
 
-        let incompleteEntity = AtomMessageEntity(
-            id: UUID(),
-            kindRaw: ChatMessageKind.outputStream.rawValue,
-            role: ChatMessageRole.system.rawValue,
-            content: "git status",
-            isComplete: false,
-            timestamp: Date(timeIntervalSince1970: 2),
-            order: 1,
-            detailJSON: "{bad",
-            atom: atomEntity
+        let checkpoint = AtomCompactionCheckpoint(
+            summary: "merged history",
+            firstKeptEntryID: secondID,
+            tokensBefore: 1_000,
+            readFiles: [],
+            modifiedFiles: []
         )
-        atomEntity.messages.append(incompleteEntity)
-        context.insert(incompleteEntity)
-        try context.save()
+        try await store.appendCompaction(atomID: atomID, checkpoint: checkpoint)
 
-        let store = PersistenceAtomHistoryStore.live(modelContainer: container)
-        let loaded = try await store.loadChatMessages(atomID: atomEntity.id)
-        #expect(loaded.count == 2)
+        let rawEntries = try await store.loadSessionEntries(atomID: atomID)
+        #expect(rawEntries.count == 3)
+        #expect(rawEntries.filter { $0.kind == .message }.count == 2)
+        #expect(rawEntries.filter { $0.kind == .compaction }.count == 1)
 
-        guard case let .outputStream(completeOutput) = loaded[0],
-              case let .outputStream(incompleteOutput) = loaded[1] else {
-            Issue.record("Expected outputStream messages")
+        let projected = try await store.loadProjectedChatMessages(atomID: atomID)
+        #expect(projected.count == 2)
+        #expect(projected[0].role == .user)
+        #expect(projected[0].id != firstID)
+        guard case let .text(recent) = projected[1] else {
+            Issue.record("Expected recent text message")
             return
         }
-        #expect(completeOutput.detail.status == .completed)
-        #expect(incompleteOutput.detail.status == .running)
+        #expect(recent.content == "recent")
+
+        let display = try await store.loadChatMessages(atomID: atomID)
+        #expect(display.count == 2)
+        guard case let .text(old) = display[0] else {
+            Issue.record("Expected old text message")
+            return
+        }
+        #expect(old.content == "old")
     }
 }
