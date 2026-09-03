@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Tab shell composing Home, Settings, and About feature modules.
+/// Tab shell composing Home, Atoms, Settings, and About feature modules.
 struct HomeTabShellView: View {
-    @Bindable var sidePanel: SidePanelFlowController
+    @Bindable var atoms: AtomsFlowController
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
     @Bindable var settings: SettingsFlowController
@@ -16,9 +16,15 @@ struct HomeTabShellView: View {
             get: { home.state.selectedTab },
             set: { home.selectTab($0) }
         )) {
-            HomeView(sidePanel: sidePanel, home: home, chat: chat, speech: speech, vision: vision)
+            HomeView(home: home, chat: chat, speech: speech, vision: vision)
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(HomeTab.home)
+
+            NavigationStack {
+                AtomsListView(flow: atoms)
+            }
+            .tabItem { Label("Atoms", systemImage: "atom") }
+            .tag(HomeTab.atoms)
 
             NavigationStack {
                 SettingsView(flow: settings)
@@ -37,6 +43,9 @@ struct HomeTabShellView: View {
         .task {
             wireDelegates()
         }
+        .onChange(of: chat.state.atom?.id) { _, atomID in
+            atoms.mirrorActiveAtomID(atomID)
+        }
     }
 
     private func wireDelegates() {
@@ -45,7 +54,7 @@ struct HomeTabShellView: View {
         }
         settings.onProviderChanged = { providerID in
             Task { await home.handleProviderChanged(providerID) }
-            sidePanel.syncSelectedProviderID(providerID)
+            atoms.syncSelectedProviderID(providerID)
         }
 
         home.onInputCapabilitiesResolved = { capabilities in
@@ -53,21 +62,21 @@ struct HomeTabShellView: View {
             chat.clearDraftAttachments()
         }
 
-        sidePanel.onOpenConversation = { conversation in
+        atoms.onOpenAtom = { atom in
             home.selectTab(.home)
             Task {
                 await speech.cancelListening()
-                await chat.reopenConversation(conversation)
+                await chat.reopenAtom(atom)
             }
         }
-        sidePanel.onActiveConversationRenamed = { id, title in
-            chat.renameActiveConversation(id: id, title: title)
+        atoms.onActiveAtomRenamed = { id, title in
+            chat.renameActiveAtom(id: id, title: title)
         }
-        sidePanel.onActiveConversationDeleted = { id in
-            if chat.state.conversation?.id == id {
+        atoms.onActiveAtomDeleted = { id in
+            if chat.state.atom?.id == id {
                 Task {
                     await speech.cancelListening()
-                    chat.clearActiveConversation()
+                    chat.clearActiveAtom()
                 }
             }
         }
@@ -76,9 +85,9 @@ struct HomeTabShellView: View {
 
 #Preview {
     let credentialStore = CredentialInMemoryStore()
-    let providerPreference = SidePanelInMemoryProviderPreferenceStore()
+    let providerPreference = InMemoryProviderPreferenceStore()
     HomeTabShellView(
-        sidePanel: SidePanelFlowController(),
+        atoms: AtomsFlowController(),
         home: HomeFlowController(
             credentialStore: credentialStore,
             providerPreference: providerPreference

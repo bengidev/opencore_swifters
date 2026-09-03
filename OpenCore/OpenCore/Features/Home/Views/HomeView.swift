@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Root home screen — welcome state or active chat, with top bar and side panel.
+/// Root home screen — welcome state or active chat with top bar actions.
 struct HomeView: View {
-    @Bindable var sidePanel: SidePanelFlowController
     @Bindable var home: HomeFlowController
     @Bindable var chat: ChatFlowController
     @Bindable var speech: SpeechFlowController
@@ -35,9 +34,6 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityHidden(sidePanel.isSidebarVisible)
-
-            SidePanelView(flow: sidePanel)
         }
         .task {
             await home.onAppear()
@@ -103,30 +99,20 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack {
-            Button {
-                sidePanel.session.mirrorActiveConversationID(chat.state.conversation?.id)
-                Task { await sidePanel.session.toggleSidebar() }
-            } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(palette.textPrimary)
-            }
-            .accessibilityLabel("Show sidebar")
-
             Spacer()
 
             Button {
                 dismissComposerKeyboard()
                 Task {
                     await speech.cancelListening()
-                    chat.clearActiveConversation()
+                    chat.clearActiveAtom()
                 }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(palette.textPrimary)
             }
-            .accessibilityLabel("New conversation")
+            .accessibilityLabel("New atom")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -263,9 +249,8 @@ private struct WelcomeViewportHeightKey: PreferenceKey {
 
 #Preview {
     let credentialStore = CredentialInMemoryStore()
-    let providerPreference = SidePanelInMemoryProviderPreferenceStore()
+    let providerPreference = InMemoryProviderPreferenceStore()
     HomeView(
-        sidePanel: SidePanelFlowController(),
         home: HomeFlowController(
             credentialStore: credentialStore,
             providerPreference: providerPreference

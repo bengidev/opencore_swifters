@@ -6,7 +6,7 @@ struct OpenCoreApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var onboardingFlow: OnboardingFlowController
-    @State private var sidePanel: SidePanelFlowController
+    @State private var atoms: AtomsFlowController
     @State private var home: HomeFlowController
     @State private var chat: ChatFlowController
     @State private var settings: SettingsFlowController
@@ -24,10 +24,11 @@ struct OpenCoreApp: App {
             )
         )
         let credentialStore = CredentialKeychainStore(service: CredentialKeychainStore.openCoreService)
-        let providerPreference = SidePanelUserDefaultsProviderPreferenceStore()
+        let providerPreference = UserDefaultsProviderPreferenceStore()
         let contextCompactionPreference = SettingsUserDefaultsContextCompactionPreferenceStore()
-        let session = SidePanelSessionFlowController(history: .live(modelContainer: modelContainer))
-        _sidePanel = State(initialValue: SidePanelFlowController(session: session))
+        _atoms = State(
+            initialValue: AtomsFlowController(history: .live(modelContainer: modelContainer))
+        )
 
         let homeController = HomeFlowController(
             credentialStore: credentialStore,
@@ -73,8 +74,8 @@ struct OpenCoreApp: App {
     private static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
             OnboardingProgressEntity.self,
-            SidePanelConversationEntity.self,
-            SidePanelMessageEntity.self
+            AtomEntity.self,
+            AtomMessageEntity.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -90,7 +91,7 @@ struct OpenCoreApp: App {
             SharedThemedRootView {
                 AppRootView(
                     onboardingFlow: onboardingFlow,
-                    sidePanel: sidePanel,
+                    atoms: atoms,
                     home: home,
                     chat: chat,
                     settings: settings,
@@ -115,7 +116,7 @@ struct OpenCoreApp: App {
     @MainActor
     private func sweepExpiredVoiceAttachmentsIfNeeded() async {
         do {
-            try PersistenceConversationHistoryStore.sweepExpiredVoiceAttachments(
+            try PersistenceAtomHistoryStore.sweepExpiredVoiceAttachments(
                 modelContainer: modelContainer
             )
         } catch {
