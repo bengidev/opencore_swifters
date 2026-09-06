@@ -14,6 +14,10 @@ struct SettingsContextWindowSection: View {
         flow.state.contextCompaction.keepRecentTokens
     }
 
+    private var areCompactionTokenSlidersEnabled: Bool {
+        !flow.state.contextCompaction.isEnabled
+    }
+
     var body: some View {
         Section {
             Toggle(
@@ -51,6 +55,7 @@ struct SettingsContextWindowSection: View {
         } footer: {
             SettingsFormChrome.SectionFooter(text: compactionFooterText)
         }
+        .disabled(!areCompactionTokenSlidersEnabled)
     }
 
     private func compactionTokenSlider(
@@ -84,9 +89,9 @@ struct SettingsContextWindowSection: View {
 
     private var compactionFooterText: String {
         if flow.state.contextCompaction.isEnabled {
-            return "Auto-compaction runs when context exceeds the model window minus \(formattedTokenCount(reserveTokens)) reserved for the reply. Up to \(formattedTokenCount(keepRecentTokens)) of recent turns stay verbatim."
+            return "Auto-compaction uses fixed reserve and keep-recent settings. Turn it off to adjust these values for manual compaction from the composer."
         }
-        return "Enable automatic compaction to summarize older history when context exceeds the model window minus the reserve headroom. Manual compaction remains available from the composer."
+        return "Reserve headroom and keep-recent settings apply to manual compaction from the composer."
     }
 
     private func formattedTokenCount(_ value: Int) -> String {
