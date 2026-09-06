@@ -20,46 +20,50 @@ struct SettingsContextWindowSection: View {
 
     var body: some View {
         Section {
-            Toggle(
-                "Automatic Compaction",
-                isOn: Binding(
-                    get: { flow.state.contextCompaction.isEnabled },
-                    set: { flow.setContextCompactionEnabled($0) }
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(
+                    "Automatic Compaction",
+                    isOn: Binding(
+                        get: { flow.state.contextCompaction.isEnabled },
+                        set: { flow.setContextCompactionEnabled($0) }
+                    )
                 )
-            )
-            .accessibilityIdentifier("settings-compaction-enabled")
-        } header: {
-            SettingsFormChrome.sectionHeader("Context Window")
-        } footer: {
-            SettingsFormChrome.SectionFooter(
-                text: "Summarize older turns and reinject the summary so the model keeps context without exceeding its window."
-            )
-        }
+                .accessibilityIdentifier("settings-compaction-enabled")
 
-        Section {
+                SettingsFormChrome.OptionDescription(
+                    text: "Summarize older turns when context nears the model limit and reinject the summary so the session can continue."
+                )
+            }
+
             compactionTokenSlider(
                 title: "Reserve Response Headroom",
+                description: "Tokens held back for the model reply. Automatic compaction runs when usage exceeds the window minus this reserve.",
                 value: reserveTokens,
                 range: 4_096...32_768,
                 step: 1_024,
                 accessibilityID: "settings-compaction-reserve"
             ) { flow.setContextCompactionReserveTokens($0) }
+            .disabled(!areCompactionTokenSlidersEnabled)
 
             compactionTokenSlider(
                 title: "Keep Recent Context",
+                description: "Recent turns kept verbatim during compaction. Everything older is summarized into the checkpoint.",
                 value: keepRecentTokens,
                 range: 4_096...40_960,
                 step: 1_024,
                 accessibilityID: "settings-compaction-keep-recent"
             ) { flow.setContextCompactionKeepRecentTokens($0) }
+            .disabled(!areCompactionTokenSlidersEnabled)
+        } header: {
+            SettingsFormChrome.sectionHeader("Context Window")
         } footer: {
             SettingsFormChrome.SectionFooter(text: compactionFooterText)
         }
-        .disabled(!areCompactionTokenSlidersEnabled)
     }
 
     private func compactionTokenSlider(
         title: String,
+        description: String,
         value: Int,
         range: ClosedRange<Double>,
         step: Double,
@@ -83,6 +87,8 @@ struct SettingsContextWindowSection: View {
                 step: step
             )
             .accessibilityIdentifier(accessibilityID)
+
+            SettingsFormChrome.OptionDescription(text: description)
         }
         .accessibilityElement(children: .contain)
     }
