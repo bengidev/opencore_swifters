@@ -82,22 +82,31 @@ struct SettingsView: View {
                 }
             }
 
-            Button {
-                isKeyFieldFocused = false
-                flow.save()
-            } label: {
-                Text(flow.state.hasStoredKey ? "Update Key" : "Save Key")
-            }
-            .disabled(!flow.state.canSave)
-            .accessibilityIdentifier("settings-save-button")
-
-            if flow.state.hasStoredKey {
-                Button("Remove Stored Key", role: .destructive) {
+            HStack(spacing: 10) {
+                Button {
                     isKeyFieldFocused = false
-                    flow.clear()
+                    flow.save()
+                } label: {
+                    Text(flow.state.hasStoredKey ? "Update Key" : "Save Key")
+                        .frame(maxWidth: .infinity)
                 }
-                .accessibilityIdentifier("settings-clear-button")
+                .buttonStyle(.borderedProminent)
+                .disabled(!flow.state.canSave)
+                .accessibilityIdentifier("settings-save-button")
+
+                if flow.state.hasStoredKey {
+                    Button(role: .destructive) {
+                        isKeyFieldFocused = false
+                        flow.clear()
+                    } label: {
+                        Text("Remove Stored Key")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("settings-clear-button")
+                }
             }
+            .padding(.vertical, 4)
         } header: {
             SettingsFormChrome.sectionHeader("API Key")
         } footer: {
