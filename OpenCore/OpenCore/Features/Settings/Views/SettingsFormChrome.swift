@@ -17,4 +17,17 @@ enum SettingsFormChrome {
                 .textCase(nil)
         }
     }
+
+    struct OptionDescription: View {
+        let text: String
+
+        @Environment(\.sharedPalette) private var palette
+
+        var body: some View {
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 }
