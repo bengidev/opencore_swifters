@@ -114,26 +114,18 @@ struct ChatRichContentView: View {
     @ViewBuilder
     private func plainTailView(_ tail: String, isLast: Bool, cursorOpacity: Double) -> some View {
         let showCursor = showsCursor && isStreaming && isLast
-        let color = plainTextColor
-        (
-            Text(tail)
-                .font(palette.swiftUIFont(for: style))
-                .foregroundStyle(color)
-            + Text(showCursor ? Self.cursorGlyph : "")
-                .font(palette.swiftUIFont(for: style))
-                .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity))
-        )
+        VStack(alignment: style == .system ? .center : .leading, spacing: 0) {
+            markdownView(ChatAssistantLaTeXPreprocessor.embedInline(tail))
+
+            if showCursor {
+                Text(Self.cursorGlyph)
+                    .font(palette.swiftUIFont(for: style))
+                    .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity))
+                    .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)
+            }
+        }
         .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var plainTextColor: Color {
-        switch style {
-        case .assistant:
-            palette.textPrimary
-        case .reasoning, .terminal, .system:
-            palette.textSecondary
-        }
     }
 
     private var openURLAction: OpenURLAction {
