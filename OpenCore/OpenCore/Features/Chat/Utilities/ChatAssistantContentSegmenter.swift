@@ -153,6 +153,14 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
                 flushPlainLines()
                 output.append(.markdown(lines[index]))
                 index += 1
+            } else if isMarkdownListLine(lines[index]) || isMarkdownBlockquoteLine(lines[index]) {
+                flushPlainLines()
+                output.append(.markdown(lines[index]))
+                index += 1
+            } else if isGFMTableRow(lines[index]) {
+                flushPlainLines()
+                output.append(.markdown(lines[index]))
+                index += 1
             } else {
                 plainLines.append(lines[index])
                 index += 1
@@ -191,6 +199,20 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
         return trimmed.range(of: #"^#{1,6}\s+\S"#, options: .regularExpression) != nil
     }
 
+    private static func isMarkdownListLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.range(of: #"^[-*•]\s+\S"#, options: .regularExpression) != nil {
+            return true
+        }
+        return trimmed.range(of: #"^\d+\.\s+\S"#, options: .regularExpression) != nil
+    }
+
+    private static func isMarkdownBlockquoteLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix(">") && trimmed.count > 1
+    }
+
     private static func isThematicBreakLine(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return false }
@@ -199,10 +221,7 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
     }
 
     private static func classifyResolvedMarkdownProse(_ prose: String) -> ChatAssistantContentSegment {
-        if hasInlineLatex(prose) {
-            return .inlineLatexProse(prose)
-        }
-        return .markdown(prose)
+        .markdown(prose)
     }
 
     private static func earliestIncompleteDelimiter(in text: String) -> String.Index? {
@@ -367,15 +386,4 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
         return nil
     }
 
-    private static func hasInlineLatex(_ text: String) -> Bool {
-        if let regex = try? NSRegularExpression(pattern: #"\\\((.+?)\\\)"#),
-           regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
-            return true
-        }
-        if let regex = try? NSRegularExpression(pattern: #"(?<!\$)\$(?!\$)([^\n$]+?)(?<!\$)\$(?!\$)"#),
-           regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil {
-            return true
-        }
-        return false
-    }
 }
