@@ -1,20 +1,16 @@
 import SwiftUI
 
-/// Context window compaction controls aligned with pi.dev reserve/keep token settings.
+/// Context window compaction controls for automatic and manual summarization.
 struct SettingsContextWindowSection: View {
     @Bindable var flow: SettingsFlowController
 
     @Environment(\.sharedPalette) private var palette
 
-    private var reserveTokens: Int {
-        flow.state.contextCompaction.reserveTokens
+    private var thresholdPercent: Int {
+        flow.state.contextCompaction.triggerThresholdPercent
     }
 
-    private var keepRecentTokens: Int {
-        flow.state.contextCompaction.keepRecentTokens
-    }
-
-    private var areCompactionTokenSlidersEnabled: Bool {
+    private var isManualThresholdEnabled: Bool {
         !flow.state.contextCompaction.isEnabled
     }
 
@@ -35,25 +31,32 @@ struct SettingsContextWindowSection: View {
                 )
             }
 
-            compactionTokenSlider(
-                title: "Reserve Response Headroom",
-                description: "Tokens held back for the model reply. Automatic compaction runs when usage exceeds the window minus this reserve.",
-                value: reserveTokens,
-                range: 4_096...32_768,
-                step: 1_024,
-                accessibilityID: "settings-compaction-reserve"
-            ) { flow.setContextCompactionReserveTokens($0) }
-            .disabled(!areCompactionTokenSlidersEnabled)
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Compact When Full") {
+                    Text("\(thresholdPercent)%")
+                        .foregroundStyle(palette.textPrimary)
+                        .monospacedDigit()
+                        .accessibilityIdentifier("settings-compaction-threshold-value")
+                }
 
-            compactionTokenSlider(
-                title: "Keep Recent Context",
-                description: "Recent turns kept verbatim during compaction. Everything older is summarized into the checkpoint.",
-                value: keepRecentTokens,
-                range: 4_096...40_960,
-                step: 1_024,
-                accessibilityID: "settings-compaction-keep-recent"
-            ) { flow.setContextCompactionKeepRecentTokens($0) }
-            .disabled(!areCompactionTokenSlidersEnabled)
+                Slider(
+                    value: Binding(
+                        get: { Double(thresholdPercent) },
+                        set: { flow.setContextCompactionThresholdPercent(Int($0.rounded())) }
+                    ),
+                    in: Double(SettingsContextCompactionPreference.thresholdPercentRange.lowerBound)...Double(
+                        SettingsContextCompactionPreference.thresholdPercentRange.upperBound
+                    ),
+                    step: 5
+                )
+                .accessibilityIdentifier("settings-compaction-threshold")
+
+                SettingsFormChrome.OptionDescription(
+                    text: "Start summarizing older turns once context use passes this level."
+                )
+            }
+            .disabled(!isManualThresholdEnabled)
+            .accessibilityElement(children: .contain)
         } header: {
             SettingsFormChrome.sectionHeader("Context Window")
         } footer: {
@@ -61,53 +64,10 @@ struct SettingsContextWindowSection: View {
         }
     }
 
-    private func compactionTokenSlider(
-        title: String,
-        description: String,
-        value: Int,
-        range: ClosedRange<Double>,
-        step: Double,
-        accessibilityID: String,
-        onChange: @escaping (Int) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LabeledContent(title) {
-                Text(formattedTokenCount(value))
-                    .foregroundStyle(palette.textPrimary)
-                    .monospacedDigit()
-                    .accessibilityIdentifier("\(accessibilityID)-value")
-            }
-
-            Slider(
-                value: Binding(
-                    get: { Double(value) },
-                    set: { onChange(Int($0.rounded())) }
-                ),
-                in: range,
-                step: step
-            )
-            .accessibilityIdentifier(accessibilityID)
-
-            SettingsFormChrome.OptionDescription(text: description)
-        }
-        .accessibilityElement(children: .contain)
-    }
-
     private var compactionFooterText: String {
         if flow.state.contextCompaction.isEnabled {
-            return "Auto-compaction uses fixed reserve and keep-recent settings. Turn it off to adjust these values for manual compaction from the composer."
+            return "Automatic compaction uses the current threshold. Turn it off to adjust the level used for manual compaction from the composer."
         }
-        return "Reserve headroom and keep-recent settings apply to manual compaction from the composer."
-    }
-
-    private func formattedTokenCount(_ value: Int) -> String {
-        if value >= 1_000 {
-            let thousands = Double(value) / 1_000.0
-            if thousands.truncatingRemainder(dividingBy: 1) == 0 {
-                return "\(Int(thousands))k tokens"
-            }
-            return String(format: "%.1fk tokens", thousands)
-        }
-        return "\(value) tokens"
+        return "This threshold applies when you compact context manually from the composer."
     }
 }
