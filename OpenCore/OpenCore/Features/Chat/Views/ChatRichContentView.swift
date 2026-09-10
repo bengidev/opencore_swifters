@@ -83,12 +83,6 @@ struct ChatRichContentView: View {
             )
         case .mermaid(let source):
             ChatMermaidSnapshotView(source: source, palette: palette)
-        case .inlineLatexProse(let prose):
-            ChatInlineLaTeXView(
-                latex: prose,
-                uiFont: palette.uiFont(for: style),
-                textColor: palette.textSecondary
-            )
         case .plainTail(let tail):
             plainTailView(tail, isLast: isLast, cursorOpacity: cursorOpacity)
         }
@@ -114,14 +108,13 @@ struct ChatRichContentView: View {
     @ViewBuilder
     private func plainTailView(_ tail: String, isLast: Bool, cursorOpacity: Double) -> some View {
         let showCursor = showsCursor && isStreaming && isLast
-        VStack(alignment: style == .system ? .center : .leading, spacing: 0) {
+        HStack(alignment: .lastTextBaseline, spacing: 0) {
             markdownView(ChatAssistantLaTeXPreprocessor.embedInline(tail))
 
             if showCursor {
                 Text(Self.cursorGlyph)
                     .font(palette.swiftUIFont(for: style))
                     .foregroundStyle(palette.accentPrimary.opacity(cursorOpacity))
-                    .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)
