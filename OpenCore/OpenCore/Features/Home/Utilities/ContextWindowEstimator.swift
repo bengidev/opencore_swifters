@@ -24,4 +24,15 @@ nonisolated enum ContextWindowEstimator {
         let tokensUsed = ContextTokenCounter.countTokens(for: messages, draft: draft)
         return tokensUsed > max(0, contextLength - reserveTokens)
     }
+
+    static func shouldCompact(
+        messages: [ChatMessage],
+        draft: String?,
+        contextLength: Int,
+        thresholdPercent: Int
+    ) -> Bool {
+        guard contextLength > 0, thresholdPercent > 0 else { return false }
+        let tokensUsed = ContextTokenCounter.countTokens(for: messages, draft: draft)
+        return tokensUsed * 100 > contextLength * thresholdPercent
+    }
 }

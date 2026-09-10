@@ -81,7 +81,7 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
             messages: messages,
             draft: nil,
             contextLength: contextLength,
-            reserveTokens: preference.reserveTokens
+            thresholdPercent: preference.triggerThresholdPercent
         )
     }
 
