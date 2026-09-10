@@ -39,12 +39,14 @@ struct SettingsContextCompactionPreferenceStoreTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
 
-        let legacy = SettingsContextCompactionPreference(
-            isEnabled: true,
-            triggerThresholdPercent: 90,
-            reserveTokens: 4_096
-        )
-        let data = try JSONEncoder().encode(legacy)
+        struct LegacyPayload: Codable {
+            var isEnabled = true
+            var triggerThresholdPercent = 90
+            var minRecentMessages = 4
+            var reserveTokens = 4_096
+            var keepRecentTokens = 20_000
+        }
+        let data = try JSONEncoder().encode(LegacyPayload())
         defaults.set(data, forKey: "opencore.context.compaction.v1")
 
         let store = SettingsUserDefaultsContextCompactionPreferenceStore(suiteName: suite)

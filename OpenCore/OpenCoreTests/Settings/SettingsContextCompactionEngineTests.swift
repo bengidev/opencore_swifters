@@ -75,14 +75,13 @@ struct SettingsContextCompactionEngineTests {
             isEnabled: true,
             minRecentMessages: 1
         )
-        preference.setThresholdPercent(90, contextLength: 100)
-        preference.keepRecentTokens = 50
+        preference.setThresholdPercent(70)
 
         let outcome = try await engine.compactIfNeeded(
             messages: messages,
             sessionEntries: entries,
             leafEntryID: thirdID,
-            contextLength: 100,
+            contextLength: 1_000,
             preference: preference
         )
 
