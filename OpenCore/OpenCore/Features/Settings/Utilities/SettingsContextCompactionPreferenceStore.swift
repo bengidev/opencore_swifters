@@ -24,8 +24,14 @@ nonisolated struct SettingsUserDefaultsContextCompactionPreferenceStore: Setting
 
     func preference() -> SettingsContextCompactionPreference {
         guard let data = defaults.data(forKey: Key.preference),
-              let decoded = try? JSONDecoder().decode(SettingsContextCompactionPreference.self, from: data) else {
+              var decoded = try? JSONDecoder().decode(SettingsContextCompactionPreference.self, from: data) else {
             return SettingsContextCompactionPreference()
+        }
+
+        let beforeNormalization = decoded
+        decoded.normalizeAfterDecoding()
+        if decoded != beforeNormalization {
+            setPreference(decoded)
         }
         return decoded
     }
