@@ -153,10 +153,24 @@ nonisolated enum ChatAssistantContentSegmenter: Sendable {
                 flushPlainLines()
                 output.append(.markdown(lines[index]))
                 index += 1
-            } else if isMarkdownListLine(lines[index]) || isMarkdownBlockquoteLine(lines[index]) {
+            } else if isMarkdownListLine(lines[index]) {
                 flushPlainLines()
-                output.append(.markdown(lines[index]))
+                var listLines = [lines[index]]
                 index += 1
+                while index < lines.count, isMarkdownListLine(lines[index]) {
+                    listLines.append(lines[index])
+                    index += 1
+                }
+                output.append(.markdown(listLines.joined(separator: "\n")))
+            } else if isMarkdownBlockquoteLine(lines[index]) {
+                flushPlainLines()
+                var quoteLines = [lines[index]]
+                index += 1
+                while index < lines.count, isMarkdownBlockquoteLine(lines[index]) {
+                    quoteLines.append(lines[index])
+                    index += 1
+                }
+                output.append(.markdown(quoteLines.joined(separator: "\n")))
             } else if isGFMTableRow(lines[index]) {
                 flushPlainLines()
                 output.append(.markdown(lines[index]))

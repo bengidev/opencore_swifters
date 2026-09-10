@@ -153,4 +153,22 @@ struct ChatAssistantContentSegmenterTests {
         #expect(segments.contains { if case .markdown(let markdown) = $0 { return markdown.contains("- First point") } else { return false } })
         #expect(!segments.contains { if case .plainTail(let tail) = $0 { return tail.contains("## TL;DR") } else { return false } })
     }
+
+    @Test("Progressive tail batches consecutive list lines into one markdown segment")
+    func progressiveTailBatchesListLines() {
+        let raw = "Partial\n\n- First point\n- Second point\n- Third point"
+        let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: true)
+
+        let listSegments = segments.filter {
+            if case .markdown(let markdown) = $0 {
+                return markdown.contains("- First point")
+            }
+            return false
+        }
+        #expect(listSegments.count == 1)
+        if case .markdown(let markdown) = listSegments[0] {
+            #expect(markdown.contains("- Second point"))
+            #expect(markdown.contains("- Third point"))
+        }
+    }
 }
