@@ -5,7 +5,8 @@ nonisolated protocol SettingsContextCompactionStrategizing: Sendable {
     func compact(
         messages: [ChatMessage],
         contextLength: Int,
-        minRecentMessages: Int
+        minRecentMessages: Int,
+        reserveTokens: Int
     ) async throws -> [ChatMessage]
 }
 
@@ -26,12 +27,12 @@ nonisolated struct SettingsContextCompactionTrimStrategy: SettingsContextCompact
     func compact(
         messages: [ChatMessage],
         contextLength: Int,
-        minRecentMessages: Int
+        minRecentMessages: Int,
+        reserveTokens: Int
     ) async throws -> [ChatMessage] {
         guard contextLength > 0, messages.count > minRecentMessages else { return messages }
 
         var working = messages
-        let reserveTokens = SettingsContextCompactionPreference().reserveTokens
         let targetTokens = max(0, contextLength - reserveTokens)
 
         while working.count > minRecentMessages + 1,
@@ -81,7 +82,7 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
             messages: messages,
             draft: nil,
             contextLength: contextLength,
-            reserveTokens: preference.reserveTokens
+            thresholdPercent: preference.triggerThresholdPercent
         )
     }
 
@@ -102,7 +103,7 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
             leafEntryID: leafEntryID,
             contextLength: contextLength,
             preference: preference,
-            keepRecentTokens: preference.keepRecentTokens
+            keepRecentTokens: preference.scaledKeepRecentTokens(for: contextLength)
         )
     }
 
@@ -136,7 +137,7 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
             leafEntryID: leafEntryID,
             contextLength: contextLength,
             preference: preference,
-            keepRecentTokens: preference.keepRecentTokens
+            keepRecentTokens: preference.scaledKeepRecentTokens(for: contextLength)
         )
     }
 
@@ -162,7 +163,8 @@ nonisolated struct SettingsContextCompactionEngine: Sendable {
             let trimmed = try await trimStrategy.compact(
                 messages: messages,
                 contextLength: contextLength,
-                minRecentMessages: preference.minRecentMessages
+                minRecentMessages: preference.minRecentMessages,
+                reserveTokens: preference.scaledReserveTokens(for: contextLength)
             )
             guard trimmed != messages else { return .unchanged(messages) }
             return SettingsContextCompactionOutcome(projectedMessages: trimmed, checkpoint: nil)

@@ -38,22 +38,15 @@ struct ChatReasoningCardView: View {
                 isExpanded.toggle()
             }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                header
+            ChatMessageCardChrome {
+                VStack(alignment: .leading, spacing: 8) {
+                    header
 
-                if showsStreamingBody {
-                    streamingBody
+                    if showsStreamingBody {
+                        streamingBody
+                    }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.surfaceRaised.opacity(0.55))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(palette.textTertiary.opacity(0.12), lineWidth: 0.5)
-            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -95,7 +88,7 @@ struct ChatReasoningCardView: View {
                 .monoTracking()
 
             if isStreaming {
-                ChatReasoningPulseDot()
+                ChatStreamingPulseDot()
             }
 
             Spacer(minLength: 8)
@@ -142,21 +135,3 @@ extension ChatReasoningCardView {
     }
 }
 
-private struct ChatReasoningPulseDot: View {
-    @Environment(\.sharedPalette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var opacity = 0.35
-
-    var body: some View {
-        Circle()
-            .fill(palette.accentPrimary)
-            .frame(width: 6, height: 6)
-            .opacity(reduceMotion ? 1 : opacity)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                    opacity = 1
-                }
-            }
-    }
-}

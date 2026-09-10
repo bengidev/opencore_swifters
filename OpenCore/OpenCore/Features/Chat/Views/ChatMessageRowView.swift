@@ -30,9 +30,9 @@ struct ChatMessageRowView: View, Equatable {
                 )
             }
         case let .system(systemMessage):
-            ChatRichContentView(text: systemMessage.content, style: .system)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
+            assistantSurround {
+                ChatSystemMessageCardView(content: systemMessage.content)
+            }
         case let .outputStream(outputStreamMessage):
             assistantSurround {
                 ChatOutputStreamCardView(message: outputStreamMessage)
@@ -46,7 +46,14 @@ struct ChatMessageRowView: View, Equatable {
             ChatUserMessageBubbleView(textMessage: textMessage)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                assistantTextBody(textMessage)
+                ChatRichContentView(
+                    text: textMessage.content,
+                    isStreaming: isAssistantTextStreaming(textMessage),
+                    showsCursor: isAssistantTextStreaming(textMessage)
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(0)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if isLastAssistantMessage, let streamErrorMessage, streamingStatus == .failed {
                     Text(streamErrorMessage)
@@ -57,17 +64,6 @@ struct ChatMessageRowView: View, Equatable {
             .padding(.horizontal, 20)
             .padding(.vertical, 4)
         }
-    }
-
-    @ViewBuilder
-    private func assistantTextBody(_ textMessage: ChatTextMessage) -> some View {
-        ChatRichContentView(
-            text: textMessage.content,
-            isStreaming: isAssistantTextStreaming(textMessage)
-        )
-        .fixedSize(horizontal: false, vertical: true)
-        .layoutPriority(0)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func isAssistantTextStreaming(_ textMessage: ChatTextMessage) -> Bool {

@@ -17,7 +17,8 @@ struct SettingsContextCompactionTrimStrategyTests {
         let compacted = try await strategy.compact(
             messages: messages,
             contextLength: contextLength,
-            minRecentMessages: 4
+            minRecentMessages: 4,
+            reserveTokens: SettingsContextCompactionPreference().scaledReserveTokens(for: contextLength)
         )
 
         #expect(compacted.count >= 4)
@@ -33,10 +34,11 @@ struct SettingsContextCompactionTrimStrategyTests {
         let compacted = try await strategy.compact(
             messages: messages,
             contextLength: contextLength,
-            minRecentMessages: 2
+            minRecentMessages: 2,
+            reserveTokens: SettingsContextCompactionPreference().scaledReserveTokens(for: contextLength)
         )
 
-        let reserveTokens = SettingsContextCompactionPreference().reserveTokens
+        let reserveTokens = SettingsContextCompactionPreference().scaledReserveTokens(for: contextLength)
         let usage = ContextWindowEstimator.estimate(
             messages: compacted,
             draft: nil,

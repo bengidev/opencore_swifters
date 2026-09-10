@@ -48,12 +48,12 @@ struct ChatAssistantContentSegmenterTests {
         #expect(segments.last == .plainTail("```swift\nlet x = 1"))
     }
 
-    @Test("Inline math prose is classified")
+    @Test("Inline math prose stays in markdown for LaTeX embedding")
     func inlineLatexProse() {
         let raw = "Energy is $E = mc^2$ in this line."
         let segments = ChatAssistantContentSegmenter.segments(from: raw)
         #expect(segments.count == 1)
-        #expect(segments[0] == .inlineLatexProse(raw))
+        #expect(segments[0] == .markdown(raw))
     }
 
     @Test("Unclosed inline dollar splits rich prefix from plain tail")
@@ -142,5 +142,33 @@ struct ChatAssistantContentSegmenterTests {
         let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: false)
         #expect(segments.count == 1)
         #expect(segments[0] == .markdown(raw))
+    }
+
+    @Test("Progressive tail extracts headings and list items for rich rendering")
+    func progressiveTailExtractsHeadingsAndLists() {
+        let raw = "Partial `token\n\n## TL;DR\n\n- First point\n- Second point"
+        let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: true)
+
+        #expect(segments.contains { if case .markdown(let markdown) = $0 { return markdown.contains("## TL;DR") } else { return false } })
+        #expect(segments.contains { if case .markdown(let markdown) = $0 { return markdown.contains("- First point") } else { return false } })
+        #expect(!segments.contains { if case .plainTail(let tail) = $0 { return tail.contains("## TL;DR") } else { return false } })
+    }
+
+    @Test("Progressive tail batches consecutive list lines into one markdown segment")
+    func progressiveTailBatchesListLines() {
+        let raw = "Partial\n\n- First point\n- Second point\n- Third point"
+        let segments = ChatAssistantContentSegmenter.segments(from: raw, progressive: true)
+
+        let listSegments = segments.filter {
+            if case .markdown(let markdown) = $0 {
+                return markdown.contains("- First point")
+            }
+            return false
+        }
+        #expect(listSegments.count == 1)
+        if case .markdown(let markdown) = listSegments[0] {
+            #expect(markdown.contains("- Second point"))
+            #expect(markdown.contains("- Third point"))
+        }
     }
 }

@@ -24,52 +24,45 @@ struct ChatOutputStreamCardView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                isShowingDetailSheet = true
-            } label: {
-                HStack(spacing: 0) {
-                    (
-                        Text(display.verb)
+        ChatMessageCardChrome {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    isShowingDetailSheet = true
+                } label: {
+                    HStack(spacing: 0) {
+                        (
+                            Text(display.verb)
+                                .font(SharedOpenCoreTypography.bodyMD)
+                                .foregroundStyle(palette.textSecondary)
+                            +
+                            Text(" " + display.target)
+                                .font(SharedOpenCoreTypography.bodyMD)
+                                .foregroundStyle(palette.textTertiary)
+                        )
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                        Spacer(minLength: 6)
+
+                        Text(statusLabel)
                             .font(SharedOpenCoreTypography.bodyMD)
-                            .foregroundStyle(palette.textSecondary)
-                        +
-                        Text(" " + display.target)
-                            .font(SharedOpenCoreTypography.bodyMD)
-                            .foregroundStyle(palette.textTertiary)
-                    )
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                            .foregroundStyle(statusColor.opacity(message.detail.status == .failed ? 1 : 0.5))
 
-                    Spacer(minLength: 6)
-
-                    Text(statusLabel)
-                        .font(SharedOpenCoreTypography.bodyMD)
-                        .foregroundStyle(statusColor.opacity(message.detail.status == .failed ? 1 : 0.5))
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(palette.textTertiary.opacity(0.6))
-                        .padding(.leading, 4)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(palette.textTertiary.opacity(0.6))
+                            .padding(.leading, 4)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(display.verb) \(display.target), \(statusLabel)")
-            .transaction { transaction in
-                transaction.animation = nil
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(display.verb) \(display.target), \(statusLabel)")
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.surfaceRaised.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(palette.textTertiary.opacity(0.12), lineWidth: 0.5)
-        )
         .sheet(isPresented: $isShowingDetailSheet) {
             ChatOutputStreamDetailSheet(message: message)
                 .presentationDetents([.fraction(0.35), .medium])
