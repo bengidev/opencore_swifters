@@ -10,10 +10,6 @@ struct SettingsContextWindowSection: View {
         flow.state.contextCompaction.triggerThresholdPercent
     }
 
-    private var isManualThresholdEnabled: Bool {
-        !flow.state.contextCompaction.isEnabled
-    }
-
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
@@ -55,7 +51,6 @@ struct SettingsContextWindowSection: View {
                     text: "Start summarizing older turns once context use passes this level."
                 )
             }
-            .disabled(!isManualThresholdEnabled)
             .accessibilityElement(children: .contain)
         } header: {
             SettingsFormChrome.sectionHeader("Context Window")
@@ -66,7 +61,7 @@ struct SettingsContextWindowSection: View {
 
     private var compactionFooterText: String {
         if flow.state.contextCompaction.isEnabled {
-            return "Automatic compaction uses the current threshold. Turn it off to adjust the level used for manual compaction from the composer."
+            return "Automatic compaction runs when context use passes this threshold. You can also compact manually from the composer."
         }
         return "This threshold applies when you compact context manually from the composer."
     }
