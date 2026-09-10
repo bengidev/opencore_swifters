@@ -39,33 +39,37 @@ struct SettingsContextCompactionEngineTests {
 
     @Test("compactIfNeeded appends Pi-style checkpoint when session entries exist")
     func compactIfNeededAppendsCheckpoint() async throws {
+        ContextTokenCounter.installEncoderForTesting(nil)
+        defer { ContextTokenCounter.installEncoderForTesting(nil) }
+
         let summarizer = SettingsFixedSummarizer(summary: "short summary")
         let engine = SettingsContextCompactionEngine(summarizer: summarizer)
         let atomID = UUID()
         let firstID = UUID()
         let secondID = UUID()
         let thirdID = UUID()
+        let tokenHeavyContent = String(repeating: "a", count: 24_576)
 
         let entries: [AtomSessionEntry] = [
             .messageEntry(
                 id: firstID,
                 atomID: atomID,
                 parentID: nil,
-                message: .text(role: .user, content: String(repeating: "a", count: 400)),
+                message: .text(role: .user, content: tokenHeavyContent),
                 timestamp: Date(timeIntervalSince1970: 0)
             ),
             .messageEntry(
                 id: secondID,
                 atomID: atomID,
                 parentID: firstID,
-                message: .text(role: .assistant, content: String(repeating: "b", count: 400)),
+                message: .text(role: .assistant, content: tokenHeavyContent),
                 timestamp: Date(timeIntervalSince1970: 1)
             ),
             .messageEntry(
                 id: thirdID,
                 atomID: atomID,
                 parentID: secondID,
-                message: .text(role: .user, content: String(repeating: "c", count: 400)),
+                message: .text(role: .user, content: tokenHeavyContent),
                 timestamp: Date(timeIntervalSince1970: 2)
             )
         ]

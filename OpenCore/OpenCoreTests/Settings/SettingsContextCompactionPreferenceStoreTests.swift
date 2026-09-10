@@ -39,19 +39,36 @@ struct SettingsContextCompactionPreferenceStoreTests {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
 
+        let legacyReserveTokens = 4_096
+        let referenceContextLength = 131_072
         struct LegacyPayload: Codable {
             var isEnabled = true
             var triggerThresholdPercent = 90
             var minRecentMessages = 4
-            var reserveTokens = 4_096
+            var reserveTokens: Int
             var keepRecentTokens = 20_000
+
+            init(reserveTokens: Int) {
+                self.reserveTokens = reserveTokens
+            }
         }
-        let data = try JSONEncoder().encode(LegacyPayload())
+        let data = try JSONEncoder().encode(LegacyPayload(reserveTokens: legacyReserveTokens))
         defaults.set(data, forKey: "opencore.context.compaction.v1")
 
         let store = SettingsUserDefaultsContextCompactionPreferenceStore(suiteName: suite)
         let migrated = store.preference()
-        #expect(migrated.triggerThresholdPercent == 97)
-        #expect(migrated.reserveTokens == SettingsContextCompactionPreference.derivedReserveTokens(for: 97))
+        let expectedPercent = SettingsContextCompactionPreference.thresholdPercent(
+            reserveTokens: legacyReserveTokens,
+            contextLength: referenceContextLength
+        )
+        #expect(migrated.triggerThresholdPercent == expectedPercent)
+        #expect(
+            migrated.reserveTokens
+                == SettingsContextCompactionPreference.derivedReserveTokens(for: expectedPercent)
+        )
+        #expect(
+            migrated.keepRecentTokens
+                == SettingsContextCompactionPreference.derivedKeepRecentTokens(for: expectedPercent)
+        )
     }
 }
