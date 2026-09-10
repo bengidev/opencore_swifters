@@ -45,27 +45,18 @@ struct SettingsFlowControllerTests {
         #expect(credentialStore.secret(for: ProviderDescriptor.openRouter.id) == "sk-new")
     }
 
-    @Test("Reserve token change persists to compaction store")
-    func reserveTokenChangePersists() {
+    @Test("Threshold percent change persists derived compaction settings")
+    func thresholdPercentChangePersists() {
         let compactionStore = SettingsInMemoryContextCompactionPreferenceStore()
         let controller = makeController(compactionStore: compactionStore)
         controller.onAppear()
 
-        controller.setContextCompactionReserveTokens(20_480)
+        controller.setContextCompactionThresholdPercent(80)
 
-        #expect(compactionStore.preference().reserveTokens == 20_480)
-        #expect(controller.state.contextCompaction.reserveTokens == 20_480)
-    }
-
-    @Test("Keep recent token change persists to compaction store")
-    func keepRecentTokenChangePersists() {
-        let compactionStore = SettingsInMemoryContextCompactionPreferenceStore()
-        let controller = makeController(compactionStore: compactionStore)
-        controller.onAppear()
-
-        controller.setContextCompactionKeepRecentTokens(24_576)
-
-        #expect(compactionStore.preference().keepRecentTokens == 24_576)
-        #expect(controller.state.contextCompaction.keepRecentTokens == 24_576)
+        let preference = compactionStore.preference()
+        #expect(preference.triggerThresholdPercent == 80)
+        #expect(controller.state.contextCompaction.triggerThresholdPercent == 80)
+        #expect(preference.reserveTokens == SettingsContextCompactionPreference.derivedReserveTokens(for: 80))
+        #expect(preference.keepRecentTokens == SettingsContextCompactionPreference.derivedKeepRecentTokens(for: 80))
     }
 }
