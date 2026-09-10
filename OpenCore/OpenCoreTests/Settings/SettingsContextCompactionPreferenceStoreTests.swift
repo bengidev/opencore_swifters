@@ -49,7 +49,7 @@ struct SettingsContextCompactionPreferenceStoreTests {
 
         let store = SettingsUserDefaultsContextCompactionPreferenceStore(suiteName: suite)
         let migrated = store.preference()
-        #expect(migrated.triggerThresholdPercent == 95)
-        #expect(migrated.reserveTokens == SettingsContextCompactionPreference.derivedReserveTokens(for: 95))
+        #expect(migrated.triggerThresholdPercent == 97)
+        #expect(migrated.reserveTokens == SettingsContextCompactionPreference.derivedReserveTokens(for: 97))
     }
 }
