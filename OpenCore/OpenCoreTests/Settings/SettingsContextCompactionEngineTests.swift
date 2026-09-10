@@ -17,8 +17,8 @@ private struct SettingsFixedSummarizer: SettingsContextCompactionSummarizing {
 
 @Suite("Settings Context Compaction Engine")
 struct SettingsContextCompactionEngineTests {
-    @Test("shouldCompact uses Pi reserve headroom rule")
-    func shouldCompactUsesReserveHeadroom() {
+    @Test("shouldCompact uses threshold percent fill rule")
+    func shouldCompactUsesThresholdPercent() {
         let engine = SettingsContextCompactionEngine(
             summarizer: SettingsFixedSummarizer(summary: "summary")
         )
@@ -28,16 +28,12 @@ struct SettingsContextCompactionEngineTests {
         let disabled = SettingsContextCompactionPreference(isEnabled: false)
         #expect(engine.shouldCompact(messages: messages, contextLength: 100, preference: disabled) == false)
 
-        let enabled = SettingsContextCompactionPreference(
-            isEnabled: true,
-            reserveTokens: 20
-        )
-        #expect(engine.shouldCompact(messages: messages, contextLength: 100, preference: enabled) == true)
+        var aboveThreshold = SettingsContextCompactionPreference(isEnabled: true)
+        aboveThreshold.setThresholdPercent(90)
+        #expect(engine.shouldCompact(messages: messages, contextLength: 100, preference: aboveThreshold) == true)
 
-        let withinBudget = SettingsContextCompactionPreference(
-            isEnabled: true,
-            reserveTokens: 90
-        )
+        var withinBudget = SettingsContextCompactionPreference(isEnabled: true)
+        withinBudget.setThresholdPercent(95)
         #expect(engine.shouldCompact(messages: messages, contextLength: 10_000, preference: withinBudget) == false)
     }
 
@@ -75,12 +71,12 @@ struct SettingsContextCompactionEngineTests {
         ]
 
         let messages = entries.compactMap(\.message)
-        let preference = SettingsContextCompactionPreference(
+        var preference = SettingsContextCompactionPreference(
             isEnabled: true,
-            minRecentMessages: 1,
-            reserveTokens: 20,
-            keepRecentTokens: 50
+            minRecentMessages: 1
         )
+        preference.setThresholdPercent(90, contextLength: 100)
+        preference.keepRecentTokens = 50
 
         let outcome = try await engine.compactIfNeeded(
             messages: messages,

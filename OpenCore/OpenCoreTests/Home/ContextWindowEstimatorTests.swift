@@ -52,6 +52,35 @@ struct ContextWindowEstimatorTests {
         #expect(usage.fractionUsed == Double(expectedUsed) / 131_072)
     }
 
+    @Test("Threshold percent rule triggers when usage exceeds fill level")
+    func thresholdPercentRuleTriggersCompaction() {
+        let messages: [ChatMessage] = [.text(role: .user, content: String(repeating: "a", count: 400))]
+        #expect(
+            ContextWindowEstimator.shouldCompact(
+                messages: messages,
+                draft: nil,
+                contextLength: 100,
+                thresholdPercent: 90
+            )
+        )
+        #expect(
+            !ContextWindowEstimator.shouldCompact(
+                messages: messages,
+                draft: nil,
+                contextLength: 10_000,
+                thresholdPercent: 90
+            )
+        )
+        #expect(
+            !ContextWindowEstimator.shouldCompact(
+                messages: messages,
+                draft: nil,
+                contextLength: 100,
+                thresholdPercent: 0
+            )
+        )
+    }
+
     @Test("Pi reserve rule triggers when usage exceeds window minus reserve")
     func piReserveRuleTriggersCompaction() {
         let messages: [ChatMessage] = [.text(role: .user, content: String(repeating: "a", count: 400))]
