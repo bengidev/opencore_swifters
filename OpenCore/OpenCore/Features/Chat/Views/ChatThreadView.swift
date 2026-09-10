@@ -22,7 +22,7 @@ struct ChatThreadView<BottomChrome: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 10) {
                     ForEach(flow.state.messages) { message in
                         ChatMessageRowView(
                             message: message,
