@@ -270,9 +270,9 @@ final class ChatFlowController {
     // MARK: - Streaming
 
     private enum StreamingCoalescingPolicy {
-        static let defaultFlushDelayNanoseconds: UInt64 = 80_000_000
-        static let mediumFlushDelayNanoseconds: UInt64 = 120_000_000
-        static let largeFlushDelayNanoseconds: UInt64 = 200_000_000
+        static let defaultFlushDelayNanoseconds: UInt64 = 32_000_000
+        static let mediumFlushDelayNanoseconds: UInt64 = 48_000_000
+        static let largeFlushDelayNanoseconds: UInt64 = 96_000_000
         static let mediumTextByteCount = 8_000
         static let largeTextByteCount = 32_000
     }
