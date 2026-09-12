@@ -11,8 +11,6 @@ struct ChatRichContentView: View {
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var displayedText: String
-    @State private var updateTask: Task<Void, Never>?
 
     init(
         text: String,
@@ -24,7 +22,6 @@ struct ChatRichContentView: View {
         self.style = style
         self.isStreaming = isStreaming
         self.showsCursor = showsCursor
-        _displayedText = State(initialValue: text)
     }
 
     private static let cursorGlyph = "▍"
@@ -42,25 +39,20 @@ struct ChatRichContentView: View {
                 content(cursorOpacity: 1)
             }
         }
-        .onAppear { displayedText = text }
-        .onChange(of: text) { _, newValue in
-            scheduleUpdate(newValue)
-        }
-        .onChange(of: isStreaming) { _, streaming in
-            guard !streaming else { return }
-            updateTask?.cancel()
-            displayedText = text
-        }
         .modifier(ChatRichTextSelectionModifier(enabled: style != .system))
     }
 
     @ViewBuilder
     private func content(cursorOpacity: Double) -> some View {
-        let segments = preparedSegments(from: displayedText)
+        let segments = renderSegments(from: text)
         VStack(alignment: style == .system ? .center : .leading, spacing: 0) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                segmentView(segment, isLast: index == segments.count - 1, cursorOpacity: cursorOpacity)
-                    .id("\(index)-\(segment)")
+            ForEach(segments) { renderSegment in
+                segmentView(
+                    renderSegment.segment,
+                    isLast: renderSegment.isLast,
+                    cursorOpacity: cursorOpacity
+                )
+                .id(renderSegment.id)
             }
         }
         .frame(maxWidth: .infinity, alignment: style == .system ? .center : .leading)
@@ -85,6 +77,7 @@ struct ChatRichContentView: View {
             ChatMermaidSnapshotView(source: source, palette: palette)
         case .plainTail(let tail):
             plainTailView(tail, isLast: isLast, cursorOpacity: cursorOpacity)
+                .contentTransition(isStreaming && isLast && !reduceMotion ? .interpolate : .identity)
         }
     }
 
@@ -130,22 +123,28 @@ struct ChatRichContentView: View {
         }
     }
 
-    private func preparedSegments(from value: String) -> [ChatAssistantContentSegment] {
+    private func renderSegments(from value: String) -> [ChatRichRenderSegment] {
         let normalized = ChatAssistantMarkdownPreprocessor.normalize(value)
-        return ChatAssistantContentSegmenter.segments(from: normalized, progressive: isStreaming)
+        let segments = ChatAssistantContentSegmenter.segments(from: normalized, progressive: isStreaming)
+        return segments.enumerated().map { index, segment in
+            ChatRichRenderSegment(
+                id: stableSegmentID(index: index, segment: segment),
+                segment: segment,
+                isLast: index == segments.count - 1
+            )
+        }
     }
 
-    private func scheduleUpdate(_ newValue: String) {
-        guard isStreaming else {
-            displayedText = newValue
-            return
-        }
-        updateTask?.cancel()
-        updateTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 33_000_000)
-            guard !Task.isCancelled else { return }
-            displayedText = newValue
-            updateTask = nil
+    private func stableSegmentID(index: Int, segment: ChatAssistantContentSegment) -> String {
+        switch segment {
+        case .markdown(let markdown):
+            "markdown-\(index)-\(markdown.hashValue)"
+        case .blockLatex(let latex):
+            "latex-\(index)-\(latex.hashValue)"
+        case .mermaid(let source):
+            "mermaid-\(index)-\(source.hashValue)"
+        case .plainTail:
+            "tail-\(index)"
         }
     }
 
@@ -156,6 +155,12 @@ struct ChatRichContentView: View {
             ? 1 - phase * Self.cursorBlinkFade
             : Self.cursorMinOpacity + (phase - 0.5) * Self.cursorBlinkFade
     }
+}
+
+private struct ChatRichRenderSegment: Identifiable {
+    let id: String
+    let segment: ChatAssistantContentSegment
+    let isLast: Bool
 }
 
 private struct ChatRichTextSelectionModifier: ViewModifier {
