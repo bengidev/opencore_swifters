@@ -1,11 +1,19 @@
 import SwiftUI
 
-/// Inline command output stream row with expandable detail sheet.
+/// Inline command execution row with litter-style shell header and live output viewport.
 struct ChatOutputStreamCardView: View {
     let message: ChatOutputStreamMessage
 
     @Environment(\.sharedPalette) private var palette
-    @State private var isShowingDetailSheet = false
+    @State private var isExpanded: Bool
+
+    init(message: ChatOutputStreamMessage) {
+        self.message = message
+        let isRunning = message.detail.status == .running && !message.isComplete
+        _isExpanded = State(
+            initialValue: isRunning || message.detail.status == .failed
+        )
+    }
 
     private var isRunning: Bool {
         message.detail.status == .running && !message.isComplete
@@ -15,196 +23,123 @@ struct ChatOutputStreamCardView: View {
         ChatOutputStreamHumanizer.humanize(message.command, isRunning: isRunning)
     }
 
-    private var statusLabel: String {
-        switch message.detail.status {
-        case .running: "running"
-        case .completed: "completed"
-        case .failed: "failed"
-        }
+    private var displayedCommand: String {
+        let trimmed = message.command.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "command" : trimmed
+    }
+
+    private var collapsedCommand: String {
+        let collapsed = displayedCommand
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return collapsed.isEmpty ? "command" : collapsed
+    }
+
+    private var durationText: String? {
+        guard let durationMs = message.detail.durationMs else { return nil }
+        return formattedDuration(durationMs)
     }
 
     var body: some View {
         ChatMessageCardChrome {
-            VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    isShowingDetailSheet = true
-                } label: {
-                    HStack(spacing: 0) {
-                        (
-                            Text(display.verb)
-                                .font(SharedOpenCoreTypography.bodyMD)
-                                .foregroundStyle(palette.textSecondary)
-                            +
-                            Text(" " + display.target)
-                                .font(SharedOpenCoreTypography.bodyMD)
-                                .foregroundStyle(palette.textTertiary)
-                        )
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            VStack(alignment: .leading, spacing: isExpanded ? 8 : 0) {
+                shellHeader
 
-                        Spacer(minLength: 6)
-
-                        Text(statusLabel)
-                            .font(SharedOpenCoreTypography.bodyMD)
-                            .foregroundStyle(statusColor.opacity(message.detail.status == .failed ? 1 : 0.5))
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(palette.textTertiary.opacity(0.6))
-                            .padding(.leading, 4)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(display.verb) \(display.target), \(statusLabel)")
-                .transaction { transaction in
-                    transaction.animation = nil
+                if isExpanded {
+                    ChatOutputStreamViewport(
+                        output: message.detail.outputTail,
+                        status: message.detail.status,
+                        durationText: durationText
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
-        .sheet(isPresented: $isShowingDetailSheet) {
-            ChatOutputStreamDetailSheet(message: message)
-                .presentationDetents([.fraction(0.35), .medium])
-                .presentationDragIndicator(.visible)
+        .animation(.easeOut(duration: 0.2), value: isExpanded)
+        .onChange(of: isRunning) { _, running in
+            if running || message.detail.status == .failed {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isExpanded = true
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var shellHeader: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("$")
+                    .font(SharedOpenCoreTypography.monoSM.weight(.semibold))
+                    .foregroundStyle(palette.warning)
+
+                Group {
+                    if isExpanded {
+                        Text(displayedCommand)
+                    } else {
+                        Text("\(display.verb) \(display.target)")
+                    }
+                }
+                .font(SharedOpenCoreTypography.monoSM)
+                .foregroundStyle(palette.textPrimary)
+                .textSelection(.enabled)
+                .lineLimit(isExpanded ? nil : 1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let durationText, !isExpanded {
+                    Text(durationText)
+                        .font(.caption2)
+                        .foregroundStyle(statusColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(statusColor.opacity(0.10))
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(statusColor.opacity(0.22), lineWidth: 0.5)
+                        )
+                }
+
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(palette.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .transaction { transaction in
+            transaction.animation = nil
         }
     }
 
     private var statusColor: Color {
         switch message.detail.status {
         case .running:
-            return palette.accentPrimary
+            palette.accentPrimary
         case .completed:
-            return palette.textSecondary
+            palette.textSecondary
         case .failed:
-            return palette.danger
+            palette.danger
         }
     }
-}
 
-private struct ChatOutputStreamDetailSheet: View {
-    let message: ChatOutputStreamMessage
-
-    @Environment(\.sharedPalette) private var palette
-    @State private var isOutputExpanded = false
-
-    private var isRunning: Bool {
-        message.detail.status == .running && !message.isComplete
-    }
-
-    private var display: ChatOutputStreamHumanizer.Info {
-        ChatOutputStreamHumanizer.humanize(message.command, isRunning: isRunning)
-    }
-
-    private var statusLabel: String {
-        switch message.detail.status {
+    private var accessibilitySummary: String {
+        let statusLabel = switch message.detail.status {
         case .running: "running"
         case .completed: "completed"
         case .failed: "failed"
         }
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                commandSection
-                metadataSection
-                if !message.detail.outputTail.isEmpty {
-                    outputSection
-                }
-            }
-            .padding()
-        }
-    }
-
-    private var commandSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Command", systemImage: "terminal.fill")
-                .font(SharedOpenCoreTypography.monoSM)
-                .foregroundStyle(palette.accentPrimary)
-                .monoTracking()
-
-            Text(message.command)
-                .font(SharedOpenCoreTypography.monoSM)
-                .foregroundStyle(palette.textPrimary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(palette.surfaceRaised)
-                )
-        }
-    }
-
-    private var metadataSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            metadataRow(label: "Action", value: "\(display.verb) \(display.target)")
-            if let cwd = message.detail.cwd, !cwd.isEmpty {
-                metadataRow(label: "Directory", value: cwd)
-            }
-            if let exitCode = message.detail.exitCode {
-                metadataRow(
-                    label: "Exit code",
-                    value: "\(exitCode)",
-                    valueColor: exitCode == 0 ? palette.success : palette.danger
-                )
-            }
-            if let durationMs = message.detail.durationMs {
-                metadataRow(label: "Duration", value: formattedDuration(durationMs))
-            }
-            metadataRow(label: "Status", value: statusLabel)
-        }
-    }
-
-    private func metadataRow(
-        label: String,
-        value: String,
-        valueColor: Color? = nil
-    ) -> some View {
-        HStack {
-            Text(label)
-                .font(SharedOpenCoreTypography.monoSM)
-                .foregroundStyle(palette.textSecondary)
-                .monoTracking()
-            Spacer()
-            Text(value)
-                .font(SharedOpenCoreTypography.monoSM)
-                .foregroundStyle(valueColor ?? palette.textPrimary)
-                .textSelection(.enabled)
-        }
-    }
-
-    private var outputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isOutputExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isOutputExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text("Output (last \(ChatOutputStreamDetail.maxOutputLines) lines)")
-                        .font(SharedOpenCoreTypography.monoSM)
-                }
-                .foregroundStyle(palette.textSecondary)
-            }
-            .buttonStyle(.plain)
-
-            if isOutputExpanded {
-                ChatRichContentView(
-                    text: message.detail.outputTail,
-                    style: .terminal
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(palette.surfaceRaised)
-                )
-            }
-        }
+        return "\(display.verb) \(display.target), \(statusLabel)"
     }
 
     private func formattedDuration(_ ms: Int) -> String {
