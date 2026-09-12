@@ -207,6 +207,7 @@ final class ChatFlowController {
         state.draftMessage = ""
         state.draftAttachments = []
         state.messages.append(userMessage)
+        NotificationCenter.default.post(name: .chatThreadRequestScrollToBottom, object: nil)
 
         if state.atom == nil {
             state.atom = Atom(
