@@ -48,8 +48,7 @@ struct ChatMessageRowView: View, Equatable {
             VStack(alignment: .leading, spacing: 6) {
                 ChatRichContentView(
                     text: textMessage.content,
-                    isStreaming: isAssistantTextStreaming(textMessage),
-                    showsCursor: isAssistantTextStreaming(textMessage)
+                    isStreaming: isAssistantTextStreaming(textMessage)
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(0)

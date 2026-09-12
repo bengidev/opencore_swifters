@@ -42,6 +42,42 @@ struct ChatOutputStreamHumanizerTests {
     }
 }
 
+@Suite("Chat Output Stream Viewport")
+struct ChatOutputStreamViewportPresentationTests {
+    @Test("Shows waiting placeholder while running with no output")
+    func waitingPlaceholder() {
+        let rendered = ChatOutputStreamViewportPresentation.renderedOutput(
+            output: "",
+            isInProgress: true
+        )
+        #expect(rendered == "Waiting for output…")
+    }
+
+    @Test("Tail preview keeps newest output while running")
+    func tailPreviewWhileRunning() {
+        let output = String(repeating: "a", count: 2_100)
+        let visible = ChatOutputStreamViewportPresentation.visibleOutput(
+            output: output,
+            isInProgress: true,
+            isLongOutputExpanded: false
+        )
+        #expect(visible.count == ChatOutputStreamViewportPresentation.maxVisibleCharacters)
+        #expect(visible == String(output.suffix(ChatOutputStreamViewportPresentation.maxVisibleCharacters)))
+    }
+
+    @Test("Completed output uses head preview until expanded")
+    func headPreviewWhenComplete() {
+        let output = String(repeating: "b", count: 2_100)
+        let visible = ChatOutputStreamViewportPresentation.visibleOutput(
+            output: output,
+            isInProgress: false,
+            isLongOutputExpanded: false
+        )
+        #expect(visible.count == ChatOutputStreamViewportPresentation.maxVisibleCharacters)
+        #expect(visible == String(output.prefix(ChatOutputStreamViewportPresentation.maxVisibleCharacters)))
+    }
+}
+
 @Suite("Chat Output Stream Detail")
 struct ChatOutputStreamDetailTests {
     @Test("Trims output tail to max lines")
