@@ -3,6 +3,7 @@ import SwiftUI
 /// Presentation rules for litter-style command output viewports.
 nonisolated enum ChatOutputStreamViewportPresentation {
     static let maxVisibleCharacters = 2_000
+    /// Caps the viewport scroll region height; character truncation is handled separately.
     static let maxVisibleLines = 3
 
     static func renderedOutput(output: String, isInProgress: Bool) -> String {
@@ -34,6 +35,17 @@ nonisolated enum ChatOutputStreamViewportPresentation {
         }
         return String(output.prefix(maxVisibleCharacters))
     }
+
+    /// Returns whether long-output expansion should collapse after an output update.
+    static func shouldCollapseLongOutputExpansion(
+        previousOutput: String,
+        newOutput: String,
+        isInProgress: Bool
+    ) -> Bool {
+        let previousRendered = renderedOutput(output: previousOutput, isInProgress: isInProgress)
+        let newRendered = renderedOutput(output: newOutput, isInProgress: isInProgress)
+        return !shouldLimitOutput(previousRendered) && shouldLimitOutput(newRendered)
+    }
 }
 
 /// Three-line capped scroll region for live command output, modeled on litter's viewport.
@@ -41,12 +53,25 @@ struct ChatOutputStreamViewport: View {
     let output: String
     let status: ChatOutputStreamStatus
     let durationText: String?
+    let exitCode: Int?
 
     @Environment(\.sharedPalette) private var palette
     @State private var expandedLongOutput = false
 
     private let bottomAnchorID = "chat-output-stream-bottom"
     private let lineFontSize: CGFloat = 12
+
+    init(
+        output: String,
+        status: ChatOutputStreamStatus,
+        durationText: String? = nil,
+        exitCode: Int? = nil
+    ) {
+        self.output = output
+        self.status = status
+        self.durationText = durationText
+        self.exitCode = exitCode
+    }
 
     private var isInProgress: Bool {
         status == .running
@@ -92,6 +117,7 @@ struct ChatOutputStreamViewport: View {
                             .foregroundStyle(palette.textSecondary)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel(outputAccessibilityLabel)
 
                         Color.clear
                             .frame(height: 1)
@@ -118,20 +144,28 @@ struct ChatOutputStreamViewport: View {
                     .allowsHitTesting(false)
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    if let durationText, !durationText.isEmpty {
-                        Text(durationText)
-                            .font(.caption2)
-                            .foregroundStyle(statusColor)
-                            .accessibilityLabel(durationAccessibilityLabel(durationText))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(alignment: .bottom) {
-                                LinearGradient(
-                                    colors: [.clear, palette.surfaceRaised.opacity(0.94)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            }
+                    HStack(spacing: 6) {
+                        if let exitCode, status == .failed {
+                            Text("exit \(exitCode)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(exitCode == 0 ? palette.textSecondary : palette.danger)
+                                .accessibilityLabel("Exit code \(exitCode)")
+                        }
+                        if let durationText, !durationText.isEmpty {
+                            Text(durationText)
+                                .font(.caption2)
+                                .foregroundStyle(statusColor)
+                                .accessibilityLabel(durationAccessibilityLabel(durationText))
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(alignment: .bottom) {
+                        LinearGradient(
+                            colors: [.clear, palette.surfaceRaised.opacity(0.94)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
                 }
                 .overlay {
@@ -141,9 +175,18 @@ struct ChatOutputStreamViewport: View {
                 .onAppear {
                     scrollToBottom(proxy)
                 }
-                .onChange(of: output) { _, _ in
-                    expandedLongOutput = false
+                .onChange(of: output) { previousOutput, newOutput in
+                    if ChatOutputStreamViewportPresentation.shouldCollapseLongOutputExpansion(
+                        previousOutput: previousOutput,
+                        newOutput: newOutput,
+                        isInProgress: isInProgress
+                    ) {
+                        expandedLongOutput = false
+                    }
                     scrollToBottom(proxy, animated: true)
+                }
+                .onChange(of: status) { _, _ in
+                    expandedLongOutput = false
                 }
                 .onChange(of: expandedLongOutput) { _, _ in
                     scrollToBottom(proxy, animated: true)
@@ -164,6 +207,19 @@ struct ChatOutputStreamViewport: View {
                         expandedLongOutput ? "Show less command output" : "Show more command output"
                     )
                 }
+            }
+        }
+    }
+
+    private var outputAccessibilityLabel: String {
+        switch renderedOutput {
+        case "Waiting for output…", "No output":
+            renderedOutput
+        default:
+            if shouldLimitOutput, !expandedLongOutput {
+                "Command output, truncated"
+            } else {
+                "Command output"
             }
         }
     }

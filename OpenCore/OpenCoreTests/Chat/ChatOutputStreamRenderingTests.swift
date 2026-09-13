@@ -76,6 +76,53 @@ struct ChatOutputStreamViewportPresentationTests {
         #expect(visible.count == ChatOutputStreamViewportPresentation.maxVisibleCharacters)
         #expect(visible == String(output.prefix(ChatOutputStreamViewportPresentation.maxVisibleCharacters)))
     }
+
+    @Test("Long-output expansion collapses only when crossing character limit")
+    func collapsesExpansionOnlyWhenCrossingLimit() {
+        let belowLimit = String(repeating: "a", count: 1_900)
+        let aboveLimit = String(repeating: "a", count: 2_100)
+
+        #expect(
+            ChatOutputStreamViewportPresentation.shouldCollapseLongOutputExpansion(
+                previousOutput: belowLimit,
+                newOutput: aboveLimit,
+                isInProgress: true
+            )
+        )
+
+        #expect(
+            !ChatOutputStreamViewportPresentation.shouldCollapseLongOutputExpansion(
+                previousOutput: aboveLimit,
+                newOutput: aboveLimit + "more",
+                isInProgress: true
+            )
+        )
+    }
+}
+
+@Suite("Chat Rich Render Segment ID")
+struct ChatRichRenderSegmentIDTests {
+    @Test("Plain tail segment ID stays stable as text grows")
+    func plainTailIDStable() {
+        let first = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("hello"))
+        let second = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("hello world"))
+        #expect(first == second)
+        #expect(first == "tail-0")
+    }
+
+    @Test("Markdown segment ID changes when content changes")
+    func markdownIDChangesWithContent() {
+        let first = ChatRichRenderSegmentID.id(index: 1, segment: .markdown("# Title"))
+        let second = ChatRichRenderSegmentID.id(index: 1, segment: .markdown("# Title\n"))
+        #expect(first != second)
+    }
+
+    @Test("Different indices produce different IDs")
+    func differentIndices() {
+        let first = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("x"))
+        let second = ChatRichRenderSegmentID.id(index: 1, segment: .plainTail("x"))
+        #expect(first != second)
+    }
 }
 
 @Suite("Chat Output Stream Detail")
