@@ -6,6 +6,20 @@ import Testing
 @MainActor
 @Suite("Home Flow Controller Capabilities")
 struct HomeFlowControllerCapabilityTests {
+    private func waitForCapabilities(
+        _ home: HomeFlowController,
+        timeout: Duration = .seconds(2)
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if home.state.inputCapabilities != nil, !home.state.isLoadingInputCapabilities {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return home.state.inputCapabilities != nil && !home.state.isLoadingInputCapabilities
+    }
+
     @Test("selectModel sets loading then resolves capabilities")
     func selectModelFetchesCapabilities() async {
         let home = HomeFlowController(
@@ -18,7 +32,7 @@ struct HomeFlowControllerCapabilityTests {
         )
         await home.onAppear()
         home.selectModel("meta-llama/llama-3.3-70b-instruct:free")
-        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await waitForCapabilities(home))
         #expect(home.state.isLoadingInputCapabilities == false)
         #expect(home.state.inputCapabilities != nil)
     }
@@ -39,7 +53,7 @@ struct HomeFlowControllerCapabilityTests {
         )
         await home.onAppear()
         home.selectModel("meta-llama/llama-3.3-70b-instruct:free")
-        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await waitForCapabilities(home))
         #expect(home.state.inputCapabilities?.supportsImageInput == true)
 
         home.selectModel("deepseek/deepseek-r1:free")
@@ -62,7 +76,7 @@ struct HomeFlowControllerCapabilityTests {
             if !caps.supportsAttachments { cleared = true }
         }
         await home.onAppear()
-        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await waitForCapabilities(home))
         #expect(cleared)
     }
 }
