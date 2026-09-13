@@ -42,6 +42,89 @@ struct ChatOutputStreamHumanizerTests {
     }
 }
 
+@Suite("Chat Output Stream Viewport")
+struct ChatOutputStreamViewportPresentationTests {
+    @Test("Shows waiting placeholder while running with no output")
+    func waitingPlaceholder() {
+        let rendered = ChatOutputStreamViewportPresentation.renderedOutput(
+            output: "",
+            isInProgress: true
+        )
+        #expect(rendered == "Waiting for output…")
+    }
+
+    @Test("Tail preview keeps newest output while running")
+    func tailPreviewWhileRunning() {
+        let output = String(repeating: "a", count: 2_100)
+        let visible = ChatOutputStreamViewportPresentation.visibleOutput(
+            output: output,
+            isInProgress: true,
+            isLongOutputExpanded: false
+        )
+        #expect(visible.count == ChatOutputStreamViewportPresentation.maxVisibleCharacters)
+        #expect(visible == String(output.suffix(ChatOutputStreamViewportPresentation.maxVisibleCharacters)))
+    }
+
+    @Test("Completed output uses head preview until expanded")
+    func headPreviewWhenComplete() {
+        let output = String(repeating: "b", count: 2_100)
+        let visible = ChatOutputStreamViewportPresentation.visibleOutput(
+            output: output,
+            isInProgress: false,
+            isLongOutputExpanded: false
+        )
+        #expect(visible.count == ChatOutputStreamViewportPresentation.maxVisibleCharacters)
+        #expect(visible == String(output.prefix(ChatOutputStreamViewportPresentation.maxVisibleCharacters)))
+    }
+
+    @Test("Long-output expansion collapses only when crossing character limit")
+    func collapsesExpansionOnlyWhenCrossingLimit() {
+        let belowLimit = String(repeating: "a", count: 1_900)
+        let aboveLimit = String(repeating: "a", count: 2_100)
+
+        #expect(
+            ChatOutputStreamViewportPresentation.shouldCollapseLongOutputExpansion(
+                previousOutput: belowLimit,
+                newOutput: aboveLimit,
+                isInProgress: true
+            )
+        )
+
+        #expect(
+            !ChatOutputStreamViewportPresentation.shouldCollapseLongOutputExpansion(
+                previousOutput: aboveLimit,
+                newOutput: aboveLimit + "more",
+                isInProgress: true
+            )
+        )
+    }
+}
+
+@Suite("Chat Rich Render Segment ID")
+struct ChatRichRenderSegmentIDTests {
+    @Test("Plain tail segment ID stays stable as text grows")
+    func plainTailIDStable() {
+        let first = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("hello"))
+        let second = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("hello world"))
+        #expect(first == second)
+        #expect(first == "tail-0")
+    }
+
+    @Test("Markdown segment ID changes when content changes")
+    func markdownIDChangesWithContent() {
+        let first = ChatRichRenderSegmentID.id(index: 1, segment: .markdown("# Title"))
+        let second = ChatRichRenderSegmentID.id(index: 1, segment: .markdown("# Title\n"))
+        #expect(first != second)
+    }
+
+    @Test("Different indices produce different IDs")
+    func differentIndices() {
+        let first = ChatRichRenderSegmentID.id(index: 0, segment: .plainTail("x"))
+        let second = ChatRichRenderSegmentID.id(index: 1, segment: .plainTail("x"))
+        #expect(first != second)
+    }
+}
+
 @Suite("Chat Output Stream Detail")
 struct ChatOutputStreamDetailTests {
     @Test("Trims output tail to max lines")

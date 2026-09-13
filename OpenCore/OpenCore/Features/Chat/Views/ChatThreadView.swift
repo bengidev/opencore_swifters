@@ -136,9 +136,8 @@ struct ChatThreadView<BottomChrome: View>: View {
     ) {
         scrollTask?.cancel()
         scrollTask = Task { @MainActor in
-            let delay = delayNanoseconds ?? scrollCoalesceDelayNanoseconds()
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: delay)
+            if let delayNanoseconds, delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
             } else {
                 await Task.yield()
             }
@@ -146,13 +145,6 @@ struct ChatThreadView<BottomChrome: View>: View {
             scrollToLast(proxy: proxy, animate: animate)
             scrollTask = nil
         }
-    }
-
-    private func scrollCoalesceDelayNanoseconds() -> UInt64 {
-        let byteCount = flow.state.currentPartialText.utf8.count
-        if byteCount >= 32_000 { return 200_000_000 }
-        if byteCount >= 8_000 { return 120_000_000 }
-        return 0
     }
 
     private func scrollToLast(proxy: ScrollViewProxy, animate: Bool) {

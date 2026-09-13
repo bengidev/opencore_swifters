@@ -108,8 +108,7 @@ struct ChatReasoningCardView: View {
             ChatRichContentView(
                 text: displayedContent,
                 style: .reasoning,
-                isStreaming: isStreaming,
-                showsCursor: isStreaming
+                isStreaming: isStreaming
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
             .accessibilityLabel(displayedContent)
