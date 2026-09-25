@@ -6,10 +6,8 @@ import ThinkingOrbsKit
 struct OnboardingChatBubbleView: View {
     let message: OnboardingChatMessage
     let containerWidth: CGFloat
-    var bubbleNamespace: Namespace.ID
 
     @Environment(\.sharedPalette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let cornerRadius: CGFloat = 20
     private let oppositeSpacerMinWidth: CGFloat = 52
@@ -32,6 +30,7 @@ struct OnboardingChatBubbleView: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
     }
 
     // MARK: - User (right)
@@ -53,25 +52,20 @@ struct OnboardingChatBubbleView: View {
 
     // MARK: - Assistant / Thinking (left)
 
-    /// Thinking and assistant share one `message.id` and the feed-level namespace so
-    /// `matchedGeometryEffect` can morph in place instead of inserting a second row.
+    /// Thinking and assistant are separate layouts. Role changes swap in place
+    /// so the taller reply cannot travel through the user bubble above it.
     @ViewBuilder
     private var leftAlignedBubble: some View {
-        Group {
-            if message.role == .thinking {
-                thinkingBubble
-                    .matchedGeometryEffect(id: "bubble-shell-\(message.id)", in: bubbleNamespace)
-            } else {
-                assistantBubble
-                    .matchedGeometryEffect(id: "bubble-shell-\(message.id)", in: bubbleNamespace)
-            }
+        switch message.role {
+        case .thinking:
+            thinkingBubble
+                .transition(.opacity)
+        case .assistant:
+            assistantBubble
+                .transition(.opacity)
+        case .user:
+            EmptyView()
         }
-        .animation(
-            reduceMotion
-                ? .easeOut(duration: 0.2)
-                : .spring(response: 0.58, dampingFraction: 0.82),
-            value: message.role
-        )
     }
 
     private var thinkingBubble: some View {
@@ -95,12 +89,6 @@ struct OnboardingChatBubbleView: View {
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking")
-        .transition(
-            .asymmetric(
-                insertion: .move(edge: .leading).combined(with: .opacity),
-                removal: .opacity
-            )
-        )
     }
 
     private var assistantBubble: some View {
@@ -133,12 +121,6 @@ struct OnboardingChatBubbleView: View {
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(assistantAccessibilityLabel)
-        .transition(
-            .asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .leading)),
-                removal: .opacity
-            )
-        )
     }
 
     private var bubbleBackground: some View {

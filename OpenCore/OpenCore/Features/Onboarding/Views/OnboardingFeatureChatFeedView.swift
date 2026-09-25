@@ -5,15 +5,17 @@ enum OnboardingChatFeedTiming {
     static let afterUserDelay: Duration = .milliseconds(450)
     static let thinkingDuration: Duration = .milliseconds(1100)
     static let afterAssistantDelay: Duration = .milliseconds(1300)
+    /// Shared ease for the feed shifting up and a reply growing in place.
+    /// No bounce — a spring overshoot reads as a snap.
+    static let placement = Animation.smooth(duration: 0.48, extraBounce: 0)
 }
 
-/// Alternating left/right chat feed — user prompts on the right, thinking orbs that morph
-/// into feature replies on the left, auto-scrolls upward, and loops forever while active.
+/// Alternating left/right chat feed — user prompts on the right, thinking orbs that
+/// become feature replies on the left, auto-scrolls upward, and loops forever while active.
 struct OnboardingFeatureChatFeedView: View {
     let isActive: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var bubbleNamespace
 
     @State private var feedItems: [OnboardingChatMessage] = []
     @State private var nextFeatureIndex = 0
@@ -60,29 +62,28 @@ struct OnboardingFeatureChatFeedView: View {
 
     private var scrollingConversation: some View {
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: messageSpacing) {
-                        ForEach(feedItems) { message in
-                            OnboardingChatBubbleView(
-                                message: message,
-                                containerWidth: geometry.size.width,
-                                bubbleNamespace: bubbleNamespace
-                            )
-                            .id(message.id)
-                            .transition(chatTransition(for: message.role))
-                        }
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                VStack(spacing: messageSpacing) {
+                    ForEach(feedItems) { message in
+                        OnboardingChatBubbleView(
+                            message: message,
+                            containerWidth: geometry.size.width
+                        )
+                        .id(message.id)
+                        .transition(.identity)
                     }
-                    .padding(.vertical, 6)
                 }
-                .mask(feedEdgeFade)
-                .onChange(of: feedItems.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-                .onChange(of: feedItems.last?.role) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
+                .layoutPriority(1)
+                .padding(.vertical, 6)
+                .geometryGroup()
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+            .compositingGroup()
+            .clipped()
+            .animation(OnboardingChatFeedTiming.placement, value: feedLayoutToken)
+            .mask(feedEdgeFade)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(currentFeatureAccessibilityLabel)
@@ -91,32 +92,26 @@ struct OnboardingFeatureChatFeedView: View {
         }
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        guard let lastID = feedItems.last?.id else { return }
-        if reduceMotion {
-            proxy.scrollTo(lastID, anchor: .bottom)
-        } else {
-            withAnimation(.spring(response: 0.52, dampingFraction: 0.84)) {
-                proxy.scrollTo(lastID, anchor: .bottom)
+    private var feedLayoutToken: String {
+        feedItems.map { message in
+            let role: String
+            switch message.role {
+            case .user:
+                role = "u"
+            case .thinking:
+                role = "t"
+            case .assistant:
+                role = "a"
             }
-        }
-    }
-
-    private func chatTransition(for role: OnboardingChatRole) -> AnyTransition {
-        let edge: Edge = role == .user ? .trailing : .leading
-        return .asymmetric(
-            insertion: .move(edge: edge)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.96)),
-            removal: .opacity
-        )
+            return "\(message.id.uuidString)-\(role)"
+        }.joined(separator: "|")
     }
 
     private var feedEdgeFade: some View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: .black, location: 0.08),
+                .init(color: .black, location: 0.1),
                 .init(color: .black, location: 1)
             ],
             startPoint: .top,
@@ -136,13 +131,11 @@ struct OnboardingFeatureChatFeedView: View {
                     if let feature {
                         OnboardingChatBubbleView(
                             message: .user(prompt: feature.userPrompt, feature: feature),
-                            containerWidth: geometry.size.width,
-                            bubbleNamespace: bubbleNamespace
+                            containerWidth: geometry.size.width
                         )
                         OnboardingChatBubbleView(
                             message: .assistant(feature: feature),
-                            containerWidth: geometry.size.width,
-                            bubbleNamespace: bubbleNamespace
+                            containerWidth: geometry.size.width
                         )
                     }
                 }
@@ -197,26 +190,20 @@ struct OnboardingFeatureChatFeedView: View {
         switch feedStep {
         case .user:
             accessibilityFeatureIndex = nextFeatureIndex
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                feedItems.append(.user(prompt: feature.userPrompt, feature: feature))
-                trimFeedIfNeeded()
-            }
+            feedItems.append(.user(prompt: feature.userPrompt, feature: feature))
+            trimFeedIfNeeded()
             feedStep = .thinking
             guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.afterUserDelay) else { return }
 
         case .thinking:
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                feedItems.append(.thinking(feature: feature))
-                trimFeedIfNeeded()
-            }
+            feedItems.append(.thinking(feature: feature))
+            trimFeedIfNeeded()
             feedStep = .morph
             guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.thinkingDuration) else { return }
 
         case .morph:
             if let thinkingIndex = feedItems.lastIndex(where: { $0.role == .thinking }) {
-                withAnimation(.spring(response: 0.62, dampingFraction: 0.84)) {
-                    feedItems[thinkingIndex] = feedItems[thinkingIndex].morphToAssistant()
-                }
+                feedItems[thinkingIndex] = feedItems[thinkingIndex].morphToAssistant()
             }
             nextFeatureIndex = (nextFeatureIndex + 1) % catalog.count
             feedStep = .user
