@@ -2,18 +2,41 @@ import SwiftUI
 
 enum OnboardingChatFeedTiming {
     static let firstMessageDelay: Duration = .milliseconds(350)
-    static let afterUserDelay: Duration = .milliseconds(450)
     static let thinkingDuration: Duration = .milliseconds(1100)
     static let afterAssistantDelay: Duration = .milliseconds(1300)
+
+    /// How long the column eases when a row is inserted or a reply grows.
+    static let placementDuration: Duration = .milliseconds(480)
+    /// Stay hidden until that ease has opened the new slot.
+    static let revealDelay: Duration = placementDuration
+    static let revealDuration: Duration = .milliseconds(280)
+    /// Next row starts only after the current placement ease has finished,
+    /// so a new layout animation does not retarget the one still in flight.
+    static let afterUserDelay: Duration = placementDuration
+
+    /// Shared ease for the feed shifting up, a reply growing in place, and the
+    /// thinking-to-reply crossfade. No bounce — a spring overshoot reads as a snap.
+    static let placement = Animation.smooth(
+        duration: timeInterval(from: placementDuration),
+        extraBounce: 0
+    )
+    static let reveal = Animation.smooth(
+        duration: timeInterval(from: revealDuration),
+        extraBounce: 0
+    )
+
+    private static func timeInterval(from duration: Duration) -> TimeInterval {
+        let (seconds, attoseconds) = duration.components
+        return TimeInterval(seconds) + TimeInterval(attoseconds) / 1_000_000_000_000_000_000
+    }
 }
 
-/// Alternating left/right chat feed — user prompts on the right, thinking orbs that morph
-/// into feature replies on the left, auto-scrolls upward, and loops forever while active.
+/// Alternating left/right chat feed — user prompts on the right, thinking orbs that
+/// become feature replies on the left, pins to the bottom and eases upward, and loops forever while active.
 struct OnboardingFeatureChatFeedView: View {
     let isActive: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var bubbleNamespace
 
     @State private var feedItems: [OnboardingChatMessage] = []
     @State private var nextFeatureIndex = 0
@@ -60,29 +83,29 @@ struct OnboardingFeatureChatFeedView: View {
 
     private var scrollingConversation: some View {
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: messageSpacing) {
-                        ForEach(feedItems) { message in
-                            OnboardingChatBubbleView(
-                                message: message,
-                                containerWidth: geometry.size.width,
-                                bubbleNamespace: bubbleNamespace
-                            )
-                            .id(message.id)
-                            .transition(chatTransition(for: message.role))
-                        }
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                VStack(spacing: messageSpacing) {
+                    ForEach(feedItems) { message in
+                        OnboardingChatBubbleView(
+                            message: message,
+                            containerWidth: geometry.size.width,
+                            animatesAppearance: true
+                        )
+                        .id(message.id)
+                        .transition(.identity)
                     }
-                    .padding(.vertical, 6)
                 }
-                .mask(feedEdgeFade)
-                .onChange(of: feedItems.count) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
-                .onChange(of: feedItems.last?.role) { _, _ in
-                    scrollToBottom(proxy: proxy)
-                }
+                .layoutPriority(1)
+                .padding(.vertical, 6)
+                .geometryGroup()
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+            .compositingGroup()
+            .clipped()
+            .animation(OnboardingChatFeedTiming.placement, value: feedLayoutToken)
+            .mask(feedEdgeFade)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(currentFeatureAccessibilityLabel)
@@ -91,32 +114,26 @@ struct OnboardingFeatureChatFeedView: View {
         }
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        guard let lastID = feedItems.last?.id else { return }
-        if reduceMotion {
-            proxy.scrollTo(lastID, anchor: .bottom)
-        } else {
-            withAnimation(.spring(response: 0.52, dampingFraction: 0.84)) {
-                proxy.scrollTo(lastID, anchor: .bottom)
+    private var feedLayoutToken: String {
+        feedItems.map { message in
+            let role: String
+            switch message.role {
+            case .user:
+                role = "u"
+            case .thinking:
+                role = "t"
+            case .assistant:
+                role = "a"
             }
-        }
-    }
-
-    private func chatTransition(for role: OnboardingChatRole) -> AnyTransition {
-        let edge: Edge = role == .user ? .trailing : .leading
-        return .asymmetric(
-            insertion: .move(edge: edge)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.96)),
-            removal: .opacity
-        )
+            return "\(message.id.uuidString)-\(role)"
+        }.joined(separator: "|")
     }
 
     private var feedEdgeFade: some View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: .black, location: 0.08),
+                .init(color: .black, location: 0.1),
                 .init(color: .black, location: 1)
             ],
             startPoint: .top,
@@ -137,12 +154,12 @@ struct OnboardingFeatureChatFeedView: View {
                         OnboardingChatBubbleView(
                             message: .user(prompt: feature.userPrompt, feature: feature),
                             containerWidth: geometry.size.width,
-                            bubbleNamespace: bubbleNamespace
+                            animatesAppearance: false
                         )
                         OnboardingChatBubbleView(
                             message: .assistant(feature: feature),
                             containerWidth: geometry.size.width,
-                            bubbleNamespace: bubbleNamespace
+                            animatesAppearance: false
                         )
                     }
                 }
@@ -197,24 +214,22 @@ struct OnboardingFeatureChatFeedView: View {
         switch feedStep {
         case .user:
             accessibilityFeatureIndex = nextFeatureIndex
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                feedItems.append(.user(prompt: feature.userPrompt, feature: feature))
-                trimFeedIfNeeded()
-            }
+            feedItems.append(.user(prompt: feature.userPrompt, feature: feature))
+            trimFeedIfNeeded()
             feedStep = .thinking
             guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.afterUserDelay) else { return }
 
         case .thinking:
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                feedItems.append(.thinking(feature: feature))
-                trimFeedIfNeeded()
-            }
+            feedItems.append(.thinking(feature: feature))
+            trimFeedIfNeeded()
             feedStep = .morph
             guard await sleepUnlessCancelled(for: OnboardingChatFeedTiming.thinkingDuration) else { return }
 
         case .morph:
             if let thinkingIndex = feedItems.lastIndex(where: { $0.role == .thinking }) {
-                withAnimation(.spring(response: 0.62, dampingFraction: 0.84)) {
+                // An explicit transaction drives the opacity crossfade. The layout
+                // ease on `feedLayoutToken` does not, by itself, animate that swap.
+                withAnimation(OnboardingChatFeedTiming.placement) {
                     feedItems[thinkingIndex] = feedItems[thinkingIndex].morphToAssistant()
                 }
             }

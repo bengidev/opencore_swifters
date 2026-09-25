@@ -184,6 +184,17 @@ struct OnboardingChatFeedTimingTests {
         #expect(OnboardingChatFeedTiming.thinkingDuration > .zero)
         #expect(OnboardingChatFeedTiming.afterAssistantDelay > .zero)
     }
+
+    @Test("Reveal and the next row wait until placement has finished")
+    func revealAndLoopWaitForPlacement() {
+        #expect(OnboardingChatFeedTiming.revealDelay >= OnboardingChatFeedTiming.placementDuration)
+        #expect(OnboardingChatFeedTiming.afterUserDelay >= OnboardingChatFeedTiming.placementDuration)
+        #expect(
+            OnboardingChatFeedTiming.thinkingDuration
+                >= OnboardingChatFeedTiming.revealDelay + OnboardingChatFeedTiming.revealDuration
+        )
+        #expect(OnboardingChatFeedTiming.afterAssistantDelay >= OnboardingChatFeedTiming.placementDuration)
+    }
 }
 
 @MainActor

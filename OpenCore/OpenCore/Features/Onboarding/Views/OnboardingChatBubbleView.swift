@@ -6,7 +6,7 @@ import ThinkingOrbsKit
 struct OnboardingChatBubbleView: View {
     let message: OnboardingChatMessage
     let containerWidth: CGFloat
-    var bubbleNamespace: Namespace.ID
+    var animatesAppearance: Bool = true
 
     @Environment(\.sharedPalette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -25,13 +25,27 @@ struct OnboardingChatBubbleView: View {
             if message.role == .user {
                 Spacer(minLength: oppositeSpacerMinWidth)
                 userBubble
+                    .modifier(
+                        OnboardingChatBubbleReveal(
+                            anchor: .bottomTrailing,
+                            isEnabled: animatesAppearance && !reduceMotion
+                        )
+                    )
             } else {
                 leftAlignedBubble
+                    .animation(OnboardingChatFeedTiming.placement, value: message.role)
+                    .modifier(
+                        OnboardingChatBubbleReveal(
+                            anchor: .bottomLeading,
+                            isEnabled: animatesAppearance && !reduceMotion
+                        )
+                    )
                 Spacer(minLength: oppositeSpacerMinWidth)
             }
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
     }
 
     // MARK: - User (right)
@@ -53,25 +67,21 @@ struct OnboardingChatBubbleView: View {
 
     // MARK: - Assistant / Thinking (left)
 
-    /// Thinking and assistant share one `message.id` and the feed-level namespace so
-    /// `matchedGeometryEffect` can morph in place instead of inserting a second row.
+    /// Thinking and assistant are separate layouts. Role changes crossfade in place
+    /// under the placement ease; the reveal modifier does not replay, so the taller
+    /// reply cannot travel through the user bubble above it.
     @ViewBuilder
     private var leftAlignedBubble: some View {
-        Group {
-            if message.role == .thinking {
-                thinkingBubble
-                    .matchedGeometryEffect(id: "bubble-shell-\(message.id)", in: bubbleNamespace)
-            } else {
-                assistantBubble
-                    .matchedGeometryEffect(id: "bubble-shell-\(message.id)", in: bubbleNamespace)
-            }
+        switch message.role {
+        case .thinking:
+            thinkingBubble
+                .transition(.opacity)
+        case .assistant:
+            assistantBubble
+                .transition(.opacity)
+        case .user:
+            EmptyView()
         }
-        .animation(
-            reduceMotion
-                ? .easeOut(duration: 0.2)
-                : .spring(response: 0.58, dampingFraction: 0.82),
-            value: message.role
-        )
     }
 
     private var thinkingBubble: some View {
@@ -95,12 +105,6 @@ struct OnboardingChatBubbleView: View {
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking")
-        .transition(
-            .asymmetric(
-                insertion: .move(edge: .leading).combined(with: .opacity),
-                removal: .opacity
-            )
-        )
     }
 
     private var assistantBubble: some View {
@@ -133,12 +137,6 @@ struct OnboardingChatBubbleView: View {
         .frame(maxWidth: maxBubbleWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(assistantAccessibilityLabel)
-        .transition(
-            .asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .leading)),
-                removal: .opacity
-            )
-        )
     }
 
     private var bubbleBackground: some View {
@@ -195,6 +193,72 @@ struct OnboardingChatBubbleView: View {
             Circle()
                 .strokeBorder(palette.lineSoft.opacity(0.7), lineWidth: 1)
         )
+    }
+}
+
+// Fade and a small scale from the bubble corner after the feed has eased the
+// new slot open, so the bubble does not draw through the one above it.
+private struct OnboardingChatBubbleReveal: ViewModifier {
+    enum Anchor {
+        case bottomLeading
+        case bottomTrailing
+    }
+
+    let anchor: Anchor
+    let isEnabled: Bool
+
+    @State private var hasRevealed: Bool
+    @State private var revealTask: Task<Void, Never>?
+
+    init(anchor: Anchor, isEnabled: Bool) {
+        self.anchor = anchor
+        self.isEnabled = isEnabled
+        _hasRevealed = State(initialValue: !isEnabled)
+    }
+
+    private var unitAnchor: UnitPoint {
+        switch anchor {
+        case .bottomLeading:
+            return .bottomLeading
+        case .bottomTrailing:
+            return .bottomTrailing
+        }
+    }
+
+    private var isConcealed: Bool {
+        isEnabled && !hasRevealed
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isConcealed ? 0 : 1)
+            .scaleEffect(isConcealed ? 0.96 : 1, anchor: unitAnchor)
+            .onAppear {
+                scheduleReveal()
+            }
+            .onDisappear {
+                revealTask?.cancel()
+                revealTask = nil
+            }
+    }
+
+    private func scheduleReveal() {
+        guard isEnabled else {
+            hasRevealed = true
+            return
+        }
+        guard !hasRevealed else { return }
+
+        revealTask?.cancel()
+        revealTask = Task { @MainActor in
+            // Stay hidden until the feed has eased the new slot open, then fade in
+            // place. Fading during that ease draws the bubble through the one above it.
+            try? await Task.sleep(for: OnboardingChatFeedTiming.revealDelay)
+            guard !Task.isCancelled, !hasRevealed else { return }
+            withAnimation(OnboardingChatFeedTiming.reveal) {
+                hasRevealed = true
+            }
+        }
     }
 }
 
