@@ -69,7 +69,8 @@ struct OnboardingFeatureChatFeedView: View {
                     ForEach(feedItems) { message in
                         OnboardingChatBubbleView(
                             message: message,
-                            containerWidth: geometry.size.width
+                            containerWidth: geometry.size.width,
+                            animatesAppearance: true
                         )
                         .id(message.id)
                         .transition(.identity)
@@ -131,11 +132,13 @@ struct OnboardingFeatureChatFeedView: View {
                     if let feature {
                         OnboardingChatBubbleView(
                             message: .user(prompt: feature.userPrompt, feature: feature),
-                            containerWidth: geometry.size.width
+                            containerWidth: geometry.size.width,
+                            animatesAppearance: false
                         )
                         OnboardingChatBubbleView(
                             message: .assistant(feature: feature),
-                            containerWidth: geometry.size.width
+                            containerWidth: geometry.size.width,
+                            animatesAppearance: false
                         )
                     }
                 }
