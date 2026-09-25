@@ -33,6 +33,7 @@ struct OnboardingChatBubbleView: View {
                     )
             } else {
                 leftAlignedBubble
+                    .animation(OnboardingChatFeedTiming.placement, value: message.role)
                     .modifier(
                         OnboardingChatBubbleReveal(
                             anchor: .bottomLeading,
@@ -66,9 +67,9 @@ struct OnboardingChatBubbleView: View {
 
     // MARK: - Assistant / Thinking (left)
 
-    /// Thinking and assistant are separate layouts. Role changes swap in place;
-    /// the reveal modifier does not replay, so the taller reply cannot travel
-    /// through the user bubble above it.
+    /// Thinking and assistant are separate layouts. Role changes crossfade in place
+    /// under the placement ease; the reveal modifier does not replay, so the taller
+    /// reply cannot travel through the user bubble above it.
     @ViewBuilder
     private var leftAlignedBubble: some View {
         switch message.role {
@@ -250,11 +251,11 @@ private struct OnboardingChatBubbleReveal: ViewModifier {
 
         revealTask?.cancel()
         revealTask = Task { @MainActor in
-            // Stay hidden while the feed eases the new slot open, then fade in
+            // Stay hidden until the feed has eased the new slot open, then fade in
             // place. Fading during that ease draws the bubble through the one above it.
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: OnboardingChatFeedTiming.revealDelay)
             guard !Task.isCancelled, !hasRevealed else { return }
-            withAnimation(.smooth(duration: 0.28, extraBounce: 0)) {
+            withAnimation(OnboardingChatFeedTiming.reveal) {
                 hasRevealed = true
             }
         }

@@ -2,16 +2,37 @@ import SwiftUI
 
 enum OnboardingChatFeedTiming {
     static let firstMessageDelay: Duration = .milliseconds(350)
-    static let afterUserDelay: Duration = .milliseconds(450)
     static let thinkingDuration: Duration = .milliseconds(1100)
     static let afterAssistantDelay: Duration = .milliseconds(1300)
-    /// Shared ease for the feed shifting up and a reply growing in place.
-    /// No bounce — a spring overshoot reads as a snap.
-    static let placement = Animation.smooth(duration: 0.48, extraBounce: 0)
+
+    /// How long the column eases when a row is inserted or a reply grows.
+    static let placementDuration: Duration = .milliseconds(480)
+    /// Stay hidden until that ease has opened the new slot.
+    static let revealDelay: Duration = placementDuration
+    static let revealDuration: Duration = .milliseconds(280)
+    /// Next row starts only after the current placement ease has finished,
+    /// so a new layout animation does not retarget the one still in flight.
+    static let afterUserDelay: Duration = placementDuration
+
+    /// Shared ease for the feed shifting up, a reply growing in place, and the
+    /// thinking-to-reply crossfade. No bounce — a spring overshoot reads as a snap.
+    static let placement = Animation.smooth(
+        duration: timeInterval(from: placementDuration),
+        extraBounce: 0
+    )
+    static let reveal = Animation.smooth(
+        duration: timeInterval(from: revealDuration),
+        extraBounce: 0
+    )
+
+    private static func timeInterval(from duration: Duration) -> TimeInterval {
+        let (seconds, attoseconds) = duration.components
+        return TimeInterval(seconds) + TimeInterval(attoseconds) / 1_000_000_000_000_000_000
+    }
 }
 
 /// Alternating left/right chat feed — user prompts on the right, thinking orbs that
-/// become feature replies on the left, auto-scrolls upward, and loops forever while active.
+/// become feature replies on the left, pins to the bottom and eases upward, and loops forever while active.
 struct OnboardingFeatureChatFeedView: View {
     let isActive: Bool
 
@@ -206,7 +227,11 @@ struct OnboardingFeatureChatFeedView: View {
 
         case .morph:
             if let thinkingIndex = feedItems.lastIndex(where: { $0.role == .thinking }) {
-                feedItems[thinkingIndex] = feedItems[thinkingIndex].morphToAssistant()
+                // An explicit transaction drives the opacity crossfade. The layout
+                // ease on `feedLayoutToken` does not, by itself, animate that swap.
+                withAnimation(OnboardingChatFeedTiming.placement) {
+                    feedItems[thinkingIndex] = feedItems[thinkingIndex].morphToAssistant()
+                }
             }
             nextFeatureIndex = (nextFeatureIndex + 1) % catalog.count
             feedStep = .user
