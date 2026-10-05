@@ -6,7 +6,7 @@
 | **Layout** | [docs/architecture/modules.md](../docs/architecture/modules.md) |
 | **Map** | [CONTEXT-MAP.md](../CONTEXT-MAP.md) |
 
-OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Home**, **Chat**, **SidePanel**, **Settings**, and **About**.
+OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Home**, **Chat**, **Atoms**, **Settings**, and **About**.
 
 ## Onboarding
 
@@ -22,7 +22,7 @@ OpenCore is the iOS app shell. Implemented feature modules: **Onboarding**, **Ho
 - **Entry views**: `HomeTabShellView` (tabs), `HomeView` (chat/welcome tab)
 - **Visual shell**: `HomeWelcomeView`, `HomeParticleOrbView`, `HomeComposerView`, `HomeModelPopupView`
 - **Catalog**: `HomeModelCatalogClient` + `HomeModelCatalogCachePreferenceClient`
-- **Composition**: wires `ChatView` + `SidePanelView`; switches welcome vs active chat
+- **Composition**: switches welcome vs active chat (`ChatView`); the Atoms tab is a sibling tab in `HomeTabShellView`
 - **Context window (display)**: `ContextWindowEstimator`, `ContextWindowUsage`, `ContextTokenCounter`
 - **Speed mode**: `HomeComposerSpeedMode` (standard vs fast provider routing)
 
@@ -80,12 +80,12 @@ flowchart LR
     PROJ --> SM
 ```
 
-## SidePanel
+## Atoms
 
-- **Host controller**: `SidePanelFlowController`
-- **Session scope**: `SidePanelSessionFlowController` (saved-conversation browser + sidebar)
-- **Persistence**: `SidePanelHistoryClient` + `SidePanelConversationEntity` (SwiftData)
-- **Presentation**: `SidePanelView` hosts session sidebar; `HomeView` toggles the drawer
-- **Delegates**: `onOpenConversation`, `onActiveConversationRenamed`, `onActiveConversationDeleted`
+- **Flow controller**: `AtomsFlowController` (saved-conversation browser: search, pin, rename, groups, delete)
+- **Persistence**: `AtomsHistoryClient` over the shared `PersistenceAtomHistoryStore` (GRDB)
+- **Presentation**: `AtomsListView` (pinned, named groups, created-date buckets) hosted as the Atoms tab in `HomeTabShellView`
+- **Delegates**: `onOpenAtom`, `onActiveAtomRenamed`, `onActiveAtomDeleted`
+- **Active atom**: owned by `ChatFlowState.atom`; the list mirrors it via `mirrorActiveAtomID`
 
-Provider preferences and credentials are shared via `SidePanelProviderPreferenceStore` and `CredentialStoring` (used by Home, Chat, and Settings).
+Provider preferences and credentials are shared via `ProviderPreferenceStore` and `CredentialStoring` (used by Home, Chat, and Settings).
