@@ -170,7 +170,7 @@ struct AtomsListView: View {
                         } label: {
                             atomRow(
                                 entry,
-                                isInGroup: section.id.hasPrefix("group:")
+                                isInGroup: section.isGroup
                             )
                         }
                         .buttonStyle(.plain)
@@ -188,8 +188,7 @@ struct AtomsListView: View {
 
     @ViewBuilder
     private func groupSectionHeader(_ section: AtomsSection) -> some View {
-        if section.id.hasPrefix("group:") {
-            let groupName = String(section.id.dropFirst("group:".count))
+        if let groupName = section.groupName {
             let isExpanded = flow.state.expandedGroups.contains(groupName)
             Button {
                 _ = withAnimation(.easeInOut(duration: 0.22)) {

@@ -62,7 +62,7 @@ struct AtomsSectionTests {
         ]
 
         let collapsed = AtomsSection.grouped(entries, now: now)
-        #expect(collapsed.first?.title == ">:Work")
+        #expect(collapsed.first?.kind == .group(name: "Work", expanded: false))
         #expect(collapsed.first?.entries.isEmpty == true)
 
         let expandedForSearch = AtomsSection.grouped(
@@ -70,7 +70,7 @@ struct AtomsSectionTests {
             now: now,
             forceExpandGroups: true
         )
-        #expect(expandedForSearch.first?.title == "v:Work")
+        #expect(expandedForSearch.first?.kind == .group(name: "Work", expanded: true))
         #expect(expandedForSearch.first?.entries.map(\.lastMessagePreview) == ["Needle"])
     }
 

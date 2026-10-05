@@ -3,9 +3,35 @@ import Foundation
 /// Section model for the Atoms list. Pinned atoms lead, then named groups,
 /// then atoms grouped by their creation date.
 struct AtomsSection: Identifiable, Equatable {
-    let id: String
+    /// What a section holds. The group name and its expansion live here so
+    /// views never parse them out of an id or title string.
+    enum Kind: Equatable {
+        case pinned
+        case group(name: String, expanded: Bool)
+        case createdDate(Date)
+    }
+
+    let kind: Kind
     let title: String
     let entries: [AtomListEntry]
+
+    var id: String {
+        switch kind {
+        case .pinned: "pinned"
+        case .group(let name, _): "group:" + name
+        case .createdDate(let day): "created:\(day.timeIntervalSinceReferenceDate)"
+        }
+    }
+
+    var isGroup: Bool {
+        if case .group = kind { return true }
+        return false
+    }
+
+    var groupName: String? {
+        if case .group(let name, _) = kind { return name }
+        return nil
+    }
 
     static func grouped(
         _ entries: [AtomListEntry],
@@ -18,7 +44,7 @@ struct AtomsSection: Identifiable, Equatable {
 
         let pinned = entries.filter(\.atom.isPinned)
         if !pinned.isEmpty {
-            sections.append(AtomsSection(id: "pinned", title: "Pinned", entries: pinned))
+            sections.append(AtomsSection(kind: .pinned, title: "Pinned", entries: pinned))
         }
 
         var groupBuckets: [String: [AtomListEntry]] = [:]
@@ -31,11 +57,10 @@ struct AtomsSection: Identifiable, Equatable {
         for groupName in groupOrder.sorted() {
             let groupEntries = groupBuckets[groupName] ?? []
             let isExpanded = forceExpandGroups || expandedGroups.contains(groupName)
-            let prefix = isExpanded ? "v:" : ">:"
             sections.append(
                 AtomsSection(
-                    id: "group:" + groupName,
-                    title: prefix + groupName,
+                    kind: .group(name: groupName, expanded: isExpanded),
+                    title: groupName,
                     entries: isExpanded ? groupEntries : []
                 )
             )
@@ -52,7 +77,7 @@ struct AtomsSection: Identifiable, Equatable {
         for day in dateOrder.sorted(by: >) {
             sections.append(
                 AtomsSection(
-                    id: "created:\(day.timeIntervalSinceReferenceDate)",
+                    kind: .createdDate(day),
                     title: createdDateLabel(for: day, now: now, calendar: calendar),
                     entries: dateBuckets[day] ?? []
                 )
