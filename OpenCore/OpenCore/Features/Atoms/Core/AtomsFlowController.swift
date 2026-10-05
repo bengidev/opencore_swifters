@@ -11,20 +11,16 @@ final class AtomsFlowController {
     private let history: AtomsHistoryClient
     private let invoker = AtomsCommandInvoker()
 
-    private(set) var selectedProviderID: String
-
     var onOpenAtom: ((Atom) -> Void)?
     var onActiveAtomRenamed: ((UUID, String) -> Void)?
     var onActiveAtomDeleted: ((UUID) -> Void)?
 
     init(
         state: AtomsFlowState = AtomsFlowState(),
-        history: AtomsHistoryClient = .preview,
-        selectedProviderID: String = ProviderDescriptor.openRouter.id
+        history: AtomsHistoryClient = .preview
     ) {
         self.state = state
         self.history = history
-        self.selectedProviderID = selectedProviderID
     }
 
     func dispatch(_ command: any AtomsCommand) {
@@ -45,10 +41,6 @@ final class AtomsFlowController {
 
     func mirrorActiveAtomID(_ id: UUID?) {
         state.activeAtomID = id
-    }
-
-    func syncSelectedProviderID(_ id: String) {
-        selectedProviderID = id
     }
 
     func loadAtoms() async {

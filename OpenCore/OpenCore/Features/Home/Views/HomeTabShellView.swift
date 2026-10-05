@@ -54,7 +54,6 @@ struct HomeTabShellView: View {
         }
         settings.onProviderChanged = { providerID in
             Task { await home.handleProviderChanged(providerID) }
-            atoms.syncSelectedProviderID(providerID)
         }
 
         home.onInputCapabilitiesResolved = { capabilities in
