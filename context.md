@@ -96,7 +96,8 @@ utilities, and the best files/APIs for replicating a supplied interface recordin
 - `OnboardingCubeView.swift` — `TimelineView(.animation(minimumInterval: 1.0/30.0))` drives the
   wireframe cube’s construction reveal, internal dust drift, and idle float while reduced motion
   renders a static completed frame.
-- `ChatRichContentView.swift` — `TimelineView` cursor blink; streaming text throttled at ~33ms.
+- `ChatFlowController.swift` — streamed deltas accumulate in private buffers and flush into
+  `state.messages` on a size-aware coalescing policy (32ms default, 48ms past 8KB, 96ms past 32KB).
 - `ChatReasoningCardView.swift` / `ChatStreamingStatusCapsuleView.swift` — pulsing dot via
   `withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true))`.
 
