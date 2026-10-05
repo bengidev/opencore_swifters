@@ -10,7 +10,7 @@ Onboarding flow state is owned by `OnboardingFlowController` and mutated through
 App
 ├── Shared        # Theme + UI primitives (cross-cutting)
 ├── Onboarding    # First-run product tour
-├── SidePanel     # Conversation history browser (session scope)
+├── Atoms         # Conversation history browser
 ├── Chat          # Live message stream, send/receive, active conversation
 ├── Settings      # Provider credentials, context compaction prefs
 ├── Speech        # On-device speech-to-text for composer input
@@ -59,20 +59,17 @@ OpenCore/
 │   │   └── Utilities/
 │   ├── About/
 │   │   └── Views/
-│   └── SidePanel/
+│   └── Atoms/
 │       ├── Core/
 │       ├── Models/
 │       ├── Utilities/
-│       ├── Session/
-│       │   ├── Core/
-│       │   └── Views/
 │       └── Views/
 └── Shared/
     ├── Theme/
     └── UI/
 ```
 
-SidePanel is a self-contained internal module with a nested `Session/` scope for the history drawer. Settings and About are sibling top-level modules with flat role folders.
+Atoms is the conversation history browser. Settings and About are sibling top-level modules with flat role folders.
 
 Home uses flat role folders only (`Core/`, `Models/`, `Utilities/`, `Views/`). Context window estimation lives in Home; compaction prefs and engine live in Settings.
 
