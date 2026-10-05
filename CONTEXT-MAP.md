@@ -1,10 +1,8 @@
 # Context map
 
-| Context   | Glossary              | ADRs                    |
-| --------- | --------------------- | ----------------------- |
-| Chat      | `OpenCore/CONTEXT.md` | `OpenCore/docs/adr/`    |
-| Atoms     | `OpenCore/CONTEXT.md` | `OpenCore/docs/adr/`    |
-| Settings  | `docs/contexts/settings/` | `docs/adr/` |
-| OpenCore  | `OpenCore/CONTEXT.md` | `OpenCore/docs/adr/`    |
-
-System-wide ADRs: `docs/adr/`
+| Context   | Glossary                  |
+| --------- | ------------------------- |
+| Chat      | `OpenCore/CONTEXT.md`     |
+| Atoms     | `docs/contexts/atoms/`    |
+| Settings  | `docs/contexts/settings/` |
+| OpenCore  | `OpenCore/CONTEXT.md`     |

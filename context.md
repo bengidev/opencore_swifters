@@ -18,7 +18,7 @@ utilities, and the best files/APIs for replicating a supplied interface recordin
   `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"`, `TARGETED_DEVICE_FAMILY = "1,2"`
   (iPhone + iPad), `SWIFT_VERSION = 6.0` (and 5.0 for some test configs),
   `PRODUCT_BUNDLE_IDENTIFIER = io.github.bengidev.OpenCore`, `MARKETING_VERSION = 1.0`.
-- **SPM dependencies** (`project.pbxproj:208-209`): `swift-markdown-ui` (MarkdownUI) and
+- **SPM dependencies** (`project.pbxproj:217-221`): `swift-markdown-ui` (MarkdownUI) and
   `LaTeXSwiftUI`. Imported directly in chat rendering (e.g. `ChatRichContentView.swift`,
   `ChatRichContentTheme.swift`). Local package: `ThinkingOrbsKit` under `OpenCore/Packages/`,
   linked in the app target's Frameworks build phase.

@@ -103,10 +103,14 @@ struct AtomsFlowControllerTests {
         var renamed: (id: UUID, title: String)?
         controller.onActiveAtomRenamed = { renamed = ($0, $1) }
 
-        await controller.renameAtom(id: target.atom.id, title: "New title")
+        await controller.renameAtom(id: target.atom.id, title: "  New title  ")
 
         #expect(renamed?.id == target.atom.id)
         #expect(renamed?.title == "New title")
+        let persistedRenames = await recorder.renamed
+        #expect(persistedRenames.count == 1)
+        #expect(persistedRenames.first?.id == target.atom.id)
+        #expect(persistedRenames.first?.title == "New title")
     }
 
     @Test("Renaming a background atom stays silent")
@@ -124,6 +128,10 @@ struct AtomsFlowControllerTests {
         await controller.renameAtom(id: background.atom.id, title: "Changed")
 
         #expect(renamed == nil)
+        let persistedRenames = await recorder.renamed
+        #expect(persistedRenames.count == 1)
+        #expect(persistedRenames.first?.id == background.atom.id)
+        #expect(persistedRenames.first?.title == "Changed")
     }
 
     @Test("Deleting the active atom notifies the parent")
@@ -140,6 +148,7 @@ struct AtomsFlowControllerTests {
         await controller.deleteAtom(id: target.atom.id)
 
         #expect(deletedID == target.atom.id)
+        #expect(await recorder.deleted == [target.atom.id])
     }
 
     @Test("Deleting a background atom stays silent")
@@ -157,5 +166,6 @@ struct AtomsFlowControllerTests {
         await controller.deleteAtom(id: background.atom.id)
 
         #expect(deletedID == nil)
+        #expect(await recorder.deleted == [background.atom.id])
     }
 }

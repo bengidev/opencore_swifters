@@ -83,9 +83,6 @@ flowchart LR
 ## Atoms
 
 - **Flow controller**: `AtomsFlowController` (saved-conversation browser: search, pin, rename, groups, delete)
-- **Persistence**: `AtomsHistoryClient` over the shared `PersistenceAtomHistoryStore` (GRDB)
-- **Presentation**: `AtomsListView` (pinned, named groups, created-date buckets) hosted as the Atoms tab in `HomeTabShellView`
-- **Delegates**: `onOpenAtom`, `onActiveAtomRenamed`, `onActiveAtomDeleted`
-- **Active atom**: owned by `ChatFlowState.atom`; the list mirrors it via `mirrorActiveAtomID`
+- **Docs**: [docs/contexts/atoms/Atoms-CONTEXT.md](../docs/contexts/atoms/Atoms-CONTEXT.md)
 
 Provider preferences and credentials are shared via `ProviderPreferenceStore` and `CredentialStoring` (used by Home, Chat, and Settings).
