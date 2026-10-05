@@ -24,19 +24,7 @@ final class AtomsFlowController {
     }
 
     func dispatch(_ command: any AtomsCommand) {
-        let priorActiveID = state.activeAtomID
         invoker.invoke(command, on: &state)
-
-        if let cmd = command as? AtomsRenamedCommand {
-            let trimmed = cmd.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, cmd.id == priorActiveID {
-                onActiveAtomRenamed?(cmd.id, trimmed)
-            }
-        }
-
-        if let cmd = command as? AtomsDeletedCommand, cmd.id == priorActiveID {
-            onActiveAtomDeleted?(cmd.id)
-        }
     }
 
     func mirrorActiveAtomID(_ id: UUID?) {
@@ -66,12 +54,16 @@ final class AtomsFlowController {
     func renameAtom(id: UUID, title: String) async {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let wasActive = id == state.activeAtomID
         dispatch(AtomsRenamedCommand(id: id, title: title))
+        if wasActive { onActiveAtomRenamed?(id, trimmed) }
         try? await history.renameAtom(id, trimmed)
     }
 
     func deleteAtom(id: UUID) async {
+        let wasActive = id == state.activeAtomID
         dispatch(AtomsDeletedCommand(id: id))
+        if wasActive { onActiveAtomDeleted?(id) }
         try? await history.deleteAtom(id)
         if let groups = try? await history.listGroups() {
             state.availableGroups = groups
