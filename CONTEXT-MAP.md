@@ -3,6 +3,7 @@
 | Context   | Glossary              | ADRs                    |
 | --------- | --------------------- | ----------------------- |
 | Chat      | `OpenCore/CONTEXT.md` | `OpenCore/docs/adr/`    |
+| Atoms     | `docs/contexts/atoms/` | `docs/adr/` |
 | Settings  | `docs/contexts/settings/` | `docs/adr/` |
 | OpenCore  | `OpenCore/CONTEXT.md` | `OpenCore/docs/adr/`    |
 
