@@ -31,8 +31,8 @@ flowchart TD
     T --> C --> S --> K --> R
 ```
 
-1. **Trigger** — automatic compaction runs when `tokensUsed > contextWindow - reserveTokens` (default reserve: 16,384).
-2. **Cut point** — walk backward from the leaf, keeping `keepRecentTokens` (default 20,000) verbatim.
+1. **Trigger** — automatic compaction runs when `tokensUsed > contextWindow - reserveTokens`. Both token budgets derive from `triggerThresholdPercent` (default 90) against the reference context length of 131,072 tokens, snapped to a 1,024-token step: reserve 13,312 and keep-recent 20,480.
+2. **Cut point** — walk backward from the leaf, keeping `keepRecentTokens` (default 20,480) verbatim.
 3. **Summarize** — structured summary prompt with cumulative file-operation tags.
 4. **Checkpoint** — append `AtomCompactionCheckpoint` to the GRDB session tree.
 5. **Reinject** — projected model context becomes `summary + kept tail`.
@@ -117,8 +117,10 @@ Synthetic summary bubbles (wrapped in `<summary>` tags) exist only in the projec
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | Automatic compaction | on | Master switch for threshold-triggered compaction |
-| Reserve response headroom | 16,384 tokens | Pi `reserveTokens` — space left for the model reply |
-| Keep recent context | 20,000 tokens | Pi `keepRecentTokens` — recent history kept verbatim |
+| Reserve response headroom | 13,312 tokens (derived) | Space left for the model reply at the reference context length |
+| Keep recent context | 20,480 tokens (derived) | Recent history kept verbatim at the reference context length |
+
+Both budgets scale with the active model's context length via `scaledReserveTokens(for:)` and `scaledKeepRecentTokens(for:)`.
 
 Manual compaction is available from the composer compact button. Overflow recovery compacts once and retries the failed turn when the provider reports a context-length error.
 
