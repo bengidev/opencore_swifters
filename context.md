@@ -22,7 +22,7 @@ utilities, and the best files/APIs for replicating a supplied interface recordin
   `LaTeXSwiftUI`. Imported directly in chat rendering (e.g. `ChatRichContentView.swift`,
   `ChatRichContentTheme.swift`).
 - **Architecture**: feature-oriented folders inside the single app target
-  (`docs/architecture/modules.md`). Modules: App, Shared, Onboarding, Home, Chat, SidePanel,
+  (`docs/architecture/modules.md`). Modules: App, Shared, Onboarding, Home, Chat, Atoms,
   Settings, Speech, Vision, About. Access control is `internal` by default.
 - Note: `OpenCore/Internal/Textual/` is an empty directory (only `.swiftpm/xcode` metadata; no
   sources), so it is **not** an active dependency source.
@@ -35,12 +35,13 @@ utilities, and the best files/APIs for replicating a supplied interface recordin
   - `HomeParticleOrbView` (`UIViewRepresentable`) — heavy CALayer/Core Animation particle orb.
   - `ChatMermaidViews.swift` — `WKWebView` for Mermaid diagram snapshot rendering.
   - `ChatRichContentTheme.swift` — UIKit fonts (`UIFont`) for MarkdownUI/LaTeX rendering.
-- **Navigation**: `TabView` (Home/Settings/About) via `HomeTabShellView`; `NavigationStack`
+- **Navigation**: `TabView` (Home/Atoms/Settings/About) via `HomeTabShellView`; `NavigationStack`
   (Settings, About, model popup, output detail sheet); `.sheet` for model popup and output detail.
 - **State**: Flow controllers (`*FlowController` with `@State`) driven by explicit commands
   (`ChatCommand`, `OnboardingCommand`, `SettingsCommand`, etc.), not TCA.
 - **Persistence**: SwiftData (`ModelContainer` with `OnboardingProgressEntity`,
-  `SidePanelConversationEntity`, `SidePanelMessageEntity`).
+  `AtomEntity`, `AtomMessageEntity`) for onboarding progress and atom records,
+  plus GRDB for the append-only atom session tree.
 
 ## 3. Theme / Design System (Shared)
 
